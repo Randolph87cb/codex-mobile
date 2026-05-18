@@ -3,8 +3,16 @@ package com.openai.codexmobile.data
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -18,6 +26,7 @@ import java.nio.charset.StandardCharsets
 class RealBridgeDataProvider : CodexDataProvider {
     private var baseUrl: String? = null
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
+    private val webSocketClient = OkHttpClient()
 
     override suspend fun connect(endpoint: String): BridgeConnectionState = withContext(Dispatchers.IO) {
         val normalizedEndpoint = normalizeEndpoint(endpoint)
@@ -78,6 +87,60 @@ class RealBridgeDataProvider : CodexDataProvider {
         }
     }
 
+    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = callbackFlow {
+        val request = Request.Builder()
+            .url(toWebSocketUrl("${requireBaseUrl()}/api/session/$sessionId/ws"))
+            .build()
+        val listener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                trySend(SessionStreamEvent.StreamOpened(sessionId = sessionId))
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                parseSessionStreamEvent(
+                    sessionId = sessionId,
+                    payload = text,
+                )?.let { trySend(it) }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                trySend(
+                    SessionStreamEvent.StreamClosed(
+                        sessionId = sessionId,
+                        reason = reason.ifBlank { "实时流正在关闭。" },
+                    ),
+                )
+                webSocket.close(code, reason)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                trySend(
+                    SessionStreamEvent.StreamClosed(
+                        sessionId = sessionId,
+                        reason = reason.ifBlank { "实时流已关闭。" },
+                    ),
+                )
+                this@callbackFlow.close()
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                trySend(
+                    SessionStreamEvent.Error(
+                        sessionId = sessionId,
+                        message = t.message ?: "实时流连接失败。",
+                        timestamp = null,
+                    ),
+                )
+                this@callbackFlow.close(t)
+            }
+        }
+
+        val webSocket = webSocketClient.newWebSocket(request, listener)
+        awaitClose {
+            webSocket.cancel()
+        }
+    }
+
     override suspend fun listSessions(): List<SessionSummary> = withContext(Dispatchers.IO) {
         val response = request(
             method = "GET",
@@ -113,6 +176,14 @@ class RealBridgeDataProvider : CodexDataProvider {
         val normalized = endpoint.trim().trimEnd('/')
         require(normalized.isNotEmpty()) { "桥接地址不能为空。" }
         return normalized
+    }
+
+    private fun toWebSocketUrl(httpUrl: String): String {
+        return when {
+            httpUrl.startsWith("https://") -> "wss://${httpUrl.removePrefix("https://")}"
+            httpUrl.startsWith("http://") -> "ws://${httpUrl.removePrefix("http://")}"
+            else -> throw IllegalArgumentException("桥接地址必须以 http:// 或 https:// 开头。")
+        }
     }
 
     private fun request(
@@ -154,6 +225,83 @@ class RealBridgeDataProvider : CodexDataProvider {
         return BufferedReader(InputStreamReader(stream, StandardCharsets.UTF_8)).use { reader ->
             reader.readText()
         }
+    }
+}
+
+private fun parseSessionStreamEvent(
+    sessionId: String,
+    payload: String,
+): SessionStreamEvent? {
+    val json = JSONObject(payload)
+    if (!json.has("type")) {
+        val message = json.optString("error").ifBlank { "收到无法识别的实时流消息。" }
+        return SessionStreamEvent.Error(
+            sessionId = sessionId,
+            message = message,
+            timestamp = null,
+        )
+    }
+
+    val eventSessionId = json.optString("sessionId").ifBlank { sessionId }
+    val timestamp = json.optString("timestamp").takeIf { it.isNotBlank() }
+    val data = json.optJSONObject("data") ?: JSONObject()
+
+    return when (json.getString("type")) {
+        "session.started" -> SessionStreamEvent.SessionStarted(
+            sessionId = eventSessionId,
+            status = data.optString("status").ifBlank { "idle" },
+            cwd = data.optString("cwd").takeIf { it.isNotBlank() },
+            model = data.optString("model").takeIf { it.isNotBlank() },
+            threadId = data.optString("threadId").takeIf { it.isNotBlank() },
+            timestamp = timestamp,
+        )
+
+        "assistant.delta" -> SessionStreamEvent.AssistantDelta(
+            sessionId = eventSessionId,
+            text = data.optString("text"),
+            turnId = data.optString("turnId").takeIf { it.isNotBlank() },
+            timestamp = timestamp,
+        )
+
+        "assistant.done" -> SessionStreamEvent.AssistantDone(
+            sessionId = eventSessionId,
+            turnStatus = data.optString("status").takeIf { it.isNotBlank() },
+            turnId = data.optString("turnId").takeIf { it.isNotBlank() },
+            errorMessage = extractEventError(data.opt("error")),
+            timestamp = timestamp,
+        )
+
+        "run.status" -> SessionStreamEvent.RunStatus(
+            sessionId = eventSessionId,
+            status = data.optString("status").ifBlank { "unknown" },
+            timestamp = timestamp,
+        )
+
+        "run.interrupted" -> SessionStreamEvent.RunInterrupted(
+            sessionId = eventSessionId,
+            status = data.optString("status").takeIf { it.isNotBlank() },
+            timestamp = timestamp,
+        )
+
+        "tool.request" -> SessionStreamEvent.ToolRequest(
+            sessionId = eventSessionId,
+            method = data.optString("method").takeIf { it.isNotBlank() },
+            timestamp = timestamp,
+        )
+
+        "tool.result" -> SessionStreamEvent.ToolResult(
+            sessionId = eventSessionId,
+            summary = data.toString(),
+            timestamp = timestamp,
+        )
+
+        "error" -> SessionStreamEvent.Error(
+            sessionId = eventSessionId,
+            message = extractEventError(data.opt("error")) ?: "bridge 返回错误事件。",
+            timestamp = timestamp,
+        )
+
+        else -> null
     }
 }
 
@@ -220,6 +368,17 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
         },
         status = status,
     )
+}
+
+private fun extractEventError(value: Any?): String? {
+    return when (value) {
+        null -> null
+        JSONObject.NULL -> null
+        is JSONObject -> {
+            value.optString("message").takeIf { it.isNotBlank() } ?: value.toString()
+        }
+        else -> value.toString().takeIf { it.isNotBlank() }
+    }
 }
 
 private fun localizedStatus(status: String): String {
