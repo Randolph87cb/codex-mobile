@@ -18,13 +18,19 @@ class SessionDetailReplayTest {
 
     @Test
     fun canReplayConnectionSessionListAndStructuredTranscript() {
+        waitForTag(TestTags.ConnectionScreen)
         composeRule.onNodeWithTag(TestTags.ConnectionScreen).assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.ConnectionConnectButton).performClick()
 
         waitForTag(TestTags.SessionListScreen)
+        composeRule.onNodeWithTag(TestTags.SessionListFolderPrefix + "D:\\workspace\\codex-mobile")
+            .assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.SessionListItemPrefix + "session-test-001").performClick()
 
         waitForTag(TestTags.SessionDetailScreen)
+        composeRule.onNodeWithTag(TestTags.SessionDetailConfigModelButton).assertIsDisplayed()
+        composeRule.onNodeWithTag(TestTags.SessionDetailConfigReasoningButton).assertIsDisplayed()
+        composeRule.onNodeWithTag(TestTags.SessionDetailConfigServiceTierButton).assertIsDisplayed()
         composeRule.onAllNodesWithTag(TestTags.SessionDetailTranscript).assertCountEquals(1)
         composeRule.onAllNodesWithText("kotlin").assertCountEquals(1)
         composeRule.onAllNodesWithText("println(\"hello from test\")").assertCountEquals(1)

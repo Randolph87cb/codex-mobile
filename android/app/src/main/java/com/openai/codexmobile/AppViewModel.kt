@@ -10,6 +10,7 @@ import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
+import com.openai.codexmobile.data.SessionConfigUpdate
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.model.BridgeConnectionState
@@ -26,21 +27,38 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.ArrayDeque
 
+private const val DraftSessionId = "__draft__"
+
 data class AppUiState(
     val endpointInput: String,
     val authTokenInput: String,
     val cwdInput: String,
     val modelInput: String,
     val approvalModeInput: String,
+    val reasoningEffortInput: String,
+    val serviceTierInput: String,
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSession: SessionDetail? = null,
+    val selectedDraftSession: DraftSessionUiState? = null,
     val draftMessage: String = "",
     val isLoading: Boolean = false,
     val message: String? = null,
     val settingsItems: List<Pair<String, String>>,
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
     val queuedInputs: List<String> = emptyList(),
+) {
+    val isDraftSelected: Boolean
+        get() = selectedDraftSession != null
+}
+
+data class DraftSessionUiState(
+    val localId: String = DraftSessionId,
+    val cwd: String,
+    val model: String,
+    val approvalMode: String,
+    val reasoningEffort: String,
+    val serviceTier: String,
 )
 
 data class SessionRealtimeUiState(
@@ -106,6 +124,22 @@ class AppViewModel(
         }
     }
 
+    fun updateReasoningEffortInput(value: String) {
+        updateSettingsState {
+            it.copy(
+                reasoningEffortInput = normalizeReasoningEffort(value),
+            )
+        }
+    }
+
+    fun updateServiceTierInput(value: String) {
+        updateSettingsState {
+            it.copy(
+                serviceTierInput = normalizeServiceTier(value),
+            )
+        }
+    }
+
     fun updateDraftMessage(value: String) {
         _uiState.update { it.copy(draftMessage = value) }
     }
@@ -119,7 +153,7 @@ class AppViewModel(
 
         viewModelScope.launch {
             stopSessionStream()
-            _uiState.update { it.copy(isLoading = true, message = null, selectedSession = null) }
+            _uiState.update { it.copy(isLoading = true, message = null, selectedSession = null, selectedDraftSession = null) }
             try {
                 val connectionState = bridgeApi.connect(endpoint)
                 val sessions = sessionRepository.listSessions()
@@ -130,6 +164,7 @@ class AppViewModel(
                         connectionState = connectionState,
                         sessions = sessions,
                         selectedSession = selectedSession,
+                        selectedDraftSession = null,
                         message = connectedMessage(connectionState),
                     ).withSettingsItems()
                 }
@@ -140,6 +175,7 @@ class AppViewModel(
                         connectionState = BridgeConnectionState.Disconnected,
                         sessions = emptyList(),
                         selectedSession = null,
+                        selectedDraftSession = null,
                         message = error.message ?: "连接桥接服务失败。",
                     ).withSettingsItems()
                 }
@@ -158,6 +194,7 @@ class AppViewModel(
                     connectionState = BridgeConnectionState.Disconnected,
                     sessions = emptyList(),
                     selectedSession = null,
+                    selectedDraftSession = null,
                     message = "已断开连接。",
                     queuedInputs = emptyList(),
                 ).withSettingsItems()
@@ -165,8 +202,49 @@ class AppViewModel(
         }
     }
 
+    fun startDraftSession(cwd: String? = null) {
+        stopSessionStream()
+        val draft = buildDraftSession(
+            cwd = cwd?.trim().takeUnless { it.isNullOrBlank() } ?: uiState.value.cwdInput.trim(),
+            model = uiState.value.modelInput.trim(),
+            approvalMode = uiState.value.approvalModeInput,
+            reasoningEffort = uiState.value.reasoningEffortInput,
+            serviceTier = uiState.value.serviceTierInput,
+        )
+        _uiState.update {
+            it.copy(
+                selectedSession = null,
+                selectedDraftSession = draft,
+                draftMessage = "",
+                queuedInputs = emptyList(),
+                message = "先输入第一句话，发送时才会真正创建会话。",
+                sessionRealtimeState = SessionRealtimeUiState(
+                    isActive = false,
+                    isConnected = false,
+                    connectionText = "尚未创建远端会话",
+                    statusText = "草稿",
+                    lastEventText = "当前只是本地草稿，还没有占用 bridge 会话。",
+                ),
+            )
+        }
+    }
+
+    fun beginDraftSession(cwd: String? = null) = startDraftSession(cwd)
+
+    fun discardDraftSession() {
+        stopSessionStream()
+        _uiState.update {
+            it.copy(
+                selectedDraftSession = null,
+                draftMessage = "",
+                queuedInputs = emptyList(),
+                sessionRealtimeState = SessionRealtimeUiState(),
+            )
+        }
+    }
+
     fun openSessionDetail(sessionId: String) {
-        if (sessionId.isBlank()) {
+        if (sessionId.isBlank() || sessionId == DraftSessionId) {
             return
         }
         if (activeStreamSessionId == sessionId && sessionStreamJob?.isActive == true) {
@@ -180,6 +258,7 @@ class AppViewModel(
                     isLoading = true,
                     message = null,
                     selectedSession = it.selectedSession?.takeIf { detail -> detail.id == sessionId },
+                    selectedDraftSession = null,
                     queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = SessionRealtimeUiState(
                         isActive = true,
@@ -200,6 +279,7 @@ class AppViewModel(
                     it.copy(
                         isLoading = false,
                         selectedSession = null,
+                        selectedDraftSession = null,
                         message = error.message ?: "加载会话失败。",
                         queuedInputs = emptyList(),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -218,6 +298,7 @@ class AppViewModel(
                     it.copy(
                         isLoading = false,
                         selectedSession = null,
+                        selectedDraftSession = null,
                         message = "未找到会话：$sessionId",
                         queuedInputs = emptyList(),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -252,46 +333,55 @@ class AppViewModel(
         if (sessionId == null || sessionId == activeStreamSessionId) {
             stopSessionStream()
         }
-        if (sessionId == null || uiState.value.selectedSession?.id == sessionId) {
+        if (sessionId == null || uiState.value.selectedSession?.id == sessionId || sessionId == DraftSessionId) {
             _uiState.update { it.copy(queuedInputs = emptyList()) }
         }
     }
 
-    fun createSession() {
-        val request = buildCreateSessionRequest(uiState.value) ?: return
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, message = null) }
-            try {
-                val created = bridgeApi.createSession(request)
-                val sessions = sessionRepository.listSessions()
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        sessions = sessions,
-                        selectedSession = created,
-                        message = "已创建会话：${created.title}",
-                    )
-                }
-            } catch (error: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        message = error.message ?: "创建会话失败。",
-                    )
-                }
-            }
-        }
-    }
-
     fun sendInput() {
-        val detail = uiState.value.selectedSession ?: return
+        val detail = uiState.value.selectedSession
+        val draftSession = uiState.value.selectedDraftSession
         val text = uiState.value.draftMessage.trim()
         if (text.isEmpty()) {
             return
         }
 
-        if (shouldQueueInput(detail, uiState.value.sessionRealtimeState)) {
+        if (detail == null && draftSession == null) {
+            startDraftSession()
+            return
+        }
+
+        if (draftSession != null) {
+            if (draftSession.cwd.trim().isBlank()) {
+                _uiState.update { it.copy(message = "请先为草稿线程填写工作目录。") }
+                return
+            }
+            viewModelScope.launch {
+                _uiState.update { it.copy(isLoading = true, message = null) }
+                try {
+                    val created = bridgeApi.createSession(buildCreateSessionRequest(draftSession))
+                    _uiState.update {
+                        it.copy(
+                            selectedDraftSession = null,
+                            selectedSession = created,
+                            message = "已创建会话，正在发送首条消息。",
+                        )
+                    }
+                    refreshSessions()
+                    submitInputNow(created, text, fromQueue = false)
+                } catch (error: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            message = error.message ?: "创建会话失败。",
+                        )
+                    }
+                }
+            }
+            return
+        }
+
+        if (detail != null && shouldQueueInput(detail, uiState.value.sessionRealtimeState)) {
             enqueueQueuedInput(detail.id, text)
             _uiState.update {
                 it.copy(
@@ -303,10 +393,12 @@ class AppViewModel(
             return
         }
 
+        val activeDetail = detail ?: return
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, message = null) }
             try {
-                submitInputNow(detail, text, fromQueue = false)
+                submitInputNow(activeDetail, text, fromQueue = false)
             } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
@@ -350,11 +442,147 @@ class AppViewModel(
         }
     }
 
+    fun updateSelectedSessionModel(value: String) {
+        applySessionConfigUpdate(
+            model = value.trim().ifBlank { "gpt-5.5" },
+            approvalMode = null,
+            reasoningEffort = null,
+            serviceTier = null,
+            cwd = null,
+        )
+    }
+
+    fun updateSelectedSessionReasoningEffort(value: String) {
+        applySessionConfigUpdate(
+            model = null,
+            approvalMode = null,
+            reasoningEffort = normalizeReasoningEffort(value),
+            serviceTier = null,
+            cwd = null,
+        )
+    }
+
+    fun updateSelectedSessionServiceTier(value: String) {
+        applySessionConfigUpdate(
+            model = null,
+            approvalMode = null,
+            reasoningEffort = null,
+            serviceTier = normalizeServiceTier(value),
+            cwd = null,
+        )
+    }
+
+    fun updateSelectedSessionCwd(value: String) {
+        val normalized = value.trim()
+        if (normalized.isBlank()) {
+            _uiState.update { it.copy(message = "工作目录不能为空。") }
+            return
+        }
+        applySessionConfigUpdate(
+            model = null,
+            approvalMode = null,
+            reasoningEffort = null,
+            serviceTier = null,
+            cwd = normalized,
+        )
+    }
+
+    fun refreshSelectedSession() {
+        val sessionId = uiState.value.selectedSession?.id ?: return
+        viewModelScope.launch {
+            refreshSessionSnapshot(sessionId)
+        }
+    }
+
     private fun refreshConnection() {
         viewModelScope.launch {
             val connectionState = bridgeApi.currentConnection()
             _uiState.update {
                 it.copy(connectionState = connectionState).withSettingsItems()
+            }
+        }
+    }
+
+    private fun applySessionConfigUpdate(
+        model: String?,
+        approvalMode: String?,
+        reasoningEffort: String?,
+        serviceTier: String?,
+        cwd: String?,
+    ) {
+        val draft = uiState.value.selectedDraftSession
+        if (draft != null) {
+            val nextDraft = draft.copy(
+                cwd = cwd ?: draft.cwd,
+                model = model ?: draft.model,
+                approvalMode = approvalMode ?: draft.approvalMode,
+                reasoningEffort = reasoningEffort ?: draft.reasoningEffort,
+                serviceTier = serviceTier ?: draft.serviceTier,
+            )
+            _uiState.update {
+                it.copy(
+                    selectedDraftSession = nextDraft,
+                    cwdInput = nextDraft.cwd,
+                    modelInput = nextDraft.model,
+                    approvalModeInput = nextDraft.approvalMode,
+                    reasoningEffortInput = nextDraft.reasoningEffort,
+                    serviceTierInput = nextDraft.serviceTier,
+                ).withSettingsItems()
+            }
+            persistSettings(_uiState.value)
+            return
+        }
+
+        val detail = uiState.value.selectedSession ?: return
+        val nextDetail = detail.copy(
+            cwd = cwd ?: detail.cwd,
+            model = model ?: detail.model,
+            approvalMode = approvalMode ?: detail.approvalMode,
+            reasoningEffort = reasoningEffort ?: detail.reasoningEffort,
+            serviceTier = serviceTier ?: detail.serviceTier,
+            subtitle = buildSessionSubtitle(
+                model = model ?: detail.model,
+                approvalMode = approvalMode ?: detail.approvalMode,
+                status = detail.status,
+            ),
+        )
+        _uiState.update {
+            it.copy(
+                selectedSession = nextDetail,
+                cwdInput = nextDetail.cwd,
+                modelInput = nextDetail.model,
+                approvalModeInput = nextDetail.approvalMode,
+                reasoningEffortInput = nextDetail.reasoningEffort,
+                serviceTierInput = nextDetail.serviceTier,
+            ).withSettingsItems()
+        }
+        persistSettings(_uiState.value)
+
+        viewModelScope.launch {
+            try {
+                val updated = bridgeApi.updateSessionConfig(
+                    detail.id,
+                    SessionConfigUpdate(
+                        cwd = cwd,
+                        model = model,
+                        approvalMode = approvalMode,
+                        reasoningEffort = reasoningEffort,
+                        serviceTier = serviceTier,
+                    ),
+                )
+                _uiState.update {
+                    if (it.selectedSession?.id == detail.id) {
+                        it.copy(selectedSession = updated, message = "已更新会话配置。")
+                    } else {
+                        it
+                    }
+                }
+                refreshSessions()
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(message = error.message ?: "更新会话配置失败。")
+                }
+                refreshSessionSnapshot(detail.id)
             }
         }
     }
@@ -488,6 +716,11 @@ class AppViewModel(
                     it.copy(
                         selectedSession = it.selectedSession?.copy(
                             status = nextStatus,
+                            subtitle = buildSessionSubtitle(
+                                model = it.selectedSession.model,
+                                approvalMode = it.selectedSession.approvalMode,
+                                status = nextStatus,
+                            ),
                             lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
                         ),
                         queuedInputs = queuedInputsFor(sessionId),
@@ -503,7 +736,6 @@ class AppViewModel(
                     )
                 }
                 refreshSessionSnapshot(sessionId)
-                flushNextQueuedInputIfIdle(sessionId)
             }
 
             is SessionStreamEvent.RunStatus -> {
@@ -511,6 +743,11 @@ class AppViewModel(
                     it.copy(
                         selectedSession = it.selectedSession?.copy(
                             status = event.status,
+                            subtitle = buildSessionSubtitle(
+                                model = it.selectedSession.model,
+                                approvalMode = it.selectedSession.approvalMode,
+                                status = event.status,
+                            ),
                             lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
                         ),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -535,7 +772,14 @@ class AppViewModel(
                     it.copy(
                         selectedSession = it.selectedSession
                             ?.let { detail -> appendSystemMessage(detail, "当前任务已中断。", event.timestamp) }
-                            ?.copy(status = "idle"),
+                            ?.copy(
+                                status = "idle",
+                                subtitle = buildSessionSubtitle(
+                                    model = it.selectedSession.model,
+                                    approvalMode = it.selectedSession.approvalMode,
+                                    status = "idle",
+                                ),
+                            ),
                         queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("idle"),
@@ -562,7 +806,14 @@ class AppViewModel(
                                     timestamp = event.timestamp,
                                 )
                             }
-                            ?.copy(status = "awaiting_approval"),
+                            ?.copy(
+                                status = "awaiting_approval",
+                                subtitle = buildSessionSubtitle(
+                                    model = it.selectedSession.model,
+                                    approvalMode = it.selectedSession.approvalMode,
+                                    status = "awaiting_approval",
+                                ),
+                            ),
                         queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("awaiting_approval"),
@@ -589,7 +840,14 @@ class AppViewModel(
                                     timestamp = event.timestamp,
                                 )
                             }
-                            ?.copy(status = event.status ?: it.selectedSession.status),
+                            ?.copy(
+                                status = event.status ?: it.selectedSession.status,
+                                subtitle = buildSessionSubtitle(
+                                    model = it.selectedSession.model,
+                                    approvalMode = it.selectedSession.approvalMode,
+                                    status = event.status ?: it.selectedSession.status,
+                                ),
+                            ),
                         queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             lastEventText = event.summary ?: "收到工具结果事件。",
@@ -611,7 +869,14 @@ class AppViewModel(
                     it.copy(
                         selectedSession = it.selectedSession
                             ?.let { detail -> appendSystemMessage(detail, "系统：${event.message}", event.timestamp) }
-                            ?.copy(status = "error"),
+                            ?.copy(
+                                status = "error",
+                                subtitle = buildSessionSubtitle(
+                                    model = it.selectedSession.model,
+                                    approvalMode = it.selectedSession.approvalMode,
+                                    status = "error",
+                                ),
+                            ),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("error"),
                             lastEventText = "实时流返回错误事件。",
@@ -673,28 +938,29 @@ class AppViewModel(
                 cwd = state.cwdInput.trim(),
                 model = state.modelInput.trim(),
                 approvalMode = state.approvalModeInput,
+                reasoningEffort = state.reasoningEffortInput,
+                serviceTier = state.serviceTierInput,
             ),
         )
     }
 
-    private fun buildCreateSessionRequest(state: AppUiState): CreateSessionRequest? {
-        val cwd = state.cwdInput.trim()
-        if (cwd.isBlank()) {
-            _uiState.update { it.copy(message = "请先在设置里填写默认工作目录。") }
-            return null
-        }
-
-        val model = state.modelInput.trim()
-        if (model.isBlank()) {
-            _uiState.update { it.copy(message = "请先在设置里填写默认模型。") }
-            return null
-        }
-
-        val approvalMode = state.approvalModeInput.takeIf { it == "manual" || it == "auto" } ?: "manual"
+    private fun buildCreateSessionRequest(detail: SessionDetail): CreateSessionRequest {
         return CreateSessionRequest(
-            cwd = cwd,
-            model = model,
-            approvalMode = approvalMode,
+            cwd = detail.cwd.trim(),
+            model = detail.model.trim(),
+            approvalMode = detail.approvalMode,
+            reasoningEffort = detail.reasoningEffort,
+            serviceTier = detail.serviceTier,
+        )
+    }
+
+    private fun buildCreateSessionRequest(draft: DraftSessionUiState): CreateSessionRequest {
+        return CreateSessionRequest(
+            cwd = draft.cwd.trim(),
+            model = draft.model.trim(),
+            approvalMode = draft.approvalMode,
+            reasoningEffort = draft.reasoningEffort,
+            serviceTier = draft.serviceTier,
         )
     }
 
@@ -715,7 +981,14 @@ class AppViewModel(
                             timestamp = nowIsoString(),
                         )
                     }
-                    ?.copy(status = result.status),
+                    ?.copy(
+                        status = result.status,
+                        subtitle = buildSessionSubtitle(
+                            model = it.selectedSession.model,
+                            approvalMode = it.selectedSession.approvalMode,
+                            status = result.status,
+                        ),
+                    ),
                 message = "已提交审批操作：${result.decision.label}",
                 queuedInputs = queuedInputsFor(it.selectedSession?.id),
                 sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -767,6 +1040,9 @@ class AppViewModel(
         detail: SessionDetail,
         realtimeState: SessionRealtimeUiState,
     ): Boolean {
+        if (detail.status == "draft") {
+            return false
+        }
         return realtimeState.pendingApproval != null ||
             detail.status == "awaiting_approval" ||
             detail.status == "running"
@@ -830,12 +1106,16 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
         cwdInput = settings.cwd,
         modelInput = settings.model,
         approvalModeInput = settings.approvalMode,
+        reasoningEffortInput = settings.reasoningEffort,
+        serviceTierInput = settings.serviceTier,
         settingsItems = defaultSettingsItems(
             endpointInput = settings.endpoint,
             authTokenInput = settings.authToken,
             cwdInput = settings.cwd,
             modelInput = settings.model,
             approvalModeInput = settings.approvalMode,
+            reasoningEffortInput = settings.reasoningEffort,
+            serviceTierInput = settings.serviceTier,
         ),
     )
 }
@@ -849,6 +1129,8 @@ private fun AppUiState.withSettingsItems(): AppUiState {
             cwdInput = cwdInput,
             modelInput = modelInput,
             approvalModeInput = approvalModeInput,
+            reasoningEffortInput = reasoningEffortInput,
+            serviceTierInput = serviceTierInput,
         ),
     )
 }
@@ -859,6 +1141,8 @@ private fun AppSettings.sanitize(): AppSettings {
         cwd = cwd.trim(),
         model = model.trim().ifEmpty { "gpt-5.5" },
         approvalMode = approvalMode.takeIf { it == "manual" || it == "auto" } ?: "manual",
+        reasoningEffort = normalizeReasoningEffort(reasoningEffort),
+        serviceTier = normalizeServiceTier(serviceTier),
     )
 }
 
@@ -866,9 +1150,25 @@ private fun buildOrUpdateSessionFromStart(
     current: SessionDetail?,
     event: SessionStreamEvent.SessionStarted,
 ): SessionDetail {
+    val model = event.model ?: current?.model ?: "gpt-5.5"
+    val approvalMode = event.approvalMode ?: current?.approvalMode ?: "manual"
+    val reasoningEffort = event.reasoningEffort ?: current?.reasoningEffort ?: "medium"
+    val serviceTier = event.serviceTier ?: current?.serviceTier ?: "fast"
+    val cwd = event.cwd ?: current?.cwd ?: ""
+
     if (current != null && current.id == event.sessionId) {
         return current.copy(
+            cwd = cwd,
+            model = model,
+            approvalMode = approvalMode,
+            reasoningEffort = reasoningEffort,
+            serviceTier = serviceTier,
             status = event.status,
+            subtitle = buildSessionSubtitle(
+                model = model,
+                approvalMode = approvalMode,
+                status = event.status,
+            ),
             lastUpdated = event.timestamp ?: current.lastUpdated,
         )
     }
@@ -882,11 +1182,44 @@ private fun buildOrUpdateSessionFromStart(
     return SessionDetail(
         id = event.sessionId,
         title = event.sessionId,
-        subtitle = "${event.model ?: "未知模型"} • 实时流",
+        subtitle = buildSessionSubtitle(
+            model = model,
+            approvalMode = approvalMode,
+            status = event.status,
+        ),
         lastUpdated = event.timestamp ?: nowIsoString(),
         transcriptPreview = transcript,
+        cwd = cwd,
+        model = model,
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
         status = event.status,
     )
+}
+
+private fun buildDraftSession(
+    cwd: String,
+    model: String,
+    approvalMode: String,
+    reasoningEffort: String,
+    serviceTier: String,
+): DraftSessionUiState {
+    return DraftSessionUiState(
+        cwd = cwd,
+        model = model.ifBlank { "gpt-5.5" },
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
+    )
+}
+
+private fun buildSessionSubtitle(
+    model: String,
+    approvalMode: String,
+    status: String,
+): String {
+    return "$model • ${localizedApprovalMode(approvalMode)} • ${localizedSessionStatus(status)}"
 }
 
 private fun appendUserMessage(
@@ -906,6 +1239,11 @@ private fun appendUserMessage(
     return detail.copy(
         transcriptPreview = nextTranscript,
         status = "running",
+        subtitle = buildSessionSubtitle(
+            model = detail.model,
+            approvalMode = detail.approvalMode,
+            status = "running",
+        ),
         lastUpdated = nowIsoString(),
     )
 }
@@ -938,7 +1276,11 @@ private fun appendAssistantDelta(
     val base = detail ?: SessionDetail(
         id = event.sessionId,
         title = event.sessionId,
-        subtitle = "实时会话",
+        subtitle = buildSessionSubtitle(
+            model = "gpt-5.5",
+            approvalMode = "manual",
+            status = "running",
+        ),
         lastUpdated = event.timestamp ?: nowIsoString(),
         transcriptPreview = "",
         status = "running",
@@ -964,6 +1306,11 @@ private fun appendAssistantDelta(
         detail = base.copy(
             transcriptPreview = nextTranscript,
             status = "running",
+            subtitle = buildSessionSubtitle(
+                model = base.model,
+                approvalMode = base.approvalMode,
+                status = "running",
+            ),
             lastUpdated = event.timestamp ?: nowIsoString(),
         ),
         activeTurnId = turnId,
@@ -996,6 +1343,8 @@ private fun defaultSettingsItems(
     cwdInput: String = "",
     modelInput: String = "gpt-5.5",
     approvalModeInput: String = "manual",
+    reasoningEffortInput: String = "medium",
+    serviceTierInput: String = "fast",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     return listOf(
@@ -1004,6 +1353,8 @@ private fun defaultSettingsItems(
         "鉴权令牌" to if (authTokenInput.isBlank()) "未配置" else "已配置",
         "默认工作目录" to cwdInput.ifBlank { "未配置" },
         "默认模型" to modelInput.ifBlank { "未配置" },
+        "推理强度" to localizedReasoningEffort(reasoningEffortInput),
+        "速度档位" to localizedServiceTier(serviceTierInput),
         "审批模式" to localizedApprovalMode(approvalModeInput),
         "运行器" to (connectedState?.runnerMode ?: "未连接"),
         "遥测" to "已关闭",
@@ -1017,8 +1368,26 @@ private fun localizedApprovalMode(mode: String): String {
     }
 }
 
+private fun localizedReasoningEffort(value: String): String {
+    return when (value) {
+        "minimal" -> "极简"
+        "low" -> "低"
+        "high" -> "高"
+        "xhigh" -> "极高"
+        else -> "中"
+    }
+}
+
+private fun localizedServiceTier(value: String): String {
+    return when (value) {
+        "flex" -> "Flex"
+        else -> "Fast"
+    }
+}
+
 private fun localizedSessionStatus(status: String): String {
     return when (status) {
+        "draft" -> "草稿"
         "running" -> "进行中"
         "awaiting_approval" -> "等待批准"
         "error" -> "出错"
@@ -1029,6 +1398,14 @@ private fun localizedSessionStatus(status: String): String {
 private fun buildApprovalResultText(result: ApprovalActionResult): String {
     val method = result.method ?: "未知方法"
     return "审批结果：${result.decision.label}（$method）"
+}
+
+private fun normalizeReasoningEffort(value: String): String {
+    return value.takeIf { it in setOf("minimal", "low", "medium", "high", "xhigh") } ?: "medium"
+}
+
+private fun normalizeServiceTier(value: String): String {
+    return value.takeIf { it == "fast" || it == "flex" } ?: "fast"
 }
 
 private fun nowIsoString(): String = Instant.now().toString()

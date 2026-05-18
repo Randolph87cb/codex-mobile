@@ -1,42 +1,78 @@
 package com.openai.codexmobile.ui.screen
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Work
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingApprovalUiState
 import com.openai.codexmobile.SessionRealtimeUiState
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.ui.TestTags
 
+private enum class SessionConfigEditor {
+    Cwd,
+    Model,
+    ReasoningEffort,
+    ServiceTier,
+}
+
 @Composable
 fun SessionDetailScreen(
     paddingValues: PaddingValues,
     sessionDetail: SessionDetail?,
+    draftSession: DraftSessionUiState?,
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     draftMessage: String,
@@ -44,17 +80,37 @@ fun SessionDetailScreen(
     onDraftMessageChange: (String) -> Unit,
     onSend: () -> Unit,
     onApprovalDecision: (ApprovalDecision) -> Unit,
+    onUpdateCwd: (String) -> Unit,
+    onUpdateModel: (String) -> Unit,
+    onUpdateReasoningEffort: (String) -> Unit,
+    onUpdateServiceTier: (String) -> Unit,
+    onRefreshSession: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val detail = remember(sessionDetail, draftSession) {
+        sessionDetail ?: draftSession?.toDraftDetail()
+    }
     val transcriptScrollState = rememberScrollState()
+    var statusExpanded by rememberSaveable { mutableStateOf(false) }
+    var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
 
     LaunchedEffect(
-        sessionDetail?.transcriptPreview,
+        detail?.transcriptPreview,
         sessionRealtimeState.lastEventText,
         sessionRealtimeState.pendingApproval?.requestId?.toString(),
     ) {
         transcriptScrollState.animateScrollTo(transcriptScrollState.maxValue)
     }
+
+    ConfigEditorDialogs(
+        activeEditor = activeEditor,
+        detail = detail,
+        onDismiss = { activeEditor = null },
+        onUpdateCwd = onUpdateCwd,
+        onUpdateModel = onUpdateModel,
+        onUpdateReasoningEffort = onUpdateReasoningEffort,
+        onUpdateServiceTier = onUpdateServiceTier,
+    )
 
     Column(
         modifier = Modifier
@@ -65,42 +121,22 @@ fun SessionDetailScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "会话详情",
+            text = if (draftSession != null) "草稿线程" else "会话详情",
             style = MaterialTheme.typography.headlineMedium,
         )
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "实时状态",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = sessionRealtimeState.connectionText,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = "运行状态：${sessionRealtimeState.statusText}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    text = sessionRealtimeState.lastEventText ?: "等待实时事件。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                sessionRealtimeState.fallbackNotice?.let { notice ->
-                    Text(
-                        text = notice,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                if (sessionRealtimeState.statusText == "进行中") {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-            }
-        }
+        StatusStrip(
+            detail = detail,
+            sessionRealtimeState = sessionRealtimeState,
+            queuedInputs = queuedInputs,
+            isDraft = draftSession != null,
+            expanded = statusExpanded,
+            onToggleExpanded = { statusExpanded = !statusExpanded },
+            onRefreshSession = onRefreshSession,
+        )
+        SessionConfigRow(
+            detail = detail,
+            onOpenEditor = { activeEditor = it },
+        )
         sessionRealtimeState.pendingApproval?.let { approval ->
             ApprovalActionCard(
                 approval = approval,
@@ -123,19 +159,19 @@ fun SessionDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = sessionDetail?.title ?: "未选择会话",
+                    text = detail?.title ?: "未选择会话",
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Text(
-                    text = sessionDetail?.subtitle ?: "请先从会话列表中选择一个会话。",
+                    text = detail?.subtitle ?: "请先从会话列表中选择一个会话。",
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Text(
-                    text = sessionDetail?.lastUpdated ?: "等待会话元数据",
+                    text = detail?.lastUpdated ?: "等待会话元数据",
                     style = MaterialTheme.typography.labelLarge,
                 )
                 TranscriptBubbleList(
-                    transcript = sessionDetail?.transcriptPreview.orEmpty(),
+                    transcript = detail?.transcriptPreview.orEmpty(),
                 )
             }
         }
@@ -145,17 +181,25 @@ fun SessionDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(TestTags.SessionDetailDraftField),
-            label = { Text("发送给 Codex") },
+            label = {
+                Text(
+                    if (draftSession != null) {
+                        "先写下首条消息，发送后才真正创建线程"
+                    } else {
+                        "发送给 Codex"
+                    },
+                )
+            },
         )
         Button(
             onClick = onSend,
-            enabled = !isLoading && sessionDetail != null && draftMessage.isNotBlank(),
+            enabled = !isLoading && detail != null && draftMessage.isNotBlank(),
             modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
         ) {
             if (isLoading) {
                 CircularProgressIndicator(strokeWidth = 2.dp)
             } else {
-                Text("发送")
+                Text(if (draftSession != null) "开始对话" else "发送")
             }
         }
         Button(
@@ -165,6 +209,310 @@ fun SessionDetailScreen(
             Text("返回会话列表")
         }
     }
+}
+
+@Composable
+private fun StatusStrip(
+    detail: SessionDetail?,
+    sessionRealtimeState: SessionRealtimeUiState,
+    queuedInputs: List<String>,
+    isDraft: Boolean,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onRefreshSession: () -> Unit,
+) {
+    val statusIcon = when {
+        isDraft -> Icons.Filled.Work
+        detail?.status == "running" -> Icons.Filled.Bolt
+        detail?.status == "awaiting_approval" -> Icons.Filled.HourglassTop
+        detail?.status == "error" -> Icons.Filled.Error
+        else -> Icons.Filled.CheckCircle
+    }
+    val connectionIcon = if (sessionRealtimeState.isConnected) {
+        Icons.Filled.CloudDone
+    } else {
+        Icons.Filled.CloudOff
+    }
+    val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailStatusStrip),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.SessionDetailStatusButton),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                StatusGlyph(icon = statusIcon, label = localizedStatusLabel(detail?.status ?: "idle"))
+                StatusGlyph(
+                    icon = connectionIcon,
+                    label = if (isDraft) "草稿" else if (sessionRealtimeState.isConnected) "实时流" else "快照",
+                )
+                StatusGlyph(icon = queueIcon, label = if (queuedInputs.isEmpty()) "无排队" else "排队 ${queuedInputs.size}")
+                if (sessionRealtimeState.pendingApproval != null) {
+                    StatusGlyph(icon = Icons.Filled.HourglassTop, label = "待审批")
+                }
+                IconButton(onClick = onToggleExpanded, modifier = Modifier.weight(1f, fill = false)) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
+                    )
+                }
+            }
+            if (expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SessionDetailStatusDetails),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(text = "连接：${sessionRealtimeState.connectionText}", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "状态：${sessionRealtimeState.statusText}", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = sessionRealtimeState.lastEventText ?: "等待实时事件。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    sessionRealtimeState.fallbackNotice?.let { notice ->
+                        Text(
+                            text = notice,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (!isDraft) {
+                        OutlinedButton(
+                            onClick = onRefreshSession,
+                            modifier = Modifier.testTag(TestTags.SessionDetailStatusRefreshButton),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = null,
+                            )
+                            Text(
+                                text = "立即同步",
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusGlyph(
+    icon: ImageVector,
+    label: String,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(imageVector = icon, contentDescription = null)
+        Text(text = label, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
+private fun SessionConfigRow(
+    detail: SessionDetail?,
+    onOpenEditor: (SessionConfigEditor) -> Unit,
+) {
+    if (detail == null) {
+        return
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .testTag(TestTags.SessionDetailConfigRow),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedButton(
+            onClick = { onOpenEditor(SessionConfigEditor.Cwd) },
+            modifier = Modifier.testTag(TestTags.SessionDetailConfigCwdButton),
+        ) {
+            Icon(imageVector = Icons.Filled.Work, contentDescription = null)
+            Text(
+                text = "目录",
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        OutlinedButton(
+            onClick = { onOpenEditor(SessionConfigEditor.Model) },
+            modifier = Modifier.testTag(TestTags.SessionDetailConfigModelButton),
+        ) {
+            Icon(imageVector = Icons.Filled.Tune, contentDescription = null)
+            Text(
+                text = detail.model,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        OutlinedButton(
+            onClick = { onOpenEditor(SessionConfigEditor.ReasoningEffort) },
+            modifier = Modifier.testTag(TestTags.SessionDetailConfigReasoningButton),
+        ) {
+            Icon(imageVector = Icons.Filled.Bolt, contentDescription = null)
+            Text(
+                text = "推理 ${localizedReasoning(detail.reasoningEffort)}",
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        OutlinedButton(
+            onClick = { onOpenEditor(SessionConfigEditor.ServiceTier) },
+            modifier = Modifier.testTag(TestTags.SessionDetailConfigServiceTierButton),
+        ) {
+            Icon(imageVector = Icons.Filled.Speed, contentDescription = null)
+            Text(
+                text = "速度 ${localizedService(detail.serviceTier)}",
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConfigEditorDialogs(
+    activeEditor: SessionConfigEditor?,
+    detail: SessionDetail?,
+    onDismiss: () -> Unit,
+    onUpdateCwd: (String) -> Unit,
+    onUpdateModel: (String) -> Unit,
+    onUpdateReasoningEffort: (String) -> Unit,
+    onUpdateServiceTier: (String) -> Unit,
+) {
+    val currentDetail = detail ?: return
+
+    when (activeEditor) {
+        SessionConfigEditor.Cwd -> TextInputConfigDialog(
+            title = "更新目录",
+            label = "工作目录",
+            initialValue = currentDetail.cwd,
+            onDismiss = onDismiss,
+            onConfirm = {
+                onUpdateCwd(it)
+                onDismiss()
+            },
+        )
+
+        SessionConfigEditor.Model -> TextInputConfigDialog(
+            title = "更新模型",
+            label = "模型",
+            initialValue = currentDetail.model,
+            onDismiss = onDismiss,
+            onConfirm = {
+                onUpdateModel(it)
+                onDismiss()
+            },
+        )
+
+        SessionConfigEditor.ReasoningEffort -> ChoiceConfigDialog(
+            title = "选择推理强度",
+            options = listOf(
+                "minimal" to "极低",
+                "low" to "低",
+                "medium" to "中",
+                "high" to "高",
+                "xhigh" to "最高",
+            ),
+            onDismiss = onDismiss,
+            onChoose = {
+                onUpdateReasoningEffort(it)
+                onDismiss()
+            },
+        )
+
+        SessionConfigEditor.ServiceTier -> ChoiceConfigDialog(
+            title = "选择速度",
+            options = listOf(
+                "fast" to "快速",
+                "flex" to "平衡",
+            ),
+            onDismiss = onDismiss,
+            onChoose = {
+                onUpdateServiceTier(it)
+                onDismiss()
+            },
+        )
+
+        null -> Unit
+    }
+}
+
+@Composable
+private fun TextInputConfigDialog(
+    title: String,
+    label: String,
+    initialValue: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var value by remember(initialValue) { mutableStateOf(initialValue) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { value = it },
+                label = { Text(label) },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(value.trim()) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
+private fun ChoiceConfigDialog(
+    title: String,
+    options: List<Pair<String, String>>,
+    onDismiss: () -> Unit,
+    onChoose: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                options.forEach { (value, label) ->
+                    OutlinedButton(
+                        onClick = { onChoose(value) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(label)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
 }
 
 @Composable
@@ -245,13 +593,7 @@ private fun TranscriptBubbleList(
                 }
                 Card(
                     modifier = Modifier
-                        .align(
-                            if (isUser) {
-                                androidx.compose.ui.Alignment.CenterEnd
-                            } else {
-                                androidx.compose.ui.Alignment.CenterStart
-                            },
-                        )
+                        .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
                         .widthIn(max = 320.dp),
                     colors = CardDefaults.cardColors(containerColor = backgroundColor),
                 ) {
@@ -392,5 +734,61 @@ private fun ApprovalActionCard(
                 Text("拒绝并中断")
             }
         }
+    }
+}
+
+private fun DraftSessionUiState.toDraftDetail(): SessionDetail {
+    return SessionDetail(
+        id = localId,
+        title = "新会话（草稿）",
+        subtitle = "首条消息发送后创建 • ${localizedApprovalMode(approvalMode)}",
+        lastUpdated = "尚未创建",
+        transcriptPreview = buildString {
+            appendLine("工作目录：$cwd")
+            appendLine("模型：$model")
+            appendLine("推理强度：${localizedReasoning(reasoningEffort)}")
+            appendLine("速度：${localizedService(serviceTier)}")
+            append("发送首条消息后，bridge 才会真正创建这个会话。")
+        },
+        cwd = cwd,
+        model = model,
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
+        status = "draft",
+    )
+}
+
+private fun localizedReasoning(value: String): String {
+    return when (value) {
+        "minimal" -> "极低"
+        "low" -> "低"
+        "high" -> "高"
+        "xhigh" -> "最高"
+        else -> "中"
+    }
+}
+
+private fun localizedService(value: String): String {
+    return when (value) {
+        "flex" -> "平衡"
+        else -> "快速"
+    }
+}
+
+private fun localizedApprovalMode(mode: String): String {
+    return when (mode) {
+        "auto" -> "自动"
+        else -> "手动"
+    }
+}
+
+private fun localizedStatusLabel(status: String): String {
+    return when (status) {
+        "draft" -> "草稿"
+        "running" -> "进行中"
+        "awaiting_approval" -> "待审批"
+        "error" -> "出错"
+        else -> "空闲"
     }
 }

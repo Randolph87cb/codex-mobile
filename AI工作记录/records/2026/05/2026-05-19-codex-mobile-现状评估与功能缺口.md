@@ -498,6 +498,83 @@
 - [ ] 为 bridge 增加 token 认证与目录白名单
 - [ ] 为上述能力补齐 bridge / Android 测试
 
+## 追加记录：草稿线程、目录分组与同线程状态同步
+
+- 时间：2026-05-19
+- 用户反馈：
+  - 新建线程时希望先选目录，不要立刻创建远端会话。
+  - 会话列表希望按目录分组，并能在目录分组内直接新建线程。
+  - 模型、推理强度、速度希望做成常驻配置按钮。
+  - 顶部状态区太占空间，希望压缩成图标并可点开查看详情。
+  - 同时在手机端和 Codex app 查看同一线程时，状态会突然停止或被打乱。
+
+### 本轮实现
+
+- Android：
+  - 会话列表按 `cwd` 分组展示，并在每个目录卡片上提供“在此新建”：
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+  - 新建线程改成“草稿线程”：
+    - 先选目录，进入草稿详情页；
+    - 首条消息发送时才真正调用 `POST /api/session`；
+    - 文件：
+      - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+      - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - 顶部配置改成常驻操作条：
+    - 目录
+    - 模型
+    - 推理强度
+    - 速度档位
+    - 文件：
+      - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+      - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+  - 顶部实时状态改成紧凑图标条，可展开查看完整细节，并提供“立即同步”入口：
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - 设置持久化扩展到：
+    - `reasoningEffort`
+    - `serviceTier`
+    - 文件：
+      - `android/app/src/main/java/com/openai/codexmobile/data/AppSettingsStore.kt`
+  - 回放宿主和 UI 测试同步更新：
+    - `android/app/src/debug/java/com/openai/codexmobile/ReplayHarnessActivity.kt`
+    - `android/app/src/androidTest/java/com/openai/codexmobile/SessionDetailReplayTest.kt`
+    - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+    - `android/app/src/test/java/com/openai/codexmobile/ui/screen/SessionListGroupingTest.kt`
+
+- bridge：
+  - `POST /api/session` 与 `PATCH /api/session/:id/config` 全链路支持：
+    - `cwd`
+    - `model`
+    - `approvalMode`
+    - `reasoningEffort`
+    - `serviceTier`
+  - 历史线程 / 外部线程状态刷新更积极：
+    - 进入历史线程时优先 `thread/resume` / `thread/read`
+    - 优先用真实线程状态覆盖旧本地状态
+  - 同线程被别的客户端占用时，bridge 会返回 `thread-busy` 并映射为 HTTP `409`，避免手机端继续盲发输入把状态打乱。
+  - `interrupt` 会优先根据真实线程内容寻找活跃 turn，因此外部客户端启动的当前轮也能被识别和同步。
+
+### 本轮验证
+
+- bridge：
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+  - 结果：通过，5 个测试文件、23 个测试全部通过
+- Android：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - `.\gradlew.bat connectedDebugAndroidTest`
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：全部通过
+
+### 当前交付结论
+
+- 新线程现在是“先选目录、先写首条消息、发送时才真正创建”。
+- 会话列表现在按目录分组，并支持从目录上下文直接开草稿线程。
+- 模型 / 推理 / 速度现在既能持久化，也能在详情页顶部直接改。
+- 顶部大状态卡已压缩成图标条，详细状态可展开查看。
+- 与桌面 Codex app 同时看同一线程时，bridge 现在会更积极地同步真实线程状态，并在忙碌冲突时明确返回 `409`，不再默默把状态打乱。
+
 ---
 
 ## 追加记录：bridge 审批闭环接通

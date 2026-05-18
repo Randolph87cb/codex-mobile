@@ -31,6 +31,8 @@ class ReplayHarnessActivity : ComponentActivity() {
                 cwd = "D:\\workspace\\codex-mobile",
                 model = "gpt-5.5",
                 approvalMode = "manual",
+                reasoningEffort = "medium",
+                serviceTier = "fast",
             ),
         )
         val dataProvider = DeterministicReplayDataProvider()
@@ -68,6 +70,11 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         title = "测试会话",
         subtitle = "用于稳定 UI 回放",
         lastUpdated = "刚刚更新",
+        cwd = "D:\\workspace\\codex-mobile",
+        model = "gpt-5.5",
+        approvalMode = "manual",
+        reasoningEffort = "medium",
+        serviceTier = "fast",
         status = "idle",
     )
     private val detail = SessionDetail(
@@ -86,6 +93,11 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
             appendLine("审批结果：历史工具结果")
             append("这条记录用于校验工具结果渲染。")
         },
+        cwd = session.cwd,
+        model = session.model,
+        approvalMode = session.approvalMode,
+        reasoningEffort = session.reasoningEffort,
+        serviceTier = session.serviceTier,
         status = session.status,
     )
     private val longApprovalSummary = buildString {
@@ -114,6 +126,19 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
 
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail = detail
+
+    override suspend fun updateSessionConfig(
+        sessionId: String,
+        update: com.openai.codexmobile.data.SessionConfigUpdate,
+    ): SessionDetail {
+        return detail.copy(
+            cwd = update.cwd ?: detail.cwd,
+            model = update.model ?: detail.model,
+            approvalMode = update.approvalMode ?: detail.approvalMode,
+            reasoningEffort = update.reasoningEffort ?: detail.reasoningEffort,
+            serviceTier = update.serviceTier ?: detail.serviceTier,
+        )
+    }
 
     override suspend fun sendInput(sessionId: String, text: String) = Unit
 

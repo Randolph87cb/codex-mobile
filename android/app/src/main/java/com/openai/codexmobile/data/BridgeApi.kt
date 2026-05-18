@@ -8,6 +8,16 @@ data class CreateSessionRequest(
     val cwd: String = ".",
     val model: String = "gpt-5.5",
     val approvalMode: String = "manual",
+    val reasoningEffort: String = "medium",
+    val serviceTier: String = "fast",
+)
+
+data class SessionConfigUpdate(
+    val cwd: String? = null,
+    val model: String? = null,
+    val approvalMode: String? = null,
+    val reasoningEffort: String? = null,
+    val serviceTier: String? = null,
 )
 
 interface BridgeApi {
@@ -16,6 +26,7 @@ interface BridgeApi {
     suspend fun disconnect()
     suspend fun currentConnection(): BridgeConnectionState
     suspend fun createSession(request: CreateSessionRequest = CreateSessionRequest()): SessionDetail
+    suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail
     suspend fun sendInput(sessionId: String, text: String)
     suspend fun approveSession(
         sessionId: String,

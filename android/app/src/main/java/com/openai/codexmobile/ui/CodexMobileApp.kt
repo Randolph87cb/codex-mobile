@@ -25,6 +25,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.openai.codexmobile.AppViewModel
+import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.ui.screen.ConnectionScreen
 import com.openai.codexmobile.ui.screen.SessionDetailScreen
 import com.openai.codexmobile.ui.screen.SessionListScreen
@@ -33,6 +34,7 @@ import com.openai.codexmobile.ui.screen.SettingsScreen
 private object Routes {
     const val Connection = "connection"
     const val Sessions = "sessions"
+    const val DraftSession = "draft"
     const val SessionDetail = "session/{sessionId}"
     const val Settings = "settings"
 }
@@ -51,12 +53,23 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
     }
 
     LaunchedEffect(uiState.connectionState, currentRoute) {
-        if (uiState.connectionState is com.openai.codexmobile.model.BridgeConnectionState.Connected &&
-            currentRoute == Routes.Connection
-        ) {
+        if (uiState.connectionState is BridgeConnectionState.Connected && currentRoute == Routes.Connection) {
             navController.navigate(Routes.Sessions) {
                 popUpTo(Routes.Connection) {
                     inclusive = false
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(currentRoute, uiState.selectedDraftSession, uiState.selectedSession?.id) {
+        if (currentRoute == Routes.DraftSession &&
+            uiState.selectedDraftSession == null &&
+            uiState.selectedSession != null
+        ) {
+            navController.navigate("session/${uiState.selectedSession?.id}") {
+                popUpTo(Routes.DraftSession) {
+                    inclusive = true
                 }
             }
         }
@@ -92,21 +105,50 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     paddingValues = paddingValues,
                     sessions = uiState.sessions,
                     connectionState = uiState.connectionState,
+                    currentCwd = uiState.cwdInput,
                     isLoading = uiState.isLoading,
                     onOpenSession = { sessionId ->
                         navController.navigate("session/$sessionId")
                     },
-                    onCreateSession = {
-                        appViewModel.createSession()
-                        if (currentRoute != Routes.SessionDetail) {
-                            navController.navigate(Routes.Sessions)
-                        }
+                    onCreateDraft = { cwd ->
+                        appViewModel.startDraftSession(cwd)
+                        navController.navigate(Routes.DraftSession)
                     },
                     onDisconnect = {
                         appViewModel.disconnect()
                         navController.popBackStack(Routes.Connection, inclusive = false)
                     },
                     onOpenSettings = { navController.navigate(Routes.Settings) },
+                )
+            }
+            composable(Routes.DraftSession) {
+                DisposableEffect(Unit) {
+                    onDispose {
+                        if (uiState.selectedDraftSession != null) {
+                            appViewModel.discardDraftSession()
+                        }
+                    }
+                }
+                SessionDetailScreen(
+                    paddingValues = paddingValues,
+                    sessionDetail = null,
+                    draftSession = uiState.selectedDraftSession,
+                    sessionRealtimeState = uiState.sessionRealtimeState,
+                    queuedInputs = uiState.queuedInputs,
+                    draftMessage = uiState.draftMessage,
+                    isLoading = uiState.isLoading,
+                    onDraftMessageChange = appViewModel::updateDraftMessage,
+                    onSend = appViewModel::sendInput,
+                    onApprovalDecision = appViewModel::submitApproval,
+                    onUpdateCwd = appViewModel::updateSelectedSessionCwd,
+                    onUpdateModel = appViewModel::updateSelectedSessionModel,
+                    onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
+                    onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
+                    onRefreshSession = appViewModel::refreshSelectedSession,
+                    onBack = {
+                        appViewModel.discardDraftSession()
+                        navController.popBackStack()
+                    },
                 )
             }
             composable(Routes.SessionDetail) { entry ->
@@ -122,6 +164,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 SessionDetailScreen(
                     paddingValues = paddingValues,
                     sessionDetail = uiState.selectedSession,
+                    draftSession = null,
                     sessionRealtimeState = uiState.sessionRealtimeState,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
@@ -129,6 +172,11 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onSend = appViewModel::sendInput,
                     onApprovalDecision = appViewModel::submitApproval,
+                    onUpdateCwd = appViewModel::updateSelectedSessionCwd,
+                    onUpdateModel = appViewModel::updateSelectedSessionModel,
+                    onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
+                    onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
+                    onRefreshSession = appViewModel::refreshSelectedSession,
                     onBack = {
                         appViewModel.closeSessionDetail(sessionId)
                         navController.popBackStack()
@@ -144,11 +192,15 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     cwdInput = uiState.cwdInput,
                     modelInput = uiState.modelInput,
                     approvalModeInput = uiState.approvalModeInput,
+                    reasoningEffortInput = uiState.reasoningEffortInput,
+                    serviceTierInput = uiState.serviceTierInput,
                     onEndpointChange = appViewModel::updateEndpointInput,
                     onAuthTokenChange = appViewModel::updateAuthTokenInput,
                     onCwdChange = appViewModel::updateCwdInput,
                     onModelChange = appViewModel::updateModelInput,
                     onApprovalModeChange = appViewModel::updateApprovalModeInput,
+                    onReasoningEffortChange = appViewModel::updateReasoningEffortInput,
+                    onServiceTierChange = appViewModel::updateServiceTierInput,
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -162,15 +214,17 @@ private fun AppTopBar(
     currentRoute: String?,
     navController: NavHostController,
 ) {
-    val isSessionDetailRoute = currentRoute == Routes.SessionDetail ||
+    val isSessionDetailRoute = currentRoute == Routes.DraftSession ||
+        currentRoute == Routes.SessionDetail ||
         currentRoute?.startsWith("session/") == true
     val title = when (currentRoute) {
         Routes.Connection -> "连接"
         Routes.Sessions -> "会话"
+        Routes.DraftSession -> "草稿线程"
         Routes.Settings -> "设置"
         else -> "Codex 移动端"
     }
-    val resolvedTitle = if (isSessionDetailRoute) "会话详情" else title
+    val resolvedTitle = if (currentRoute?.startsWith("session/") == true) "会话详情" else title
 
     TopAppBar(
         title = { Text(text = resolvedTitle) },

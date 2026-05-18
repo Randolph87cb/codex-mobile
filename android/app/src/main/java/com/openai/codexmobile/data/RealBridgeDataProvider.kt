@@ -67,10 +67,32 @@ class RealBridgeDataProvider : CodexDataProvider {
             .put("cwd", request.cwd)
             .put("model", request.model)
             .put("approvalMode", request.approvalMode)
+            .put("reasoningEffort", request.reasoningEffort)
+            .put("serviceTier", request.serviceTier)
 
         val response = request(
             method = "POST",
             url = "${requireBaseUrl()}/api/session",
+            body = payload.toString(),
+        )
+        if (response.statusCode !in 200..299) {
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        response.body.toSessionDetail()
+    }
+
+    override suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail = withContext(Dispatchers.IO) {
+        val payload = JSONObject()
+        update.cwd?.let { payload.put("cwd", it) }
+        update.model?.let { payload.put("model", it) }
+        update.approvalMode?.let { payload.put("approvalMode", it) }
+        update.reasoningEffort?.let { payload.put("reasoningEffort", it) }
+        update.serviceTier?.let { payload.put("serviceTier", it) }
+
+        val response = request(
+            method = "PATCH",
+            url = "${requireBaseUrl()}/api/session/$sessionId/config",
             body = payload.toString(),
         )
         if (response.statusCode !in 200..299) {
@@ -288,6 +310,9 @@ private fun parseSessionStreamEvent(
             status = data.optString("status").ifBlank { "idle" },
             cwd = data.optString("cwd").takeIf { it.isNotBlank() },
             model = data.optString("model").takeIf { it.isNotBlank() },
+            approvalMode = data.optString("approvalMode").takeIf { it.isNotBlank() },
+            reasoningEffort = data.optString("reasoningEffort").takeIf { it.isNotBlank() },
+            serviceTier = data.optString("serviceTier").takeIf { it.isNotBlank() },
             threadId = data.optString("threadId").takeIf { it.isNotBlank() },
             timestamp = timestamp,
         )
@@ -436,6 +461,11 @@ private fun JSONObject.toSessionSummary(): SessionSummary {
         title = title,
         subtitle = "$model • ${localizedStatus(status)} • $cwd",
         lastUpdated = updatedAt.ifBlank { "未知更新时间" },
+        cwd = cwd,
+        model = model,
+        approvalMode = optString("approvalMode").ifBlank { "manual" },
+        reasoningEffort = optString("reasoningEffort").ifBlank { "medium" },
+        serviceTier = optString("serviceTier").ifBlank { "fast" },
         status = status,
     )
 }
@@ -449,6 +479,8 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
     val title = optString("title").ifBlank { id }
     val model = optString("model").ifBlank { "未知模型" }
     val approvalMode = optString("approvalMode").ifBlank { "未知审批模式" }
+    val reasoningEffort = optString("reasoningEffort").ifBlank { "medium" }
+    val serviceTier = optString("serviceTier").ifBlank { "fast" }
     val status = optString("status").ifBlank { "unknown" }
     val cwd = optString("cwd").ifBlank { "未提供工作目录" }
     val threadId = optString("threadId").ifBlank { "尚未分配" }
@@ -470,6 +502,11 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
                 append("最近错误：$lastError")
             }
         },
+        cwd = cwd,
+        model = model,
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
         status = status,
     )
 }

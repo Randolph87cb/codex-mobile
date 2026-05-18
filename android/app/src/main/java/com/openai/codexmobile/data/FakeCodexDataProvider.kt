@@ -18,6 +18,8 @@ class FakeCodexDataProvider : CodexDataProvider {
             title = "Compose 骨架初始化",
             subtitle = "占位会话列表项",
             lastUpdated = "刚刚更新",
+            cwd = "D:\\workspace\\codex-mobile",
+            model = "gpt-5.5",
             status = "idle",
         ),
         SessionSummary(
@@ -25,6 +27,8 @@ class FakeCodexDataProvider : CodexDataProvider {
             title = "桥接协议探索",
             subtitle = "预留给后续原生桥接集成",
             lastUpdated = "12 分钟前更新",
+            cwd = "D:\\workspace\\playground",
+            model = "gpt-5.5",
             status = "idle",
         ),
     )
@@ -50,7 +54,27 @@ class FakeCodexDataProvider : CodexDataProvider {
             subtitle = "${request.model} • ${request.approvalMode}",
             lastUpdated = "刚刚更新",
             transcriptPreview = "工作目录：${request.cwd}",
+            cwd = request.cwd,
+            model = request.model,
+            approvalMode = request.approvalMode,
+            reasoningEffort = request.reasoningEffort,
+            serviceTier = request.serviceTier,
             status = "idle",
+        )
+    }
+
+    override suspend fun updateSessionConfig(
+        sessionId: String,
+        update: SessionConfigUpdate,
+    ): SessionDetail {
+        delay(100)
+        val detail = getSessionDetail(sessionId) ?: error("session not found")
+        return detail.copy(
+            cwd = update.cwd ?: detail.cwd,
+            model = update.model ?: detail.model,
+            approvalMode = update.approvalMode ?: detail.approvalMode,
+            reasoningEffort = update.reasoningEffort ?: detail.reasoningEffort,
+            serviceTier = update.serviceTier ?: detail.serviceTier,
         )
     }
 
@@ -88,6 +112,11 @@ class FakeCodexDataProvider : CodexDataProvider {
             subtitle = session.subtitle,
             lastUpdated = session.lastUpdated,
             transcriptPreview = "这里是占位详情页，后续会替换成真实会话内容和工具输出。",
+            cwd = session.cwd,
+            model = session.model,
+            approvalMode = session.approvalMode,
+            reasoningEffort = session.reasoningEffort,
+            serviceTier = session.serviceTier,
             status = session.status,
         )
     }

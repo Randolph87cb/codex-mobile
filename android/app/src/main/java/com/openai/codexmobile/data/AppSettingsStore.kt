@@ -9,6 +9,8 @@ data class AppSettings(
     val cwd: String,
     val model: String,
     val approvalMode: String,
+    val reasoningEffort: String,
+    val serviceTier: String,
 )
 
 data class AppSettingsDefaults(
@@ -16,6 +18,8 @@ data class AppSettingsDefaults(
     val cwd: String,
     val model: String = "gpt-5.5",
     val approvalMode: String = "manual",
+    val reasoningEffort: String = "medium",
+    val serviceTier: String = "fast",
 )
 
 interface AppSettingsStore {
@@ -39,6 +43,12 @@ class SharedPreferencesAppSettingsStore(
             approvalMode = preferences.getString(KEY_APPROVAL_MODE, defaults.approvalMode)
                 ?.takeIf { it == "manual" || it == "auto" }
                 ?: defaults.approvalMode,
+            reasoningEffort = preferences.getString(KEY_REASONING_EFFORT, defaults.reasoningEffort)
+                ?.takeIf { it in setOf("minimal", "low", "medium", "high", "xhigh") }
+                ?: defaults.reasoningEffort,
+            serviceTier = preferences.getString(KEY_SERVICE_TIER, defaults.serviceTier)
+                ?.takeIf { it == "fast" || it == "flex" }
+                ?: defaults.serviceTier,
         )
     }
 
@@ -49,6 +59,8 @@ class SharedPreferencesAppSettingsStore(
             .putString(KEY_CWD, settings.cwd)
             .putString(KEY_MODEL, settings.model)
             .putString(KEY_APPROVAL_MODE, settings.approvalMode)
+            .putString(KEY_REASONING_EFFORT, settings.reasoningEffort)
+            .putString(KEY_SERVICE_TIER, settings.serviceTier)
             .apply()
     }
 
@@ -59,6 +71,8 @@ class SharedPreferencesAppSettingsStore(
         const val KEY_CWD = "cwd"
         const val KEY_MODEL = "model"
         const val KEY_APPROVAL_MODE = "approval_mode"
+        const val KEY_REASONING_EFFORT = "reasoning_effort"
+        const val KEY_SERVICE_TIER = "service_tier"
     }
 }
 

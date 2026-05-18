@@ -48,6 +48,13 @@ class FallbackCodexDataProvider(
         return requireActiveProvider().createSession(request)
     }
 
+    override suspend fun updateSessionConfig(
+        sessionId: String,
+        update: SessionConfigUpdate,
+    ): SessionDetail {
+        return requireActiveProvider().updateSessionConfig(sessionId, update)
+    }
+
     override suspend fun sendInput(sessionId: String, text: String) {
         requireActiveProvider().sendInput(sessionId, text)
     }

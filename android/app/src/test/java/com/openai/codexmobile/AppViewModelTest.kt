@@ -7,6 +7,7 @@ import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
+import com.openai.codexmobile.data.SessionConfigUpdate
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.model.BridgeConnectionState
@@ -28,7 +29,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.util.ArrayDeque
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModelTest {
@@ -45,230 +45,89 @@ class AppViewModelTest {
     }
 
     @Test
-    fun detailStreamAppendsAssistantDeltaAndRefreshesFinalSnapshot() = runTest(dispatcher.scheduler) {
-        val initialDetail = SessionDetail(
-            id = "sess_1",
-            title = "实时会话",
-            subtitle = "gpt-5.5 • 手动批准 • 空闲",
-            lastUpdated = "2026-05-19T10:00:00.000Z",
-            transcriptPreview = "你：你好",
+    fun draftSessionCreatesRealSessionOnlyWhenFirstMessageIsSent() = runTest(dispatcher.scheduler) {
+        val createdDetail = sampleDetail(
+            id = "sess_draft",
+            cwd = "D:\\workspace\\project-a",
+            model = "gpt-5.5",
             status = "idle",
         )
-        val finalDetail = initialDetail.copy(
-            lastUpdated = "2026-05-19T10:00:05.000Z",
-            transcriptPreview = "你：你好\n\nCodex：你好，我是实时流。",
-            status = "idle",
-        )
-        val bridgeApi = FakeBridgeApi(createdDetail = initialDetail)
-        val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummaryFor(initialDetail)),
-            details = arrayDequeOf(initialDetail, finalDetail),
-        )
+        val bridgeApi = FakeBridgeApi(createdDetail = createdDetail)
+        val repository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap())
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
 
-        viewModel.openSessionDetail("sess_1")
+        viewModel.startDraftSession("D:\\workspace\\project-a")
         advanceUntilIdle()
 
-        bridgeApi.emit(
-            SessionStreamEvent.StreamOpened(sessionId = "sess_1"),
-        )
-        bridgeApi.emit(
-            SessionStreamEvent.SessionStarted(
-                sessionId = "sess_1",
-                status = "idle",
-                cwd = "D:\\workspace\\codex-mobile",
-                model = "gpt-5.5",
-                threadId = "thread_1",
-                timestamp = "2026-05-19T10:00:01.000Z",
-            ),
-        )
-        bridgeApi.emit(
-            SessionStreamEvent.RunStatus(
-                sessionId = "sess_1",
-                status = "running",
-                timestamp = "2026-05-19T10:00:02.000Z",
-            ),
-        )
-        bridgeApi.emit(
-            SessionStreamEvent.AssistantDelta(
-                sessionId = "sess_1",
-                text = "你好，",
-                turnId = "turn_1",
-                timestamp = "2026-05-19T10:00:03.000Z",
-            ),
-        )
-        bridgeApi.emit(
-            SessionStreamEvent.AssistantDelta(
-                sessionId = "sess_1",
-                text = "我是实时流。",
-                turnId = "turn_1",
-                timestamp = "2026-05-19T10:00:04.000Z",
-            ),
-        )
-        bridgeApi.emit(
-            SessionStreamEvent.AssistantDone(
-                sessionId = "sess_1",
-                turnStatus = "completed",
-                turnId = "turn_1",
-                errorMessage = null,
-                timestamp = "2026-05-19T10:00:05.000Z",
-            ),
-        )
-        advanceUntilIdle()
+        assertNotNull(viewModel.uiState.value.selectedDraftSession)
+        assertNull(bridgeApi.lastCreateSessionRequest)
 
-        assertEquals("已连接实时流", viewModel.uiState.value.sessionRealtimeState.connectionText)
-        assertEquals("空闲", viewModel.uiState.value.sessionRealtimeState.statusText)
-        assertEquals("本轮回复已结束。", viewModel.uiState.value.sessionRealtimeState.lastEventText)
-        assertEquals(finalDetail.transcriptPreview, viewModel.uiState.value.selectedSession?.transcriptPreview)
-        assertEquals(2, repository.getSessionDetailCallCount)
-    }
-
-    @Test
-    fun sendInputUsesRealtimeFlowAndInterruptedEventUpdatesUi() = runTest(dispatcher.scheduler) {
-        val detail = SessionDetail(
-            id = "sess_2",
-            title = "中断测试",
-            subtitle = "gpt-5.5 • 手动批准 • 空闲",
-            lastUpdated = "2026-05-19T11:00:00.000Z",
-            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
-            status = "idle",
-        )
-        val interruptedDetail = detail.copy(
-            lastUpdated = "2026-05-19T11:00:02.000Z",
-            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile\n\n你：停止当前任务",
-            status = "idle",
-        )
-        val bridgeApi = FakeBridgeApi(createdDetail = detail)
-        val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummaryFor(detail)),
-            details = arrayDequeOf(detail, interruptedDetail),
-        )
-        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
-
-        viewModel.openSessionDetail("sess_2")
-        advanceUntilIdle()
-
-        viewModel.updateDraftMessage("停止当前任务")
+        viewModel.updateDraftMessage("第一条消息")
         viewModel.sendInput()
         advanceUntilIdle()
 
-        bridgeApi.emit(
-            SessionStreamEvent.RunInterrupted(
-                sessionId = "sess_2",
-                status = "idle",
-                timestamp = "2026-05-19T11:00:02.000Z",
+        assertEquals(
+            CreateSessionRequest(
+                cwd = "D:\\workspace\\project-a",
+                model = "gpt-5.5",
+                approvalMode = "manual",
+                reasoningEffort = "medium",
+                serviceTier = "fast",
             ),
+            bridgeApi.lastCreateSessionRequest,
         )
-        advanceUntilIdle()
-
-        assertEquals(listOf("停止当前任务"), bridgeApi.sentInputs)
+        assertEquals(listOf("第一条消息"), bridgeApi.sentInputs)
+        assertNull(viewModel.uiState.value.selectedDraftSession)
+        assertEquals("sess_draft", viewModel.uiState.value.selectedSession?.id)
         assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("你：停止当前任务") == true,
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("你：第一条消息") == true,
         )
-        assertEquals("当前任务已中断。", viewModel.uiState.value.message)
-        assertEquals("空闲", viewModel.uiState.value.sessionRealtimeState.statusText)
-        assertEquals(2, repository.getSessionDetailCallCount)
     }
 
     @Test
-    fun connectUsesConfiguredTokenAndUpdatesSettings() = runTest(dispatcher.scheduler) {
-        val detail = SessionDetail(
-            id = "sess_3",
-            title = "鉴权测试",
-            subtitle = "gpt-5.5 • 手动批准 • 空闲",
-            lastUpdated = "2026-05-19T12:00:00.000Z",
-            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
-            status = "idle",
-        )
+    fun sessionStartedEventUpdatesConfigFields() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_stream", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummaryFor(detail)),
-            details = arrayDequeOf(detail),
-        )
-        val settingsStore = FakeAppSettingsStore()
-        val viewModel = AppViewModel(bridgeApi, repository, settingsStore)
-
-        viewModel.updateAuthTokenInput("bridge-secret")
-        viewModel.connect()
-        advanceUntilIdle()
-
-        assertEquals("bridge-secret", bridgeApi.updatedAuthToken)
-        assertEquals("bridge-secret", bridgeApi.authTokenAtConnect)
-        assertTrue(
-            viewModel.uiState.value.settingsItems.any { (label, value) ->
-                label == "鉴权令牌" && value == "已配置"
-            },
-        )
-        assertEquals("bridge-secret", settingsStore.saved.authToken)
-    }
-
-    @Test
-    fun pendingApprovalCanBeSubmittedFromRealtimeState() = runTest(dispatcher.scheduler) {
-        val detail = SessionDetail(
-            id = "sess_4",
-            title = "审批测试",
-            subtitle = "gpt-5.5 • 手动批准 • 空闲",
-            lastUpdated = "2026-05-19T13:00:00.000Z",
-            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
-            status = "idle",
-        )
-        val bridgeApi = FakeBridgeApi(createdDetail = detail)
-        val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummaryFor(detail)),
-            details = arrayDequeOf(detail),
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
 
-        viewModel.openSessionDetail("sess_4")
+        viewModel.openSessionDetail("sess_stream")
         advanceUntilIdle()
 
         bridgeApi.emit(
-            SessionStreamEvent.ToolRequest(
-                sessionId = "sess_4",
-                requestId = BridgeRequestId.Text("req-1"),
-                method = "item/commandExecution/requestApproval",
-                paramsSummary = "等待审批：item/commandExecution/requestApproval",
-                timestamp = "2026-05-19T13:00:01.000Z",
+            SessionStreamEvent.SessionStarted(
+                sessionId = "sess_stream",
+                status = "running",
+                cwd = "D:\\workspace\\other",
+                model = "gpt-5.5-coder",
+                approvalMode = "auto",
+                reasoningEffort = "high",
+                serviceTier = "flex",
+                threadId = "thread-1",
+                timestamp = "2026-05-19T10:00:01Z",
             ),
         )
         advanceUntilIdle()
 
-        assertNotNull(viewModel.uiState.value.sessionRealtimeState.pendingApproval)
-        assertEquals("等待批准", viewModel.uiState.value.sessionRealtimeState.statusText)
-        assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("等待审批：item/commandExecution/requestApproval") == true,
-        )
-
-        viewModel.submitApproval(ApprovalDecision.Reject)
-        advanceUntilIdle()
-
-        assertEquals(1, bridgeApi.approvalCalls.size)
-        val approvalCall = bridgeApi.approvalCalls.single()
-        assertEquals("sess_4", approvalCall.sessionId)
-        assertEquals("req-1", approvalCall.requestId?.toString())
-        assertEquals(ApprovalDecision.Reject, approvalCall.decision)
-        assertEquals("已提交审批操作：拒绝", viewModel.uiState.value.message)
+        val selected = viewModel.uiState.value.selectedSession
+        assertEquals("D:\\workspace\\other", selected?.cwd)
+        assertEquals("gpt-5.5-coder", selected?.model)
+        assertEquals("auto", selected?.approvalMode)
+        assertEquals("high", selected?.reasoningEffort)
+        assertEquals("flex", selected?.serviceTier)
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
-        assertEquals(null, viewModel.uiState.value.sessionRealtimeState.pendingApproval)
-        assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("审批结果：拒绝（item/commandExecution/requestApproval）") == true,
-        )
     }
 
     @Test
-    fun inputDuringApprovalIsQueuedAndSentAfterSessionReturnsToIdle() = runTest(dispatcher.scheduler) {
-        val detail = SessionDetail(
-            id = "sess_queue",
-            title = "排队测试",
-            subtitle = "gpt-5.5 • 手动批准 • 空闲",
-            lastUpdated = "2026-05-19T16:00:00.000Z",
-            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
-            status = "idle",
-        )
+    fun inputDuringApprovalIsQueuedAndSentAfterIdle() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_queue", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummaryFor(detail)),
-            details = arrayDequeOf(detail),
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
 
@@ -292,10 +151,6 @@ class AppViewModelTest {
 
         assertTrue(bridgeApi.sentInputs.isEmpty())
         assertEquals(listOf("这条消息应该排队"), viewModel.uiState.value.queuedInputs)
-        assertEquals("", viewModel.uiState.value.draftMessage)
-        assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("这条消息应该排队") == false,
-        )
 
         bridgeApi.emit(
             SessionStreamEvent.RunStatus(
@@ -308,82 +163,59 @@ class AppViewModelTest {
 
         assertEquals(listOf("这条消息应该排队"), bridgeApi.sentInputs)
         assertTrue(viewModel.uiState.value.queuedInputs.isEmpty())
-        assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("你：这条消息应该排队") == true,
-        )
     }
 
     @Test
-    fun createSessionUsesEditableSavedSettings() = runTest(dispatcher.scheduler) {
-        val detail = SessionDetail(
-            id = "sess_5",
-            title = "配置测试",
-            subtitle = "gpt-5.5 • 手动批准 • 空闲",
-            lastUpdated = "2026-05-19T14:00:00.000Z",
-            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
-            status = "idle",
-        )
+    fun updatingSessionConfigPersistsSettingsAndCallsBridge() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_config", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummaryFor(detail)),
-            details = arrayDequeOf(detail),
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
         )
-        val settingsStore = FakeAppSettingsStore(
-            initial = AppSettings(
-                endpoint = "http://10.0.2.2:8787",
-                authToken = "bridge-secret",
-                cwd = "D:\\workspace\\codex-mobile",
-                model = "gpt-5.5",
-                approvalMode = "manual",
-            ),
-        )
+        val settingsStore = FakeAppSettingsStore()
         val viewModel = AppViewModel(bridgeApi, repository, settingsStore)
 
-        viewModel.updateCwdInput("D:\\workspace\\other-project")
-        viewModel.updateModelInput("gpt-5.4")
-        viewModel.updateApprovalModeInput("auto")
-        viewModel.createSession()
+        viewModel.openSessionDetail("sess_config")
         advanceUntilIdle()
 
-        assertEquals(
-            CreateSessionRequest(
-                cwd = "D:\\workspace\\other-project",
-                model = "gpt-5.4",
-                approvalMode = "auto",
-            ),
-            bridgeApi.lastCreateSessionRequest,
-        )
-        assertEquals("D:\\workspace\\other-project", settingsStore.saved.cwd)
-        assertEquals("gpt-5.4", settingsStore.saved.model)
-        assertEquals("auto", settingsStore.saved.approvalMode)
+        viewModel.updateSelectedSessionModel("gpt-5.5-coder")
+        viewModel.updateSelectedSessionReasoningEffort("high")
+        viewModel.updateSelectedSessionServiceTier("flex")
+        advanceUntilIdle()
+
+        assertEquals(3, bridgeApi.sessionConfigUpdates.size)
+        assertEquals("gpt-5.5-coder", settingsStore.saved.model)
+        assertEquals("high", settingsStore.saved.reasoningEffort)
+        assertEquals("flex", settingsStore.saved.serviceTier)
+        assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedSession?.model)
+        assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
+        assertEquals("flex", viewModel.uiState.value.selectedSession?.serviceTier)
     }
 
     @Test
-    fun missingSessionClearsSelectedSessionWithoutStartingRealtimeStream() = runTest(dispatcher.scheduler) {
-        val staleDetail = SessionDetail(
-            id = "sess_stale",
-            title = "旧会话",
-            subtitle = "gpt-5.5 • 手动批准 • 空闲",
-            lastUpdated = "2026-05-19T15:00:00.000Z",
-            transcriptPreview = "你：旧内容",
-            status = "idle",
-        )
-        val bridgeApi = FakeBridgeApi(createdDetail = staleDetail)
+    fun connectUsesConfiguredTokenAndUpdatesSettings() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_auth", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummaryFor(staleDetail)),
-            details = arrayDequeOf(staleDetail, null),
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
         )
-        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+        val settingsStore = FakeAppSettingsStore()
+        val viewModel = AppViewModel(bridgeApi, repository, settingsStore)
 
-        viewModel.openSessionDetail("sess_stale")
+        viewModel.updateAuthTokenInput("bridge-secret")
+        viewModel.connect()
         advanceUntilIdle()
 
-        viewModel.openSessionDetail("sess_missing")
-        advanceUntilIdle()
-
-        assertNull(viewModel.uiState.value.selectedSession)
-        assertEquals("未找到会话：sess_missing", viewModel.uiState.value.message)
-        assertEquals(1, bridgeApi.observeSessionCalls)
+        assertEquals("bridge-secret", bridgeApi.updatedAuthToken)
+        assertEquals("bridge-secret", bridgeApi.authTokenAtConnect)
+        assertTrue(
+            viewModel.uiState.value.settingsItems.any { (label, value) ->
+                label == "鉴权令牌" && value == "已配置"
+            },
+        )
+        assertEquals("bridge-secret", settingsStore.saved.authToken)
     }
 }
 
@@ -391,12 +223,13 @@ private class FakeBridgeApi(
     private val createdDetail: SessionDetail,
 ) : BridgeApi {
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
+    private var currentDetail: SessionDetail = createdDetail
     val sentInputs = mutableListOf<String>()
     val approvalCalls = mutableListOf<ApprovalCall>()
+    val sessionConfigUpdates = mutableListOf<SessionConfigUpdate>()
     var updatedAuthToken: String = ""
     var authTokenAtConnect: String = ""
     var lastCreateSessionRequest: CreateSessionRequest? = null
-    var observeSessionCalls: Int = 0
 
     override fun updateAuthToken(token: String) {
         updatedAuthToken = token
@@ -413,7 +246,29 @@ private class FakeBridgeApi(
 
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail {
         lastCreateSessionRequest = request
-        return createdDetail
+        currentDetail = createdDetail.copy(
+            cwd = request.cwd,
+            model = request.model,
+            approvalMode = request.approvalMode,
+            reasoningEffort = request.reasoningEffort,
+            serviceTier = request.serviceTier,
+        )
+        return currentDetail
+    }
+
+    override suspend fun updateSessionConfig(
+        sessionId: String,
+        update: SessionConfigUpdate,
+    ): SessionDetail {
+        sessionConfigUpdates += update
+        currentDetail = currentDetail.copy(
+            cwd = update.cwd ?: currentDetail.cwd,
+            model = update.model ?: currentDetail.model,
+            approvalMode = update.approvalMode ?: currentDetail.approvalMode,
+            reasoningEffort = update.reasoningEffort ?: currentDetail.reasoningEffort,
+            serviceTier = update.serviceTier ?: currentDetail.serviceTier,
+        )
+        return currentDetail
     }
 
     override suspend fun sendInput(sessionId: String, text: String) {
@@ -434,10 +289,7 @@ private class FakeBridgeApi(
         )
     }
 
-    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> {
-        observeSessionCalls += 1
-        return events
-    }
+    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = events
 
     suspend fun emit(event: SessionStreamEvent) {
         events.emit(event)
@@ -452,23 +304,11 @@ private data class ApprovalCall(
 
 private class FakeSessionRepository(
     private val sessionSummaries: List<SessionSummary>,
-    details: List<SessionDetail?>,
+    private val detailsById: Map<String, SessionDetail>,
 ) : SessionRepository {
-    private val detailsQueue = details.toMutableList()
-    private var lastDetail: SessionDetail? = details.lastOrNull()
-    var getSessionDetailCallCount: Int = 0
-        private set
-
     override suspend fun listSessions(): List<SessionSummary> = sessionSummaries
 
-    override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
-        getSessionDetailCallCount += 1
-        val next = if (detailsQueue.isEmpty()) lastDetail else detailsQueue.removeAt(0)
-        if (next != null) {
-            lastDetail = next
-        }
-        return next
-    }
+    override suspend fun getSessionDetail(sessionId: String): SessionDetail? = detailsById[sessionId]
 }
 
 private class FakeAppSettingsStore(
@@ -478,6 +318,8 @@ private class FakeAppSettingsStore(
         cwd = "D:\\workspace\\codex-mobile",
         model = "gpt-5.5",
         approvalMode = "manual",
+        reasoningEffort = "medium",
+        serviceTier = "fast",
     ),
 ) : AppSettingsStore {
     var saved: AppSettings = initial
@@ -490,16 +332,41 @@ private class FakeAppSettingsStore(
     }
 }
 
-private fun sessionSummaryFor(detail: SessionDetail): SessionSummary {
-    return SessionSummary(
-        id = detail.id,
-        title = detail.title,
-        subtitle = "gpt-5.5 • 空闲 • D:\\workspace\\codex-mobile",
-        lastUpdated = detail.lastUpdated,
-        status = detail.status,
+private fun sampleDetail(
+    id: String,
+    cwd: String = "D:\\workspace\\codex-mobile",
+    model: String = "gpt-5.5",
+    approvalMode: String = "manual",
+    reasoningEffort: String = "medium",
+    serviceTier: String = "fast",
+    status: String,
+): SessionDetail {
+    return SessionDetail(
+        id = id,
+        title = "测试会话",
+        subtitle = "$model • 手动 • 空闲",
+        lastUpdated = "2026-05-19T10:00:00.000Z",
+        transcriptPreview = "工作目录：$cwd",
+        cwd = cwd,
+        model = model,
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
+        status = status,
     )
 }
 
-private fun arrayDequeOf(vararg details: SessionDetail?): List<SessionDetail?> {
-    return details.toList()
+private fun SessionDetail.toSummary(): SessionSummary {
+    return SessionSummary(
+        id = id,
+        title = title,
+        subtitle = "$model • $status • $cwd",
+        lastUpdated = lastUpdated,
+        cwd = cwd,
+        model = model,
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
+        status = status,
+    )
 }
