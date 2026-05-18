@@ -16,9 +16,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionSummary
+import com.openai.codexmobile.ui.TestTags
 
 @Composable
 fun SessionListScreen(
@@ -33,6 +35,7 @@ fun SessionListScreen(
 ) {
     Column(
         modifier = Modifier
+            .testTag(TestTags.SessionListScreen)
             .fillMaxSize()
             .padding(paddingValues)
             .padding(horizontal = 24.dp, vertical = 16.dp),
@@ -59,6 +62,7 @@ fun SessionListScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag(TestTags.SessionListItemPrefix + session.id)
                         .clickable { onOpenSession(session.id) },
                 ) {
                     Column(
@@ -75,7 +79,9 @@ fun SessionListScreen(
         Button(
             onClick = onCreateSession,
             enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SessionListCreateButton),
         ) {
             if (isLoading) {
                 CircularProgressIndicator(strokeWidth = 2.dp)
@@ -85,13 +91,17 @@ fun SessionListScreen(
         }
         Button(
             onClick = onOpenSettings,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SessionListOpenSettingsButton),
         ) {
             Text("设置")
         }
         Button(
             onClick = onDisconnect,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SessionListDisconnectButton),
         ) {
             Text("断开连接")
         }

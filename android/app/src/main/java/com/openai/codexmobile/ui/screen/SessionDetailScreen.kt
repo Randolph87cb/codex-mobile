@@ -8,10 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -24,12 +23,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.PendingApprovalUiState
 import com.openai.codexmobile.SessionRealtimeUiState
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.model.SessionDetail
+import com.openai.codexmobile.ui.TestTags
 
 @Composable
 fun SessionDetailScreen(
@@ -55,6 +56,7 @@ fun SessionDetailScreen(
 
     Column(
         modifier = Modifier
+            .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
             .padding(24.dp),
@@ -105,6 +107,7 @@ fun SessionDetailScreen(
         }
         Card(
             modifier = Modifier
+                .testTag(TestTags.SessionDetailTranscript)
                 .fillMaxWidth()
                 .weight(1f),
         ) {
@@ -134,12 +137,15 @@ fun SessionDetailScreen(
         OutlinedTextField(
             value = draftMessage,
             onValueChange = onDraftMessageChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SessionDetailDraftField),
             label = { Text("发送给 Codex") },
         )
         Button(
             onClick = onSend,
             enabled = !isLoading && sessionDetail != null && draftMessage.isNotBlank(),
+            modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
         ) {
             if (isLoading) {
                 CircularProgressIndicator(strokeWidth = 2.dp)
@@ -147,7 +153,10 @@ fun SessionDetailScreen(
                 Text("发送")
             }
         }
-        Button(onClick = onBack) {
+        Button(
+            onClick = onBack,
+            modifier = Modifier.testTag(TestTags.SessionDetailBackButton),
+        ) {
             Text("返回会话列表")
         }
     }
@@ -259,7 +268,11 @@ private fun ApprovalActionCard(
     approval: PendingApprovalUiState,
     onApprovalDecision: (ApprovalDecision) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailApprovalCard),
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -281,24 +294,28 @@ private fun ApprovalActionCard(
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.Approve) },
                 enabled = !approval.isSubmitting,
+                modifier = Modifier.testTag(TestTags.SessionDetailApproveButton),
             ) {
                 Text("批准")
             }
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.ApproveForSession) },
                 enabled = !approval.isSubmitting,
+                modifier = Modifier.testTag(TestTags.SessionDetailApproveForSessionButton),
             ) {
                 Text("本会话都批准")
             }
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.Reject) },
                 enabled = !approval.isSubmitting,
+                modifier = Modifier.testTag(TestTags.SessionDetailRejectButton),
             ) {
                 Text("拒绝")
             }
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.RejectAndInterrupt) },
                 enabled = !approval.isSubmitting,
+                modifier = Modifier.testTag(TestTags.SessionDetailRejectAndInterruptButton),
             ) {
                 Text("拒绝并中断")
             }

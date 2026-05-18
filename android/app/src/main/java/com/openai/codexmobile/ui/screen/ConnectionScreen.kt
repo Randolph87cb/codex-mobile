@@ -14,8 +14,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.model.BridgeConnectionState
+import com.openai.codexmobile.ui.TestTags
 
 @Composable
 fun ConnectionScreen(
@@ -29,6 +31,7 @@ fun ConnectionScreen(
 ) {
     Column(
         modifier = Modifier
+            .testTag(TestTags.ConnectionScreen)
             .fillMaxSize()
             .padding(paddingValues)
             .padding(24.dp),
@@ -53,7 +56,9 @@ fun ConnectionScreen(
                 OutlinedTextField(
                     value = endpoint,
                     onValueChange = onEndpointChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.ConnectionEndpointField),
                     label = { Text("桥接地址") },
                     singleLine = true,
                 )
@@ -64,6 +69,7 @@ fun ConnectionScreen(
                 Button(
                     onClick = onConnect,
                     enabled = !isLoading,
+                    modifier = Modifier.testTag(TestTags.ConnectionConnectButton),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
@@ -71,7 +77,10 @@ fun ConnectionScreen(
                         Text("连接桥接服务")
                     }
                 }
-                Button(onClick = onOpenSettings) {
+                Button(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.testTag(TestTags.ConnectionOpenSettingsButton),
+                ) {
                     Text("打开设置")
                 }
             }

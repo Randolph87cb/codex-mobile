@@ -17,8 +17,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.openai.codexmobile.ui.TestTags
 
 @Composable
 fun SettingsScreen(
@@ -40,6 +42,7 @@ fun SettingsScreen(
 
     Column(
         modifier = Modifier
+            .testTag(TestTags.SettingsScreen)
             .fillMaxSize()
             .padding(paddingValues)
             .padding(24.dp)
@@ -64,7 +67,9 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = endpointInput,
                     onValueChange = onEndpointChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SettingsEndpointField),
                     singleLine = true,
                     label = { Text("桥接地址") },
                 )
@@ -75,7 +80,9 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = authTokenInput,
                     onValueChange = onAuthTokenChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SettingsAuthTokenField),
                     singleLine = true,
                     label = { Text("Bridge Token") },
                     visualTransformation = PasswordVisualTransformation(),
@@ -87,7 +94,9 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = cwdInput,
                     onValueChange = onCwdChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SettingsCwdField),
                     singleLine = true,
                     label = { Text("默认工作目录") },
                 )
@@ -98,7 +107,9 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = modelInput,
                     onValueChange = onModelChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SettingsModelField),
                     singleLine = true,
                     label = { Text("默认模型") },
                 )
@@ -109,20 +120,34 @@ fun SettingsScreen(
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (approvalModeInput == "manual") {
-                            Button(onClick = {}, enabled = false) {
+                            Button(
+                                onClick = {},
+                                enabled = false,
+                                modifier = Modifier.testTag(TestTags.SettingsApprovalManualButton),
+                            ) {
                                 Text("手动审批")
                             }
                         } else {
-                            OutlinedButton(onClick = { onApprovalModeChange("manual") }) {
+                            OutlinedButton(
+                                onClick = { onApprovalModeChange("manual") },
+                                modifier = Modifier.testTag(TestTags.SettingsApprovalManualButton),
+                            ) {
                                 Text("手动审批")
                             }
                         }
                         if (approvalModeInput == "auto") {
-                            Button(onClick = {}, enabled = false) {
+                            Button(
+                                onClick = {},
+                                enabled = false,
+                                modifier = Modifier.testTag(TestTags.SettingsApprovalAutoButton),
+                            ) {
                                 Text("自动审批")
                             }
                         } else {
-                            OutlinedButton(onClick = { onApprovalModeChange("auto") }) {
+                            OutlinedButton(
+                                onClick = { onApprovalModeChange("auto") },
+                                modifier = Modifier.testTag(TestTags.SettingsApprovalAutoButton),
+                            ) {
                                 Text("自动审批")
                             }
                         }
@@ -130,7 +155,10 @@ fun SettingsScreen(
                 }
             }
         }
-        Button(onClick = onBack) {
+        Button(
+            onClick = onBack,
+            modifier = Modifier.testTag(TestTags.SettingsBackButton),
+        ) {
             Text("返回")
         }
     }

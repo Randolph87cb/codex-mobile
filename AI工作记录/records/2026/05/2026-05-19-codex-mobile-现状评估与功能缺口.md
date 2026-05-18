@@ -429,6 +429,67 @@
 - 模拟器侧连接 bridge 时，应使用：
   - `http://10.0.2.2:8787`
 
+## 本轮补齐稳定自动回放
+
+- 目标：
+  - 不再依赖 `adb` 坐标点击做半自动联调。
+  - 为 Android 页面补稳定定位锚点，并在模拟器上跑通一条可重复的详情页自动回放。
+
+### 本轮问题判断
+
+- 之前之所以“能启动模拟器，但没有形成稳定的全自动详情页回放”，核心不是模拟器不行，而是：
+  - Compose 页面缺少稳定 `testTag`
+  - 关键控件只能靠文本或坐标猜测
+  - 真 bridge / 历史会话 / 异步实时流会让黑盒脚本的状态非常漂移
+- 所以本轮改法不是继续堆 `adb input tap`，而是补正式的 instrumentation 测试入口。
+
+### 本轮改动
+
+- 为关键页面和操作补稳定 `testTag`：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/TestTags.kt`
+  - `ConnectionScreen.kt`
+  - `SessionListScreen.kt`
+  - `SessionDetailScreen.kt`
+  - `SettingsScreen.kt`
+- 增加 debug 专用回放宿主，不污染 release：
+  - `android/app/src/debug/AndroidManifest.xml`
+  - `android/app/src/debug/java/com/openai/codexmobile/ReplayHarnessActivity.kt`
+- 回放宿主接入确定性测试数据：
+  - 固定连接成功
+  - 固定会话列表
+  - 固定详情 transcript
+  - 固定 `tool.request -> approve -> tool.result` 流程
+- 新增 instrumentation 用例：
+  - `android/app/src/androidTest/java/com/openai/codexmobile/SessionDetailReplayTest.kt`
+  - 覆盖流程：
+    - 连接
+    - 打开会话列表
+    - 进入会话详情
+    - 校验代码块与工具结果文本存在
+    - 校验待审批卡片存在
+    - 点击批准并确认审批结果写回页面
+- 为 instrumentation 增加依赖：
+  - `android/app/build.gradle.kts`
+
+### 本轮验证
+
+- Android 单元测试：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过
+- Android debug 构建：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：通过
+- Android 模拟器 instrumentation：
+  - `cd android`
+  - `.\gradlew.bat connectedDebugAndroidTest`
+  - 结果：通过
+
+### 当前结论
+
+- “没有稳定自动详情页回放”这个缺口本轮已经补上。
+- 现在项目里已经有一条基于模拟器、可重复执行的最小 UI 回放链路，可作为后续详情页和实时流交互改动的回归基础。
+
 ## 后续事项
 
 - [ ] 接通 `/api/session/:id/approve` 与 app-server 审批响应
