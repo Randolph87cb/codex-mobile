@@ -329,6 +329,77 @@
 
 - 这轮用户最容易撞到的“未收尾功能”已经基本收干净，剩余重点不再是基础配置或明显占位逻辑，而是更细的移动端体验增强。
 
+## 本轮继续修正
+
+- 用户反馈：
+  - 实时流仍会失败
+  - 工具结果 / 代码块还没有真正渲染出来
+
+### 本轮定位结论
+
+- bridge 的历史会话链路存在语义不一致：
+  - `/api/sessions` 和 `/api/session/:id` 可以返回历史线程
+  - `/api/session/:id/input` 也会先 `attachSession()`
+  - 但 `/api/session/:id/ws`、`/interrupt`、`/approve` 之前只查 `store.get()`，不会附着历史线程
+- 这会导致 Android 在会话列表里点开历史线程时，详情能看到，但实时流会因为 `session-not-found` 直接断开。
+- Android 的 transcript 渲染之前仍是“整段文本 -> 单一气泡”，不会把：
+  - fenced code block
+  - `tool.request`
+  - `tool.result`
+  解析成更易读的展示结构。
+- 同时，`tool.request / tool.result / error` 等实时事件虽然会更新状态栏，但之前没有稳定写回 `transcriptPreview`，所以即便 UI 支持，也可能在正文里看不到。
+
+### 本轮改动
+
+- bridge：
+  - 为这 3 条路由补齐历史线程附着：
+    - `/api/session/:id/ws`
+    - `/api/session/:id/interrupt`
+    - `/api/session/:id/approve`
+  - 文件：
+    - `bridge/src/app.ts`
+  - 测试补充：
+    - `bridge/tests/app.test.ts`
+    - 增加历史会话的 `interrupt / approve / websocket` 行为验证
+
+- Android：
+  - transcript 解析升级为富文本块模型：
+    - 普通文本段
+    - fenced code block
+    - 工具请求 / 工具结果气泡
+  - 会话详情页按块渲染：
+    - 代码块单独卡片 + 等宽字体
+    - 工具结果单独标题和正文
+  - `tool.request / tool.result / error / interrupted` 现在会补写进 transcript 正文，不只停在顶部状态区
+  - 审批提交结果写入正文时统一改为 `审批结果：...`，方便结构化渲染识别
+  - 文件：
+    - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptBubble.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+    - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+    - `android/app/src/test/java/com/openai/codexmobile/ui/screen/TranscriptBubbleTest.kt`
+
+### 本轮验证
+
+- bridge：
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+  - 结果：通过，5 个测试文件、16 个测试全部通过
+- Android：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：通过
+
+### 当前剩余风险
+
+- 我已经通过 bridge 自动化测试覆盖了“历史会话可订阅 ws”的根因修复，但这轮模拟器自动点击在系统返回路径上不够稳定，没有形成一条完整的无人工详情页录制回放。
+- 所以当前最关键的剩余确认是：
+  - 你在最新版 APK 里点开一个历史线程时，实时流是否不再直接报错
+  - 一条带代码块的回复、一次工具请求/工具结果，是否已经按新样式显示
+
 - 真机反馈后，已额外修正两项 Android 问题：
   - WebSocket `onClosing` 不再直接回发保留关闭码 `1005`，改为使用安全关闭码规整处理
   - 会话详情页不再把整段对话塞进单个文本块，而是按“你 / Codex / 系统”拆成对话气泡

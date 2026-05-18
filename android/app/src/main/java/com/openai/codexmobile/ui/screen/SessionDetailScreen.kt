@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -21,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.PendingApprovalUiState
 import com.openai.codexmobile.SessionRealtimeUiState
@@ -169,7 +173,13 @@ private fun TranscriptBubbleList(
                 val backgroundColor = when (bubble.speaker) {
                     TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
                     TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
-                    TranscriptSpeaker.System -> MaterialTheme.colorScheme.surfaceVariant
+                    TranscriptSpeaker.System -> when (bubble.kind) {
+                        TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
+                        TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.surfaceVariant
+                        TranscriptBubbleKind.Status,
+                        TranscriptBubbleKind.Message,
+                        -> MaterialTheme.colorScheme.surfaceVariant
+                    }
                 }
                 Card(
                     modifier = Modifier
@@ -187,21 +197,59 @@ private fun TranscriptBubbleList(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(
-                            text = when (bubble.speaker) {
-                                TranscriptSpeaker.User -> "你"
-                                TranscriptSpeaker.Assistant -> "Codex"
-                                TranscriptSpeaker.System -> "系统"
-                            },
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                        Text(
-                            text = bubble.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        Text(text = bubble.label, style = MaterialTheme.typography.labelLarge)
+                        bubble.title?.let { title ->
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                        }
+                        bubble.parts.forEach { part ->
+                            when (part) {
+                                is TranscriptPart.Text -> {
+                                    Text(
+                                        text = part.text,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+
+                                is TranscriptPart.CodeBlock -> {
+                                    CodeBlockCard(part)
+                                }
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CodeBlockCard(part: TranscriptPart.CodeBlock) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            part.language?.let { language ->
+                Text(
+                    text = language,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = part.code,
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+            )
         }
     }
 }

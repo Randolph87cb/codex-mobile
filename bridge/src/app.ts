@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import websocket from "@fastify/websocket";
 import { z } from "zod";
-import { isHistoryCapableRunner, type BridgeRunner } from "./bridge-runner.js";
+import { isHistoryCapableRunner, type BridgeRunner, type HistoryCapableBridgeRunner } from "./bridge-runner.js";
 import { AppServerRunner } from "./app-server-runner.js";
 import { MockRunner } from "./mock-runner.js";
 import { authorizeApiRequest, buildBridgeSecurityState, resolveBridgeSecurityConfig, validateSessionCwd } from "./security.js";
@@ -153,18 +153,18 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
 
   app.post("/api/session/:id/interrupt", async (request, reply) => {
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
-    const session = store.get(params.id);
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
     if (!session) {
       return reply.status(404).send({ error: "session-not-found" });
     }
 
-    await runner.interrupt(params.id);
+    await runner.interrupt(session.id);
     return { ok: true };
   });
 
   app.post("/api/session/:id/approve", async (request, reply) => {
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
-    const session = store.get(params.id);
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
     if (!session) {
       return reply.status(404).send({ error: "session-not-found" });
     }
@@ -178,7 +178,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     }
 
     try {
-      const result = await runner.approve(params.id, body.data);
+      const result = await runner.approve(session.id, body.data);
       return {
         ok: true,
         requestId: result.requestId,
@@ -205,9 +205,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     }
   });
 
-  app.get("/api/session/:id/ws", { websocket: true }, (socket, request) => {
+  app.get("/api/session/:id/ws", { websocket: true }, async (socket, request) => {
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
-    const session = store.get(params.id);
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
     if (!session) {
       socket.send(JSON.stringify({ error: "session-not-found" }));
       socket.close();
@@ -238,6 +238,18 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   return app;
+}
+
+async function resolveSessionRecord(
+  sessionId: string,
+  store: SessionStore,
+  historyRunner: HistoryCapableBridgeRunner | null,
+) {
+  let session = store.get(sessionId) ?? undefined;
+  if (!session && historyRunner) {
+    session = (await historyRunner.attachSession(sessionId)) ?? undefined;
+  }
+  return session;
 }
 
 function createRunner(store: SessionStore): BridgeRunner {

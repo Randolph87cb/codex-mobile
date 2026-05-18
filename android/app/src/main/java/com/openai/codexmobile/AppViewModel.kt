@@ -519,10 +519,9 @@ class AppViewModel(
                 activeAssistantTurnId = null
                 _uiState.update {
                     it.copy(
-                        selectedSession = it.selectedSession?.copy(
-                            status = "idle",
-                            lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
-                        ),
+                        selectedSession = it.selectedSession
+                            ?.let { detail -> appendSystemMessage(detail, "当前任务已中断。", event.timestamp) }
+                            ?.copy(status = "idle"),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("idle"),
                             lastEventText = "当前任务已中断。",
@@ -538,7 +537,16 @@ class AppViewModel(
             is SessionStreamEvent.ToolRequest -> {
                 _uiState.update {
                     it.copy(
-                        selectedSession = it.selectedSession?.copy(status = "awaiting_approval"),
+                        selectedSession = it.selectedSession
+                            ?.let { detail ->
+                                appendSystemMessage(
+                                    detail = detail,
+                                    message = event.paramsSummary
+                                        ?: "等待审批：${event.method ?: "未知方法"}",
+                                    timestamp = event.timestamp,
+                                )
+                            }
+                            ?.copy(status = "awaiting_approval"),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("awaiting_approval"),
                             lastEventText = "收到工具请求：${event.method ?: "未知方法"}",
@@ -556,10 +564,15 @@ class AppViewModel(
             is SessionStreamEvent.ToolResult -> {
                 _uiState.update {
                     it.copy(
-                        selectedSession = it.selectedSession?.copy(
-                            status = event.status ?: it.selectedSession.status,
-                            lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
-                        ),
+                        selectedSession = it.selectedSession
+                            ?.let { detail ->
+                                appendSystemMessage(
+                                    detail = detail,
+                                    message = event.summary ?: "审批结果：${event.method ?: "未知方法"}",
+                                    timestamp = event.timestamp,
+                                )
+                            }
+                            ?.copy(status = event.status ?: it.selectedSession.status),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             lastEventText = event.summary ?: "收到工具结果事件。",
                             fallbackNotice = null,
@@ -575,7 +588,9 @@ class AppViewModel(
                 activeAssistantTurnId = null
                 _uiState.update {
                     it.copy(
-                        selectedSession = it.selectedSession?.copy(status = "error"),
+                        selectedSession = it.selectedSession
+                            ?.let { detail -> appendSystemMessage(detail, "系统：${event.message}", event.timestamp) }
+                            ?.copy(status = "error"),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("error"),
                             lastEventText = "实时流返回错误事件。",
@@ -663,10 +678,15 @@ class AppViewModel(
         _uiState.update {
             it.copy(
                 isLoading = false,
-                selectedSession = it.selectedSession?.copy(
-                    status = result.status,
-                    lastUpdated = nowIsoString(),
-                ),
+                selectedSession = it.selectedSession
+                    ?.let { detail ->
+                        appendSystemMessage(
+                            detail = detail,
+                            message = buildApprovalResultText(result),
+                            timestamp = nowIsoString(),
+                        )
+                    }
+                    ?.copy(status = result.status),
                 message = "已提交审批操作：${result.decision.label}",
                 sessionRealtimeState = it.sessionRealtimeState.copy(
                     statusText = localizedSessionStatus(result.status),
@@ -763,6 +783,26 @@ private fun appendUserMessage(
         transcriptPreview = nextTranscript,
         status = "running",
         lastUpdated = nowIsoString(),
+    )
+}
+
+private fun appendSystemMessage(
+    detail: SessionDetail,
+    message: String,
+    timestamp: String?,
+): SessionDetail {
+    val current = detail.transcriptPreview.trimEnd()
+    val nextTranscript = buildString {
+        if (current.isNotBlank()) {
+            append(current)
+            append("\n\n")
+        }
+        append(message)
+    }
+
+    return detail.copy(
+        transcriptPreview = nextTranscript,
+        lastUpdated = timestamp ?: nowIsoString(),
     )
 }
 
@@ -864,7 +904,7 @@ private fun localizedSessionStatus(status: String): String {
 
 private fun buildApprovalResultText(result: ApprovalActionResult): String {
     val method = result.method ?: "未知方法"
-    return "已提交${result.decision.label}：$method"
+    return "审批结果：${result.decision.label}（$method）"
 }
 
 private fun nowIsoString(): String = Instant.now().toString()

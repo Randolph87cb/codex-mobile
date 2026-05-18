@@ -308,6 +308,67 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("attaches history sessions for interrupt and approve routes", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+
+    const interrupt = await app.inject({
+      method: "POST",
+      url: "/api/session/thread-history/interrupt",
+    });
+    expect(interrupt.statusCode).toBe(200);
+    expect(runner.interrupt).toHaveBeenCalledWith("thread-history");
+
+    const approve = await app.inject({
+      method: "POST",
+      url: "/api/session/thread-history/approve",
+      payload: {
+        requestId: "req-history",
+        decision: "approve",
+      },
+    });
+    expect(approve.statusCode).toBe(200);
+    expect(runner.approve).toHaveBeenCalledWith("thread-history", {
+      requestId: "req-history",
+      decision: "approve",
+    });
+
+    await app.close();
+  });
+
+  test("attaches history sessions for websocket subscriptions", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const address = app.server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("unexpected-server-address");
+    }
+
+    const payload = await new Promise<string>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/session/thread-history/ws`);
+      socket.addEventListener("message", (event) => {
+        resolve(String(event.data));
+        socket.close();
+      });
+      socket.addEventListener("error", () => {
+        reject(new Error("websocket-connect-failed"));
+      });
+    });
+
+    expect(JSON.parse(payload)).toMatchObject({
+      type: "session.started",
+      sessionId: "thread-history",
+      data: {
+        threadId: "thread-history",
+      },
+    });
+
+    await app.close();
+  });
+
   test("forwards approval decisions to the runner", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);

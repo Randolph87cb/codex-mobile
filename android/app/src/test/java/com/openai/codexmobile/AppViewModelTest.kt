@@ -235,6 +235,9 @@ class AppViewModelTest {
 
         assertNotNull(viewModel.uiState.value.sessionRealtimeState.pendingApproval)
         assertEquals("等待批准", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("等待审批：item/commandExecution/requestApproval") == true,
+        )
 
         viewModel.submitApproval(ApprovalDecision.Reject)
         advanceUntilIdle()
@@ -247,6 +250,9 @@ class AppViewModelTest {
         assertEquals("已提交审批操作：拒绝", viewModel.uiState.value.message)
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
         assertEquals(null, viewModel.uiState.value.sessionRealtimeState.pendingApproval)
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("审批结果：拒绝（item/commandExecution/requestApproval）") == true,
+        )
     }
 
     @Test
