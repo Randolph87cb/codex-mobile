@@ -52,6 +52,8 @@ export function buildSessionViewFromRecord(session: SessionRecord): SessionView 
     cwd: session.cwd,
     model: session.model,
     approvalMode: session.approvalMode,
+    reasoningEffort: session.reasoningEffort,
+    serviceTier: session.serviceTier,
     status: session.status,
     threadId: session.threadId,
     activeTurnId: session.activeTurnId,
@@ -71,6 +73,8 @@ export function buildSessionViewFromThread(
   const updatedAt = pickLatestTimestamp(toIsoString(thread.updatedAt), session?.updatedAt, true);
   const transcriptPreview = buildThreadTranscriptPreview(thread);
   const model = session?.model ?? normalizeText(thread.modelProvider, "openai") ?? "openai";
+  const reasoningEffort = session?.reasoningEffort ?? "medium";
+  const serviceTier = session?.serviceTier ?? "fast";
   const title = firstNonEmpty(
     normalizeText(thread.name),
     extractFirstUserMessage(thread),
@@ -89,6 +93,8 @@ export function buildSessionViewFromThread(
     cwd: thread.cwd,
     model,
     approvalMode: session?.approvalMode ?? "manual",
+    reasoningEffort,
+    serviceTier,
     status,
     threadId: session?.threadId ?? thread.id,
     activeTurnId: session?.activeTurnId ?? null,

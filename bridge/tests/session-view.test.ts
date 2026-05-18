@@ -63,6 +63,8 @@ describe("session view mapping", () => {
         cwd: "D:\\workspace\\codex-mobile",
         model: "gpt-5.5",
         approvalMode: "manual",
+        reasoningEffort: "medium",
+        serviceTier: "fast",
         status: "running",
         threadId: "thread-2",
         activeTurnId: "turn-old",

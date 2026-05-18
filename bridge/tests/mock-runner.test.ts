@@ -10,6 +10,8 @@ describe("MockRunner", () => {
       cwd: "D:\\workspace\\codex-mobile",
       model: "gpt-5.5",
       approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
     });
     const runner = new MockRunner(store);
     const events: BridgeEvent[] = [];

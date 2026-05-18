@@ -11,6 +11,8 @@ export class SessionStore {
       cwd: input.cwd,
       model: input.model,
       approvalMode: input.approvalMode,
+      reasoningEffort: input.reasoningEffort,
+      serviceTier: input.serviceTier,
       status: "idle",
       threadId: null,
       activeTurnId: null,

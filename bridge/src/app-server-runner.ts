@@ -10,10 +10,12 @@ import { SessionStore } from "./session-store.js";
 import type {
   ApprovalDecision,
   JsonRpcRequestId,
+  ReasoningEffort,
   SessionApprovalInput,
   SessionApprovalResult,
   SessionRecord,
   SessionStatus,
+  ServiceTier,
   SessionView,
 } from "./types.js";
 
@@ -45,11 +47,19 @@ interface ThreadResumeResult {
   cwd?: string;
   model?: string;
   approvalPolicy?: "on-request" | "never";
+  serviceTier?: ServiceTier | null;
+  reasoningEffort?: ReasoningEffort | null;
 }
 
 class ApprovalError extends Error {
   constructor(readonly code: "session-not-found" | "approval-not-found" | "approval-request-id-required") {
     super(code);
+  }
+}
+
+class BusySessionError extends Error {
+  constructor(readonly status: Extract<SessionStatus, "running" | "awaiting_approval">) {
+    super("thread-busy");
   }
 }
 
@@ -89,24 +99,34 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       throw new Error("session-not-found");
     }
 
-    const result = await this.client.request<{ thread: { id: string } }>("thread/start", {
+    const result = await this.client.request<ThreadResumeResult>("thread/start", {
       cwd: session.cwd,
       model: session.model,
+      serviceTier: session.serviceTier,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
     });
 
     this.rememberThreadSession(result.thread.id, sessionId);
     this.store.update(sessionId, {
       threadId: result.thread.id,
-      status: "idle",
+      cwd: result.cwd ?? session.cwd,
+      model: result.model ?? session.model,
+      approvalMode: mapApprovalMode(result.approvalPolicy) ?? session.approvalMode,
+      reasoningEffort: mapReasoningEffort(result.reasoningEffort) ?? session.reasoningEffort,
+      serviceTier: mapServiceTier(result.serviceTier) ?? session.serviceTier,
+      status: mapThreadStatus(result.thread.status),
       lastError: null,
     });
   }
 
   async submitInput(sessionId: string, text: string): Promise<void> {
-    const session = this.store.get(sessionId);
+    const originalSession = this.store.get(sessionId);
+    const session = originalSession ? await this.syncSessionWithThreadRead(originalSession) : undefined;
     if (!session?.threadId) {
       throw new Error("thread-not-initialized");
+    }
+    if (session.status === "running" || session.status === "awaiting_approval") {
+      throw new BusySessionError(session.status);
     }
 
     this.store.update(sessionId, { status: "running", lastError: null });
@@ -126,7 +146,8 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   }
 
   async interrupt(sessionId: string): Promise<void> {
-    const session = this.store.get(sessionId);
+    const originalSession = this.store.get(sessionId);
+    const session = originalSession ? await this.syncSessionWithThreadRead(originalSession) : undefined;
     if (!session?.threadId || !session.activeTurnId) {
       return;
     }
@@ -235,7 +256,12 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     const session = this.store.get(sessionId);
     if (session?.threadId) {
       const thread = await this.tryReadThread(session.threadId);
-      return thread ? buildSessionViewFromThread(thread, session) : buildSessionViewFromRecord(session);
+      if (!thread) {
+        return buildSessionViewFromRecord(session);
+      }
+
+      const synced = this.applyThreadSnapshot(session, thread);
+      return buildSessionViewFromThread(thread, synced);
     }
 
     if (session) {
@@ -245,7 +271,12 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     const attachedSession = this.store.findByThreadId(sessionId);
     if (attachedSession?.threadId) {
       const thread = await this.tryReadThread(attachedSession.threadId);
-      return thread ? buildSessionViewFromThread(thread, attachedSession) : buildSessionViewFromRecord(attachedSession);
+      if (!thread) {
+        return buildSessionViewFromRecord(attachedSession);
+      }
+
+      const synced = this.applyThreadSnapshot(attachedSession, thread);
+      return buildSessionViewFromThread(thread, synced);
     }
 
     const thread = await this.tryReadThread(sessionId);
@@ -255,17 +286,17 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   async attachSession(sessionId: string): Promise<SessionRecord | null> {
     const existing = this.store.get(sessionId);
     if (existing) {
-      return (await this.tryResumeAttachedSession(existing)) ?? existing;
+      return (await this.refreshAttachedSession(existing)) ?? existing;
     }
 
     const byThreadId = this.store.findByThreadId(sessionId);
     if (byThreadId) {
-      return (await this.tryResumeAttachedSession(byThreadId)) ?? byThreadId;
+      return (await this.refreshAttachedSession(byThreadId)) ?? byThreadId;
     }
 
     const resumed = await this.tryResumeThread(sessionId);
     if (resumed) {
-      return this.attachResumedThread(sessionId, resumed);
+      return this.syncSessionWithThreadRead(this.attachResumedThread(sessionId, resumed));
     }
 
     const thread = await this.tryReadThread(sessionId);
@@ -278,6 +309,8 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       cwd: thread.cwd,
       model: thread.modelProvider ?? "openai",
       approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
       status: mapThreadStatus(thread.status),
       threadId: thread.id,
       activeTurnId: null,
@@ -296,7 +329,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
             : new Date().toISOString(),
     });
     this.rememberThreadSession(thread.id, attached.id);
-    return attached;
+    return this.applyThreadSnapshot(attached, thread);
   }
 
   private handleNotification(notification: JsonRpcNotification): void {
@@ -384,7 +417,18 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
             ? "error"
             : "idle";
 
-    this.store.update(sessionId, { status });
+    const patch: Partial<Omit<SessionRecord, "id" | "createdAt">> = { status };
+    if (status === "idle" || status === "error") {
+      patch.activeTurnId = null;
+    }
+    if (status !== "error") {
+      patch.lastError = null;
+    }
+
+    this.store.update(sessionId, patch);
+    if (status !== "awaiting_approval") {
+      this.clearPendingApprovals(sessionId);
+    }
     this.emitStatus(sessionId, status, { sourceStatus: payload.status });
   }
 
@@ -462,6 +506,10 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         error: payload.turn.error,
       },
     });
+    this.emitStatus(sessionId, status, {
+      turnId: payload.turn.id,
+      sourceTurnStatus: payload.turn.status,
+    });
   }
 
   private handleError(params: unknown): void {
@@ -524,7 +572,9 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       threadId: session.threadId,
       cwd: session.cwd,
       model: session.model,
+      serviceTier: session.serviceTier,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      effort: session.reasoningEffort,
       input: [
         {
           type: "text",
@@ -542,6 +592,11 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
   }
 
+  private async refreshAttachedSession(session: SessionRecord): Promise<SessionRecord | null> {
+    const resumed = (await this.tryResumeAttachedSession(session)) ?? session;
+    return this.syncSessionWithThreadRead(resumed);
+  }
+
   private async resumeThreadSession(session: SessionRecord): Promise<SessionRecord> {
     if (!session.threadId) {
       return session;
@@ -551,6 +606,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       threadId: session.threadId,
       cwd: session.cwd,
       model: session.model,
+      serviceTier: session.serviceTier,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
       excludeTurns: true,
     });
@@ -562,6 +618,8 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         cwd: resumed.cwd ?? session.cwd,
         model: resumed.model ?? session.model,
         approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? session.approvalMode,
+        reasoningEffort: mapReasoningEffort(resumed.reasoningEffort) ?? session.reasoningEffort,
+        serviceTier: mapServiceTier(resumed.serviceTier) ?? session.serviceTier,
         status: mapThreadStatus(resumed.thread.status),
         lastError: null,
       }) ?? session
@@ -585,6 +643,8 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       cwd: resumed.cwd ?? resumed.thread.cwd,
       model: resumed.model ?? resumed.thread.modelProvider ?? "openai",
       approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? "manual",
+      reasoningEffort: mapReasoningEffort(resumed.reasoningEffort) ?? "medium",
+      serviceTier: mapServiceTier(resumed.serviceTier) ?? "fast",
       status: mapThreadStatus(resumed.thread.status),
       threadId: resumed.thread.id,
       activeTurnId: null,
@@ -604,6 +664,35 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     });
     this.rememberThreadSession(resumed.thread.id, attached.id);
     return attached;
+  }
+
+  private async syncSessionWithThreadRead(session: SessionRecord): Promise<SessionRecord> {
+    if (!session.threadId) {
+      return session;
+    }
+
+    const thread = await this.tryReadThread(session.threadId);
+    if (!thread) {
+      return session;
+    }
+
+    return this.applyThreadSnapshot(session, thread);
+  }
+
+  private applyThreadSnapshot(session: SessionRecord, thread: AppServerThread): SessionRecord {
+    const status = mapThreadStatus(thread.status);
+    const activeTurnId = findLatestActiveTurnId(thread);
+    const lastError = extractLatestThreadError(thread);
+    return (
+      this.store.update(session.id, {
+        cwd: thread.cwd || session.cwd,
+        status,
+        activeTurnId:
+          activeTurnId ??
+          (status === "running" || status === "awaiting_approval" ? session.activeTurnId : null),
+        lastError: status === "error" ? lastError ?? session.lastError : lastError,
+      }) ?? session
+    );
   }
 
   private getApprovalPolicy(mode: SessionRecord["approvalMode"]): "on-request" | "never" {
@@ -802,4 +891,63 @@ function mapApprovalMode(approvalPolicy: "on-request" | "never" | undefined): Se
     return "auto";
   }
   return null;
+}
+
+function mapReasoningEffort(
+  reasoningEffort: ReasoningEffort | null | undefined,
+): SessionRecord["reasoningEffort"] | null {
+  switch (reasoningEffort) {
+    case "minimal":
+    case "low":
+    case "medium":
+    case "high":
+    case "xhigh":
+      return reasoningEffort;
+    default:
+      return null;
+  }
+}
+
+function mapServiceTier(
+  serviceTier: ServiceTier | null | undefined,
+): SessionRecord["serviceTier"] | null {
+  switch (serviceTier) {
+    case "fast":
+    case "flex":
+      return serviceTier;
+    default:
+      return null;
+  }
+}
+
+function findLatestActiveTurnId(thread: AppServerThread): string | null {
+  const turns = [...(thread.turns ?? [])].sort(compareTurnsDescending);
+  for (const turn of turns) {
+    if (turn.status === "inProgress") {
+      return turn.id;
+    }
+  }
+
+  return null;
+}
+
+function extractLatestThreadError(thread: AppServerThread): string | null {
+  const turns = [...(thread.turns ?? [])].sort(compareTurnsDescending);
+  for (const turn of turns) {
+    const message = turn.error?.message?.trim();
+    if (message) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
+function compareTurnsDescending(
+  left: { startedAt?: number | null; completedAt?: number | null },
+  right: { startedAt?: number | null; completedAt?: number | null },
+): number {
+  const leftTimestamp = left.startedAt ?? left.completedAt ?? 0;
+  const rightTimestamp = right.startedAt ?? right.completedAt ?? 0;
+  return rightTimestamp - leftTimestamp;
 }

@@ -12,6 +12,16 @@ const createSessionSchema = z.object({
   cwd: z.string().trim().min(1),
   model: z.string().trim().min(1).default("gpt-5.5"),
   approvalMode: z.enum(["manual", "auto"]).default("manual"),
+  reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).default("medium"),
+  serviceTier: z.enum(["fast", "flex"]).default("fast"),
+});
+
+const updateSessionConfigSchema = z.object({
+  cwd: z.string().trim().min(1).optional(),
+  model: z.string().trim().min(1).optional(),
+  approvalMode: z.enum(["manual", "auto"]).optional(),
+  reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
+  serviceTier: z.enum(["fast", "flex"]).optional(),
 });
 
 const inputSchema = z.object({
@@ -104,6 +114,43 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     return reply.status(201).send(store.get(session.id));
   });
 
+  app.patch("/api/session/:id/config", async (request, reply) => {
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    const body = updateSessionConfigSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: body.error.flatten(),
+      });
+    }
+
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
+    if (!session) {
+      return reply.status(404).send({ error: "session-not-found" });
+    }
+
+    let cwd = body.data.cwd;
+    if (cwd !== undefined) {
+      const validatedCwd = validateSessionCwd(cwd, security);
+      if (!validatedCwd.ok) {
+        return reply.status(validatedCwd.error === "invalid-cwd" ? 400 : 403).send({
+          error: validatedCwd.error,
+          message: validatedCwd.message,
+        });
+      }
+      cwd = validatedCwd.cwd ?? cwd;
+    }
+
+    const updated = store.update(session.id, {
+      cwd,
+      model: body.data.model,
+      approvalMode: body.data.approvalMode,
+      reasoningEffort: body.data.reasoningEffort,
+      serviceTier: body.data.serviceTier,
+    });
+    return updated ?? session;
+  });
+
   app.get("/api/session/:id", async (request, reply) => {
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
     if (historyRunner) {
@@ -142,9 +189,17 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     try {
       await runner.submitInput(session.id, body.data.text);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "thread-busy") {
+        return reply.status(409).send({
+          error: "thread-busy",
+          message: "thread is already running in another client",
+        });
+      }
+
       return reply.status(502).send({
         error: "turn-start-failed",
-        message: error instanceof Error ? error.message : String(error),
+        message,
       });
     }
 
@@ -214,16 +269,20 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       return;
     }
 
+    const view = historyRunner ? await historyRunner.getSessionView(session.id) : null;
     socket.send(
       JSON.stringify({
         type: "session.started",
         sessionId: session.id,
         timestamp: new Date().toISOString(),
         data: {
-          cwd: session.cwd,
-          model: session.model,
-          status: session.status,
-          threadId: session.threadId,
+          cwd: view?.cwd ?? session.cwd,
+          model: view?.model ?? session.model,
+          approvalMode: view?.approvalMode ?? session.approvalMode,
+          reasoningEffort: view?.reasoningEffort ?? session.reasoningEffort,
+          serviceTier: view?.serviceTier ?? session.serviceTier,
+          status: view?.status ?? session.status,
+          threadId: view?.threadId ?? session.threadId,
         },
       }),
     );
@@ -245,11 +304,14 @@ async function resolveSessionRecord(
   store: SessionStore,
   historyRunner: HistoryCapableBridgeRunner | null,
 ) {
-  let session = store.get(sessionId) ?? undefined;
-  if (!session && historyRunner) {
-    session = (await historyRunner.attachSession(sessionId)) ?? undefined;
+  if (historyRunner) {
+    const session = await historyRunner.attachSession(sessionId);
+    if (session) {
+      return session;
+    }
   }
-  return session;
+
+  return store.get(sessionId);
 }
 
 function createRunner(store: SessionStore): BridgeRunner {

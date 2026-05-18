@@ -53,6 +53,8 @@ function createSessionStore(): SessionStore {
     cwd: "D:\\workspace\\codex-mobile",
     model: "gpt-5.5",
     approvalMode: "manual",
+    reasoningEffort: "medium",
+    serviceTier: "fast",
     status: "running",
     threadId: "thread-1",
     activeTurnId: "turn-1",
@@ -72,6 +74,20 @@ describe("AppServerRunner", () => {
         return { thread: { id: "thread-2" } };
       }
 
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-2",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
       if (method === "turn/start") {
         return { turn: { id: "turn-2" } };
       }
@@ -84,6 +100,8 @@ describe("AppServerRunner", () => {
       cwd: "D:\\workspace\\codex-mobile",
       model: "gpt-5.5",
       approvalMode: "manual",
+      reasoningEffort: "high",
+      serviceTier: "flex",
       status: "idle",
       threadId: null,
       activeTurnId: null,
@@ -101,13 +119,24 @@ describe("AppServerRunner", () => {
       "thread/start",
       expect.objectContaining({
         approvalPolicy: "on-request",
+        serviceTier: "flex",
       }),
     );
     expect(client.request).toHaveBeenNthCalledWith(
       2,
+      "thread/read",
+      expect.objectContaining({
+        threadId: "thread-2",
+        includeTurns: true,
+      }),
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      3,
       "turn/start",
       expect.objectContaining({
         approvalPolicy: "on-request",
+        effort: "high",
+        serviceTier: "flex",
       }),
     );
   });
@@ -262,8 +291,26 @@ describe("AppServerRunner", () => {
 
   test("retries turn/start after resuming a historical thread when app-server reports thread not found", async () => {
     const store = createSessionStore();
+    store.update("sess-1", {
+      status: "idle",
+      activeTurnId: null,
+    });
     const client = new FakeAppServerClient();
     client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
       if (method === "turn/start") {
         if (client.request.mock.calls.filter(([calledMethod]) => calledMethod === "turn/start").length === 1) {
           throw new Error("thread not found: thread-1");
@@ -296,13 +343,21 @@ describe("AppServerRunner", () => {
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
+      "thread/read",
+      expect.objectContaining({
+        threadId: "thread-1",
+        includeTurns: true,
+      }),
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
       "turn/start",
       expect.objectContaining({
         threadId: "thread-1",
       }),
     );
     expect(client.request).toHaveBeenNthCalledWith(
-      2,
+      3,
       "thread/resume",
       expect.objectContaining({
         threadId: "thread-1",
@@ -310,7 +365,7 @@ describe("AppServerRunner", () => {
       }),
     );
     expect(client.request).toHaveBeenNthCalledWith(
-      3,
+      4,
       "turn/start",
       expect.objectContaining({
         threadId: "thread-1",
@@ -320,6 +375,171 @@ describe("AppServerRunner", () => {
       activeTurnId: "turn-2",
       status: "running",
       lastError: null,
+    });
+  });
+
+  test("syncs external idle status and clears stale active turn when attaching an existing session", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/resume") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+          cwd: "D:\\workspace\\codex-mobile",
+          model: "gpt-5.5",
+          approvalPolicy: "on-request",
+          serviceTier: "fast",
+          reasoningEffort: "medium",
+        };
+      }
+
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080400,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const attached = await runner.attachSession("sess-1");
+
+    expect(attached).toMatchObject({
+      id: "sess-1",
+      status: "idle",
+      activeTurnId: null,
+    });
+  });
+
+  test("blocks turn/start when the thread is already active in another client", async () => {
+    const store = createSessionStore();
+    store.update("sess-1", {
+      status: "idle",
+      activeTurnId: null,
+    });
+
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080400,
+            status: { type: "active", activeFlags: [] },
+            turns: [
+              {
+                id: "turn-external",
+                status: "inProgress",
+                error: null,
+                startedAt: 1716080300,
+                completedAt: null,
+                items: [],
+              },
+            ],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await expect(runner.submitInput("sess-1", "新输入")).rejects.toThrow("thread-busy");
+    expect(store.get("sess-1")).toMatchObject({
+      status: "running",
+      activeTurnId: "turn-external",
+    });
+    expect(client.request).toHaveBeenCalledTimes(1);
+    expect(client.request).toHaveBeenCalledWith(
+      "thread/read",
+      expect.objectContaining({
+        threadId: "thread-1",
+        includeTurns: true,
+      }),
+    );
+  });
+
+  test("discovers the active turn from thread/read before interrupting", async () => {
+    const store = createSessionStore();
+    store.update("sess-1", {
+      status: "running",
+      activeTurnId: null,
+    });
+
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080400,
+            status: { type: "active", activeFlags: [] },
+            turns: [
+              {
+                id: "turn-external",
+                status: "inProgress",
+                error: null,
+                startedAt: 1716080300,
+                completedAt: null,
+                items: [],
+              },
+            ],
+          },
+        };
+      }
+
+      if (method === "turn/interrupt") {
+        return {};
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await runner.interrupt("sess-1");
+
+    expect(client.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/read",
+      expect.objectContaining({
+        threadId: "thread-1",
+        includeTurns: true,
+      }),
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
+      "turn/interrupt",
+      {
+        threadId: "thread-1",
+        turnId: "turn-external",
+      },
+    );
+    expect(store.get("sess-1")).toMatchObject({
+      status: "idle",
+      activeTurnId: null,
     });
   });
 });

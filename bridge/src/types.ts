@@ -2,11 +2,15 @@ export type SessionStatus = "idle" | "running" | "awaiting_approval" | "error";
 export type JsonRpcRequestId = string | number;
 export type ApprovalDecision = "approve" | "approve_for_session" | "reject" | "reject_and_interrupt";
 export type ApprovalMode = "manual" | "auto";
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ServiceTier = "fast" | "flex";
 
 export interface CreateSessionInput {
   cwd: string;
   model: string;
   approvalMode: ApprovalMode;
+  reasoningEffort: ReasoningEffort;
+  serviceTier: ServiceTier;
 }
 
 export interface SessionRecord {
@@ -14,6 +18,8 @@ export interface SessionRecord {
   cwd: string;
   model: string;
   approvalMode: ApprovalMode;
+  reasoningEffort: ReasoningEffort;
+  serviceTier: ServiceTier;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;
@@ -32,6 +38,8 @@ export interface SessionView {
   cwd: string;
   model: string;
   approvalMode: ApprovalMode;
+  reasoningEffort: ReasoningEffort;
+  serviceTier: ServiceTier;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;

@@ -41,6 +41,8 @@ class TestRunner implements HistoryCapableBridgeRunner {
         cwd: "D:\\workspace\\history",
         model: "openai",
         approvalMode: "manual",
+        reasoningEffort: "medium",
+        serviceTier: "fast",
         status: "idle",
         threadId: "thread-history",
         activeTurnId: null,
@@ -66,6 +68,8 @@ class TestRunner implements HistoryCapableBridgeRunner {
       cwd: "D:\\workspace\\history",
       model: "openai",
       approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
       status: "idle",
       threadId: "thread-history",
       activeTurnId: null,
@@ -85,6 +89,8 @@ class TestRunner implements HistoryCapableBridgeRunner {
       cwd: "D:\\workspace\\history",
       model: "openai",
       approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
       status: "idle",
       threadId: "thread-history",
       activeTurnId: null,
@@ -139,6 +145,8 @@ describe("buildBridgeApp", () => {
     expect(create.json()).toMatchObject({
       cwd: "D:\\workspace\\codex-mobile",
       model: "gpt-5.5",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
       threadId: "thread-test",
     });
 
@@ -308,6 +316,72 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("updates persisted session config through patch route", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/session/${session.id}/config`,
+      payload: {
+        cwd: "D:\\workspace\\codex-mobile\\bridge",
+        model: "gpt-5",
+        approvalMode: "auto",
+        reasoningEffort: "high",
+        serviceTier: "flex",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: session.id,
+      cwd: "D:\\workspace\\codex-mobile\\bridge",
+      model: "gpt-5",
+      approvalMode: "auto",
+      reasoningEffort: "high",
+      serviceTier: "flex",
+    });
+
+    await app.close();
+  });
+
+  test("returns 409 when thread is already active in another client", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    runner.submitInput.mockRejectedValueOnce(new Error("thread-busy"));
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        text: "hello",
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: "thread-busy",
+    });
+
+    await app.close();
+  });
+
   test("attaches history sessions for interrupt and approve routes", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
@@ -377,6 +451,8 @@ describe("buildBridgeApp", () => {
       cwd: "D:\\workspace\\codex-mobile",
       model: "gpt-5.5",
       approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
     });
 
     const approve = await app.inject({
