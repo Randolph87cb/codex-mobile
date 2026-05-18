@@ -107,6 +107,18 @@
 - 已确认项目当前仍处于“基础文本远控 MVP”阶段。
 - 已整理出可直接转成 backlog 的功能缺口与优先级。
 - 已确认后续开发可以采用多 `worktree` 并行，但必须按分支隔离，并先划清 bridge / Android / 安全控制面的 ownership，避免交叉修改同一协议文件。
+- 已确定首批并行切分为 3 个 `worktree`：
+  - `codex/bridge-approval`
+  - `codex/android-realtime`
+  - `codex/bridge-security`
+- 已确定对应工作目录：
+  - `D:\workspace\codex-mobile-bridge-approval`
+  - `D:\workspace\codex-mobile-android-realtime`
+  - `D:\workspace\codex-mobile-bridge-security`
+- 已约束并行边界：
+  - `bridge-approval` 负责审批链路，不负责 token 和白名单。
+  - `android-realtime` 负责移动端实时流与详情页展示，不改 bridge 安全策略。
+  - `bridge-security` 负责认证、目录白名单与配置入口，不接管审批协议设计。
 
 ## 后续事项
 
