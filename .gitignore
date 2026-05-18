@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+.vscode/
+.logs/
+.tmp/
+.tools/
