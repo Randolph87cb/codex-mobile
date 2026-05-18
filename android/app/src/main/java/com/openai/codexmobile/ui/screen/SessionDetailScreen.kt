@@ -1,15 +1,18 @@
 package com.openai.codexmobile.ui.screen
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -110,10 +113,8 @@ fun SessionDetailScreen(
                     text = sessionDetail?.lastUpdated ?: "等待会话元数据",
                     style = MaterialTheme.typography.labelLarge,
                 )
-                Text(
-                    text = sessionDetail?.transcriptPreview
-                        ?: "这里会显示会话内容、实时回复和结束状态。",
-                    style = MaterialTheme.typography.bodyMedium,
+                TranscriptBubbleList(
+                    transcript = sessionDetail?.transcriptPreview.orEmpty(),
                 )
             }
         }
@@ -135,6 +136,63 @@ fun SessionDetailScreen(
         }
         Button(onClick = onBack) {
             Text("返回会话列表")
+        }
+    }
+}
+
+@Composable
+private fun TranscriptBubbleList(
+    transcript: String,
+) {
+    val bubbles = parseTranscriptBubbles(transcript)
+    if (bubbles.isEmpty()) {
+        Text(
+            text = "这里会显示会话内容、实时回复和结束状态。",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        bubbles.forEach { bubble ->
+            Box(modifier = Modifier.fillMaxWidth()) {
+                val isUser = bubble.speaker == TranscriptSpeaker.User
+                val backgroundColor = when (bubble.speaker) {
+                    TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
+                    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
+                    TranscriptSpeaker.System -> MaterialTheme.colorScheme.surfaceVariant
+                }
+                Card(
+                    modifier = Modifier
+                        .align(
+                            if (isUser) {
+                                androidx.compose.ui.Alignment.CenterEnd
+                            } else {
+                                androidx.compose.ui.Alignment.CenterStart
+                            },
+                        )
+                        .widthIn(max = 320.dp),
+                    colors = CardDefaults.cardColors(containerColor = backgroundColor),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = when (bubble.speaker) {
+                                TranscriptSpeaker.User -> "你"
+                                TranscriptSpeaker.Assistant -> "Codex"
+                                TranscriptSpeaker.System -> "系统"
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        Text(
+                            text = bubble.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
         }
     }
 }

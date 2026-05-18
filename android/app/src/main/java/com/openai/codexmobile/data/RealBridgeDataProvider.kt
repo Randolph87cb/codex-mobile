@@ -145,7 +145,7 @@ class RealBridgeDataProvider : CodexDataProvider {
                         reason = reason.ifBlank { "实时流正在关闭。" },
                     ),
                 )
-                webSocket.close(code, reason)
+                webSocket.close(normalizeCloseCode(code), normalizeCloseReason(reason))
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -395,6 +395,18 @@ private fun summarizeToolResult(data: JSONObject): String {
             append(requestId)
         }
     }
+}
+
+private fun normalizeCloseCode(code: Int): Int {
+    return if (code in 1000..4999 && code !in setOf(1004, 1005, 1006, 1015)) {
+        code
+    } else {
+        1000
+    }
+}
+
+private fun normalizeCloseReason(reason: String): String? {
+    return reason.trim().takeIf { it.isNotEmpty() }?.take(123)
 }
 
 private data class HttpResponse(

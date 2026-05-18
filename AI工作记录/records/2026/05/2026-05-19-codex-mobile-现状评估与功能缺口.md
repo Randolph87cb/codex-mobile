@@ -256,6 +256,17 @@
 
 - 仍缺一次“启用真实 token 后的真机端到端联调”，但代码与自动化验证已具备条件。
 
+## 后续修正记录
+
+- 真机反馈后，已额外修正两项 Android 问题：
+  - WebSocket `onClosing` 不再直接回发保留关闭码 `1005`，改为使用安全关闭码规整处理
+  - 会话详情页不再把整段对话塞进单个文本块，而是按“你 / Codex / 系统”拆成对话气泡
+- 已新增对话气泡解析测试：
+  - `android/app/src/test/java/com/openai/codexmobile/ui/screen/TranscriptBubbleTest.kt`
+- 修正后的验证结果：
+  - `android`：`gradlew testDebugUnitTest` 通过
+  - `android`：`build-android-debug.ps1` 通过
+
 ## 后续事项
 
 - [ ] 接通 `/api/session/:id/approve` 与 app-server 审批响应
