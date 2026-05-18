@@ -138,8 +138,16 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 SettingsScreen(
                     paddingValues = paddingValues,
                     items = uiState.settingsItems,
+                    endpointInput = uiState.endpointInput,
                     authTokenInput = uiState.authTokenInput,
+                    cwdInput = uiState.cwdInput,
+                    modelInput = uiState.modelInput,
+                    approvalModeInput = uiState.approvalModeInput,
+                    onEndpointChange = appViewModel::updateEndpointInput,
                     onAuthTokenChange = appViewModel::updateAuthTokenInput,
+                    onCwdChange = appViewModel::updateCwdInput,
+                    onModelChange = appViewModel::updateModelInput,
+                    onApprovalModeChange = appViewModel::updateApprovalModeInput,
                     onBack = { navController.popBackStack() },
                 )
             }

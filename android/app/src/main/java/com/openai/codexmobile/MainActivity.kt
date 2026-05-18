@@ -4,9 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.openai.codexmobile.data.FallbackCodexDataProvider
-import com.openai.codexmobile.data.FakeCodexDataProvider
+import com.openai.codexmobile.data.AppSettingsDefaults
 import com.openai.codexmobile.data.RealBridgeDataProvider
+import com.openai.codexmobile.data.SharedPreferencesAppSettingsStore
+import com.openai.codexmobile.data.defaultEndpointForCurrentDevice
 import com.openai.codexmobile.ui.CodexMobileApp
 import com.openai.codexmobile.ui.theme.CodexMobileTheme
 
@@ -14,10 +15,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val dataProvider = FallbackCodexDataProvider(
-            primary = RealBridgeDataProvider(),
-            fallback = FakeCodexDataProvider(),
+        val settingsStore = SharedPreferencesAppSettingsStore(
+            context = applicationContext,
+            defaults = AppSettingsDefaults(
+                endpoint = defaultEndpointForCurrentDevice(),
+                cwd = "D:\\workspace\\codex-mobile",
+            ),
         )
+        val dataProvider = RealBridgeDataProvider()
 
         setContent {
             CodexMobileTheme {
@@ -25,6 +30,7 @@ class MainActivity : ComponentActivity() {
                     factory = AppViewModelFactory(
                         bridgeApi = dataProvider,
                         sessionRepository = dataProvider,
+                        settingsStore = settingsStore,
                     ),
                 )
                 CodexMobileApp(appViewModel = appViewModel)

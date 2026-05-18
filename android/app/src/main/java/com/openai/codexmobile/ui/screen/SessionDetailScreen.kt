@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.PendingApprovalUiState
@@ -39,6 +40,14 @@ fun SessionDetailScreen(
     onBack: () -> Unit,
 ) {
     val transcriptScrollState = rememberScrollState()
+
+    LaunchedEffect(
+        sessionDetail?.transcriptPreview,
+        sessionRealtimeState.lastEventText,
+        sessionRealtimeState.pendingApproval?.requestId?.toString(),
+    ) {
+        transcriptScrollState.animateScrollTo(transcriptScrollState.maxValue)
+    }
 
     Column(
         modifier = Modifier

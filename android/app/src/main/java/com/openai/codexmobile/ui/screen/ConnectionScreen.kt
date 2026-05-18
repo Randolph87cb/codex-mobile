@@ -58,7 +58,7 @@ fun ConnectionScreen(
                     singleLine = true,
                 )
                 Text(
-                    text = "真机安装时，这里填写 Windows 电脑的局域网 IP。当前示例是 192.168.31.66。只有模拟器才使用 10.0.2.2。",
+                    text = "模拟器请使用 10.0.2.2:8787；真机请填写 Windows 电脑的局域网地址。设置页会保存默认连接参数。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Button(

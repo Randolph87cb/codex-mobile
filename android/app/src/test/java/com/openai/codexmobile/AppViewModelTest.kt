@@ -1,5 +1,7 @@
 package com.openai.codexmobile
 
+import com.openai.codexmobile.data.AppSettings
+import com.openai.codexmobile.data.AppSettingsStore
 import com.openai.codexmobile.data.ApprovalActionResult
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
@@ -22,6 +24,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -61,7 +64,7 @@ class AppViewModelTest {
             sessionSummaries = listOf(sessionSummaryFor(initialDetail)),
             details = arrayDequeOf(initialDetail, finalDetail),
         )
-        val viewModel = AppViewModel(bridgeApi, repository)
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
 
         viewModel.openSessionDetail("sess_1")
         advanceUntilIdle()
@@ -140,7 +143,7 @@ class AppViewModelTest {
             sessionSummaries = listOf(sessionSummaryFor(detail)),
             details = arrayDequeOf(detail, interruptedDetail),
         )
-        val viewModel = AppViewModel(bridgeApi, repository)
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
 
         viewModel.openSessionDetail("sess_2")
         advanceUntilIdle()
@@ -182,7 +185,8 @@ class AppViewModelTest {
             sessionSummaries = listOf(sessionSummaryFor(detail)),
             details = arrayDequeOf(detail),
         )
-        val viewModel = AppViewModel(bridgeApi, repository)
+        val settingsStore = FakeAppSettingsStore()
+        val viewModel = AppViewModel(bridgeApi, repository, settingsStore)
 
         viewModel.updateAuthTokenInput("bridge-secret")
         viewModel.connect()
@@ -195,6 +199,7 @@ class AppViewModelTest {
                 label == "鉴权令牌" && value == "已配置"
             },
         )
+        assertEquals("bridge-secret", settingsStore.saved.authToken)
     }
 
     @Test
@@ -212,7 +217,7 @@ class AppViewModelTest {
             sessionSummaries = listOf(sessionSummaryFor(detail)),
             details = arrayDequeOf(detail),
         )
-        val viewModel = AppViewModel(bridgeApi, repository)
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
 
         viewModel.openSessionDetail("sess_4")
         advanceUntilIdle()
@@ -243,6 +248,79 @@ class AppViewModelTest {
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
         assertEquals(null, viewModel.uiState.value.sessionRealtimeState.pendingApproval)
     }
+
+    @Test
+    fun createSessionUsesEditableSavedSettings() = runTest(dispatcher.scheduler) {
+        val detail = SessionDetail(
+            id = "sess_5",
+            title = "配置测试",
+            subtitle = "gpt-5.5 • 手动批准 • 空闲",
+            lastUpdated = "2026-05-19T14:00:00.000Z",
+            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(sessionSummaryFor(detail)),
+            details = arrayDequeOf(detail),
+        )
+        val settingsStore = FakeAppSettingsStore(
+            initial = AppSettings(
+                endpoint = "http://10.0.2.2:8787",
+                authToken = "bridge-secret",
+                cwd = "D:\\workspace\\codex-mobile",
+                model = "gpt-5.5",
+                approvalMode = "manual",
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, settingsStore)
+
+        viewModel.updateCwdInput("D:\\workspace\\other-project")
+        viewModel.updateModelInput("gpt-5.4")
+        viewModel.updateApprovalModeInput("auto")
+        viewModel.createSession()
+        advanceUntilIdle()
+
+        assertEquals(
+            CreateSessionRequest(
+                cwd = "D:\\workspace\\other-project",
+                model = "gpt-5.4",
+                approvalMode = "auto",
+            ),
+            bridgeApi.lastCreateSessionRequest,
+        )
+        assertEquals("D:\\workspace\\other-project", settingsStore.saved.cwd)
+        assertEquals("gpt-5.4", settingsStore.saved.model)
+        assertEquals("auto", settingsStore.saved.approvalMode)
+    }
+
+    @Test
+    fun missingSessionClearsSelectedSessionWithoutStartingRealtimeStream() = runTest(dispatcher.scheduler) {
+        val staleDetail = SessionDetail(
+            id = "sess_stale",
+            title = "旧会话",
+            subtitle = "gpt-5.5 • 手动批准 • 空闲",
+            lastUpdated = "2026-05-19T15:00:00.000Z",
+            transcriptPreview = "你：旧内容",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = staleDetail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(sessionSummaryFor(staleDetail)),
+            details = arrayDequeOf(staleDetail, null),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+
+        viewModel.openSessionDetail("sess_stale")
+        advanceUntilIdle()
+
+        viewModel.openSessionDetail("sess_missing")
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedSession)
+        assertEquals("未找到会话：sess_missing", viewModel.uiState.value.message)
+        assertEquals(1, bridgeApi.observeSessionCalls)
+    }
 }
 
 private class FakeBridgeApi(
@@ -253,6 +331,8 @@ private class FakeBridgeApi(
     val approvalCalls = mutableListOf<ApprovalCall>()
     var updatedAuthToken: String = ""
     var authTokenAtConnect: String = ""
+    var lastCreateSessionRequest: CreateSessionRequest? = null
+    var observeSessionCalls: Int = 0
 
     override fun updateAuthToken(token: String) {
         updatedAuthToken = token
@@ -267,7 +347,10 @@ private class FakeBridgeApi(
 
     override suspend fun currentConnection(): BridgeConnectionState = BridgeConnectionState.Disconnected
 
-    override suspend fun createSession(request: CreateSessionRequest): SessionDetail = createdDetail
+    override suspend fun createSession(request: CreateSessionRequest): SessionDetail {
+        lastCreateSessionRequest = request
+        return createdDetail
+    }
 
     override suspend fun sendInput(sessionId: String, text: String) {
         sentInputs += text
@@ -287,7 +370,10 @@ private class FakeBridgeApi(
         )
     }
 
-    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = events
+    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> {
+        observeSessionCalls += 1
+        return events
+    }
 
     suspend fun emit(event: SessionStreamEvent) {
         events.emit(event)
@@ -302,9 +388,9 @@ private data class ApprovalCall(
 
 private class FakeSessionRepository(
     private val sessionSummaries: List<SessionSummary>,
-    details: ArrayDeque<SessionDetail>,
+    details: List<SessionDetail?>,
 ) : SessionRepository {
-    private val detailsQueue = details
+    private val detailsQueue = details.toMutableList()
     private var lastDetail: SessionDetail? = details.lastOrNull()
     var getSessionDetailCallCount: Int = 0
         private set
@@ -313,11 +399,30 @@ private class FakeSessionRepository(
 
     override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
         getSessionDetailCallCount += 1
-        val next = if (detailsQueue.isEmpty()) lastDetail else detailsQueue.removeFirst()
+        val next = if (detailsQueue.isEmpty()) lastDetail else detailsQueue.removeAt(0)
         if (next != null) {
             lastDetail = next
         }
         return next
+    }
+}
+
+private class FakeAppSettingsStore(
+    initial: AppSettings = AppSettings(
+        endpoint = "http://10.0.2.2:8787",
+        authToken = "",
+        cwd = "D:\\workspace\\codex-mobile",
+        model = "gpt-5.5",
+        approvalMode = "manual",
+    ),
+) : AppSettingsStore {
+    var saved: AppSettings = initial
+        private set
+
+    override fun load(): AppSettings = saved
+
+    override fun save(settings: AppSettings) {
+        saved = settings
     }
 }
 
@@ -331,6 +436,6 @@ private fun sessionSummaryFor(detail: SessionDetail): SessionSummary {
     )
 }
 
-private fun arrayDequeOf(vararg details: SessionDetail): ArrayDeque<SessionDetail> {
-    return ArrayDeque(details.toList())
+private fun arrayDequeOf(vararg details: SessionDetail?): List<SessionDetail?> {
+    return details.toList()
 }

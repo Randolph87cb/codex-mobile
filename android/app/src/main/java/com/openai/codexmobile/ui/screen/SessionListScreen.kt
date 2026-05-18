@@ -31,65 +31,69 @@ fun SessionListScreen(
     onDisconnect: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            Text(
-                text = "会话列表",
-                style = MaterialTheme.typography.headlineMedium,
-            )
-        }
-        item {
-            Text(
-                text = when (connectionState) {
-                    is BridgeConnectionState.Connected -> "桥接地址：${connectionState.endpoint}"
-                    BridgeConnectionState.Disconnected -> "桥接服务未连接"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        items(sessions, key = { it.id }) { session ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenSession(session.id) },
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+        Text(
+            text = "会话列表",
+            style = MaterialTheme.typography.headlineMedium,
+        )
+        Text(
+            text = when (connectionState) {
+                is BridgeConnectionState.Connected -> "桥接地址：${connectionState.endpoint}"
+                BridgeConnectionState.Disconnected -> "桥接服务未连接"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(sessions, key = { it.id }) { session ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenSession(session.id) },
                 ) {
-                    Text(text = session.title, style = MaterialTheme.typography.titleMedium)
-                    Text(text = session.subtitle, style = MaterialTheme.typography.bodyMedium)
-                    Text(text = session.lastUpdated, style = MaterialTheme.typography.labelMedium)
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(text = session.title, style = MaterialTheme.typography.titleMedium)
+                        Text(text = session.subtitle, style = MaterialTheme.typography.bodyMedium)
+                        Text(text = session.lastUpdated, style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }
-        item {
-            Button(
-                onClick = onCreateSession,
-                enabled = !isLoading,
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(strokeWidth = 2.dp)
-                } else {
-                    Text("新建会话")
-                }
+        Button(
+            onClick = onCreateSession,
+            enabled = !isLoading,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(strokeWidth = 2.dp)
+            } else {
+                Text("新建会话")
             }
         }
-        item {
-            Button(onClick = onOpenSettings) {
-                Text("设置")
-            }
+        Button(
+            onClick = onOpenSettings,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("设置")
         }
-        item {
-            Button(onClick = onDisconnect) {
-                Text("断开连接")
-            }
+        Button(
+            onClick = onDisconnect,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("断开连接")
         }
     }
 }

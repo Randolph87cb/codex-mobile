@@ -258,6 +258,77 @@
 
 ## 后续修正记录
 
+## 本轮模拟器联调收尾
+
+- 目标：
+  - 使用本地 Android 模拟器对当前 `main` 做一次真实联调。
+  - 把“看起来功能有了，但模拟器里一用就暴露”的剩余缺口收尾。
+- 本轮环境：
+  - bridge：`http://127.0.0.1:8787`
+  - 模拟器访问地址：`http://10.0.2.2:8787`
+  - bridge 开启 `CODEX_MOBILE_AUTH_TOKEN`
+  - 使用现有本地 AVD `codex-mobile-api35`
+
+### 模拟器联调时暴露的真实问题
+
+- Android 首次默认地址仍是硬编码的局域网 IP，不适合模拟器直接联调。
+- 设置页只能改 token，桥接地址、默认工作目录、默认模型、审批模式都没有真正开放编辑。
+- 新建会话仍把 `cwd / model / approvalMode` 写死在 `AppViewModel` 里，用户改不了。
+- 真实 bridge 连接失败时，Android 仍可能静默切到 `FakeCodexDataProvider`，容易误导成“真服务已连通”。
+- 会话详情打开不存在的会话时，会保留上一条旧快照，存在内容误导。
+- 详情页实时内容没有自动滚到底，长回复时看起来容易像“卡住”。
+- 会话列表的“新建会话 / 设置 / 断开连接”放在长列表底部，历史会话较多时几乎不可达。
+- 设置项变多后，设置页在模拟器小屏上出现内容挤压，需要可滚动布局。
+
+### 本轮收尾改动
+
+- Android 改为只连真实 bridge，不再在连接失败时静默回退到本地假数据：
+  - `android/app/src/main/java/com/openai/codexmobile/MainActivity.kt`
+- 新增本地设置存储，持久化这些关键输入：
+  - bridge 地址
+  - token
+  - 默认工作目录
+  - 默认模型
+  - 审批模式
+  - 文件：`android/app/src/main/java/com/openai/codexmobile/data/AppSettingsStore.kt`
+- `AppViewModel` 改为从设置加载初始值，并在用户修改时立即保存；新建会话改为真正消费这些设置值，不再写死参数：
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+- 连接页默认在模拟器环境下使用 `http://10.0.2.2:8787`，并把说明文案改成通用表述：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
+- 设置页增加 bridge 地址、默认工作目录、默认模型、审批模式编辑能力，并改为可滚动布局：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+- 会话详情页增加“跟随最新内容”自动滚动：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 会话列表页改为“列表滚动 + 底部固定操作区”，避免关键按钮被长列表埋住：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+
+### 本轮新增测试覆盖
+
+- `connectUsesConfiguredTokenAndUpdatesSettings`
+  - 确认 token 会传给连接层并写回设置存储
+- `createSessionUsesEditableSavedSettings`
+  - 确认新建会话使用用户编辑后的 `cwd / model / approvalMode`
+- `missingSessionClearsSelectedSessionWithoutStartingRealtimeStream`
+  - 确认会话不存在时不再残留旧内容，也不会继续接实时流
+
+### 本轮验证结果
+
+- Android 单元测试：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过
+- Android 构建：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：通过
+- 模拟器联调事实：
+  - 最新 APK 已重新安装到 `codex-mobile-api35`
+  - 已确认连接页默认地址变为 `http://10.0.2.2:8787`
+  - 已确认带 token 的真实 bridge 可以在模拟器内看到真实会话列表，不再掉到假数据源
+
+### 当前结论
+
+- 这轮用户最容易撞到的“未收尾功能”已经基本收干净，剩余重点不再是基础配置或明显占位逻辑，而是更细的移动端体验增强。
+
 - 真机反馈后，已额外修正两项 Android 问题：
   - WebSocket `onClosing` 不再直接回发保留关闭码 `1005`，改为使用安全关闭码规整处理
   - 会话详情页不再把整段对话塞进单个文本块，而是按“你 / Codex / 系统”拆成对话气泡

@@ -3,6 +3,8 @@ package com.openai.codexmobile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.openai.codexmobile.data.AppSettings
+import com.openai.codexmobile.data.AppSettingsStore
 import com.openai.codexmobile.data.ApprovalActionResult
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
@@ -24,15 +26,18 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 
 data class AppUiState(
-    val endpointInput: String = "http://192.168.31.66:8787",
-    val authTokenInput: String = "",
+    val endpointInput: String,
+    val authTokenInput: String,
+    val cwdInput: String,
+    val modelInput: String,
+    val approvalModeInput: String,
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSession: SessionDetail? = null,
     val draftMessage: String = "",
     val isLoading: Boolean = false,
     val message: String? = null,
-    val settingsItems: List<Pair<String, String>> = defaultSettingsItems(),
+    val settingsItems: List<Pair<String, String>>,
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
 )
 
@@ -56,9 +61,11 @@ data class PendingApprovalUiState(
 class AppViewModel(
     private val bridgeApi: BridgeApi,
     private val sessionRepository: SessionRepository,
+    private val settingsStore: AppSettingsStore,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AppUiState())
+    private val initialSettings = settingsStore.load().sanitize()
+    private val _uiState = MutableStateFlow(createInitialUiState(initialSettings))
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
     private var sessionStreamJob: Job? = null
@@ -66,19 +73,31 @@ class AppViewModel(
     private var activeAssistantTurnId: String? = null
 
     init {
+        bridgeApi.updateAuthToken(initialSettings.authToken)
         refreshConnection()
     }
 
     fun updateEndpointInput(value: String) {
-        _uiState.update { it.copy(endpointInput = value) }
+        updateSettingsState { it.copy(endpointInput = value) }
     }
 
     fun updateAuthTokenInput(value: String) {
         bridgeApi.updateAuthToken(value)
-        _uiState.update {
+        updateSettingsState { it.copy(authTokenInput = value) }
+    }
+
+    fun updateCwdInput(value: String) {
+        updateSettingsState { it.copy(cwdInput = value) }
+    }
+
+    fun updateModelInput(value: String) {
+        updateSettingsState { it.copy(modelInput = value) }
+    }
+
+    fun updateApprovalModeInput(value: String) {
+        updateSettingsState {
             it.copy(
-                authTokenInput = value,
-                settingsItems = defaultSettingsItems(it.connectionState, value),
+                approvalModeInput = value.takeIf { mode -> mode == "manual" || mode == "auto" } ?: "manual",
             )
         }
     }
@@ -88,33 +107,37 @@ class AppViewModel(
     }
 
     fun connect() {
+        val endpoint = uiState.value.endpointInput.trim()
+        if (endpoint.isBlank()) {
+            _uiState.update { it.copy(message = "请先填写桥接地址。") }
+            return
+        }
+
         viewModelScope.launch {
             stopSessionStream()
             _uiState.update { it.copy(isLoading = true, message = null, selectedSession = null) }
             try {
-                val connectionState = bridgeApi.connect(uiState.value.endpointInput)
+                val connectionState = bridgeApi.connect(endpoint)
                 val sessions = sessionRepository.listSessions()
                 val selectedSession = sessions.firstOrNull()?.let { sessionRepository.getSessionDetail(it.id) }
-                _uiState.update {
-                    it.copy(
+                _uiState.update { state ->
+                    state.copy(
                         isLoading = false,
                         connectionState = connectionState,
                         sessions = sessions,
                         selectedSession = selectedSession,
                         message = connectedMessage(connectionState),
-                        settingsItems = defaultSettingsItems(connectionState, it.authTokenInput),
-                    )
+                    ).withSettingsItems()
                 }
             } catch (error: Exception) {
-                _uiState.update {
-                    it.copy(
+                _uiState.update { state ->
+                    state.copy(
                         isLoading = false,
                         connectionState = BridgeConnectionState.Disconnected,
                         sessions = emptyList(),
                         selectedSession = null,
                         message = error.message ?: "连接桥接服务失败。",
-                        settingsItems = defaultSettingsItems(authTokenInput = it.authTokenInput),
-                    )
+                    ).withSettingsItems()
                 }
             }
         }
@@ -130,8 +153,7 @@ class AppViewModel(
                     sessions = emptyList(),
                     selectedSession = null,
                     message = "已断开连接。",
-                    settingsItems = defaultSettingsItems(authTokenInput = it.authTokenInput),
-                )
+                ).withSettingsItems()
             }
         }
     }
@@ -150,6 +172,7 @@ class AppViewModel(
                 it.copy(
                     isLoading = true,
                     message = null,
+                    selectedSession = it.selectedSession?.takeIf { detail -> detail.id == sessionId },
                     sessionRealtimeState = SessionRealtimeUiState(
                         isActive = true,
                         connectionText = "正在连接实时流",
@@ -162,27 +185,51 @@ class AppViewModel(
                 )
             }
 
-            try {
-                val detail = sessionRepository.getSessionDetail(sessionId)
-                _uiState.update { state ->
-                    state.copy(
-                        isLoading = false,
-                        selectedSession = detail ?: state.selectedSession,
-                        message = if (detail == null) "未找到会话：$sessionId" else state.message,
-                        sessionRealtimeState = state.sessionRealtimeState.copy(
-                            statusText = detail?.status?.let(::localizedSessionStatus)
-                                ?: state.sessionRealtimeState.statusText,
-                            fallbackNotice = if (detail == null) "当前只显示上次可用快照。" else null,
-                        ),
-                    )
-                }
+            val detail = try {
+                sessionRepository.getSessionDetail(sessionId)
             } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        selectedSession = null,
                         message = error.message ?: "加载会话失败。",
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            isConnected = false,
+                            connectionText = "会话加载失败",
+                            statusText = "无法打开会话",
+                            fallbackNotice = "请检查 bridge 连接和会话状态。",
+                        ),
                     )
                 }
+                return@launch
+            }
+
+            if (detail == null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        selectedSession = null,
+                        message = "未找到会话：$sessionId",
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            isConnected = false,
+                            connectionText = "找不到目标会话",
+                            statusText = "会话不存在",
+                            fallbackNotice = "这条会话可能已经结束或不再可访问。",
+                        ),
+                    )
+                }
+                return@launch
+            }
+
+            _uiState.update { state ->
+                state.copy(
+                    isLoading = false,
+                    selectedSession = detail,
+                    sessionRealtimeState = state.sessionRealtimeState.copy(
+                        statusText = localizedSessionStatus(detail.status),
+                        fallbackNotice = null,
+                    ),
+                )
             }
 
             startSessionStream(sessionId)
@@ -196,16 +243,12 @@ class AppViewModel(
     }
 
     fun createSession() {
+        val request = buildCreateSessionRequest(uiState.value) ?: return
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, message = null) }
             try {
-                val created = bridgeApi.createSession(
-                    CreateSessionRequest(
-                        cwd = "D:\\workspace\\codex-mobile",
-                        model = "gpt-5.5",
-                        approvalMode = "manual",
-                    ),
-                )
+                val created = bridgeApi.createSession(request)
                 val sessions = sessionRepository.listSessions()
                 _uiState.update {
                     it.copy(
@@ -302,10 +345,7 @@ class AppViewModel(
         viewModelScope.launch {
             val connectionState = bridgeApi.currentConnection()
             _uiState.update {
-                it.copy(
-                    connectionState = connectionState,
-                    settingsItems = defaultSettingsItems(connectionState, it.authTokenInput),
-                )
+                it.copy(connectionState = connectionState).withSettingsItems()
             }
         }
     }
@@ -425,8 +465,6 @@ class AppViewModel(
                     it.copy(
                         selectedSession = rendered.detail,
                         sessionRealtimeState = it.sessionRealtimeState.copy(
-                            isActive = true,
-                            isConnected = true,
                             statusText = localizedSessionStatus("running"),
                             lastEventText = "Codex 正在实时输出回复。",
                         ),
@@ -450,9 +488,8 @@ class AppViewModel(
                                 else -> "本轮回复已结束。"
                             },
                             fallbackNotice = event.errorMessage,
-                            pendingApproval = null,
                         ),
-                        message = event.errorMessage?.let { message -> "运行出错：$message" } ?: it.message,
+                        message = event.errorMessage,
                     )
                 }
                 refreshSessionSnapshot(sessionId)
@@ -470,11 +507,6 @@ class AppViewModel(
                             lastEventText = statusEventText(event.status),
                             fallbackNotice = if (event.status == "awaiting_approval") {
                                 it.sessionRealtimeState.fallbackNotice
-                            } else {
-                                null
-                            },
-                            pendingApproval = if (event.status == "awaiting_approval") {
-                                it.sessionRealtimeState.pendingApproval
                             } else {
                                 null
                             },
@@ -581,6 +613,47 @@ class AppViewModel(
         }
     }
 
+    private fun updateSettingsState(transform: (AppUiState) -> AppUiState) {
+        _uiState.update { current ->
+            val next = transform(current).withSettingsItems()
+            persistSettings(next)
+            next
+        }
+    }
+
+    private fun persistSettings(state: AppUiState) {
+        settingsStore.save(
+            AppSettings(
+                endpoint = state.endpointInput.trim(),
+                authToken = state.authTokenInput,
+                cwd = state.cwdInput.trim(),
+                model = state.modelInput.trim(),
+                approvalMode = state.approvalModeInput,
+            ),
+        )
+    }
+
+    private fun buildCreateSessionRequest(state: AppUiState): CreateSessionRequest? {
+        val cwd = state.cwdInput.trim()
+        if (cwd.isBlank()) {
+            _uiState.update { it.copy(message = "请先在设置里填写默认工作目录。") }
+            return null
+        }
+
+        val model = state.modelInput.trim()
+        if (model.isBlank()) {
+            _uiState.update { it.copy(message = "请先在设置里填写默认模型。") }
+            return null
+        }
+
+        val approvalMode = state.approvalModeInput.takeIf { it == "manual" || it == "auto" } ?: "manual"
+        return CreateSessionRequest(
+            cwd = cwd,
+            model = model,
+            approvalMode = approvalMode,
+        )
+    }
+
     override fun onCleared() {
         stopSessionStream()
         super.onCleared()
@@ -604,6 +677,45 @@ class AppViewModel(
             )
         }
     }
+}
+
+private fun createInitialUiState(settings: AppSettings): AppUiState {
+    return AppUiState(
+        endpointInput = settings.endpoint,
+        authTokenInput = settings.authToken,
+        cwdInput = settings.cwd,
+        modelInput = settings.model,
+        approvalModeInput = settings.approvalMode,
+        settingsItems = defaultSettingsItems(
+            endpointInput = settings.endpoint,
+            authTokenInput = settings.authToken,
+            cwdInput = settings.cwd,
+            modelInput = settings.model,
+            approvalModeInput = settings.approvalMode,
+        ),
+    )
+}
+
+private fun AppUiState.withSettingsItems(): AppUiState {
+    return copy(
+        settingsItems = defaultSettingsItems(
+            connectionState = connectionState,
+            endpointInput = endpointInput,
+            authTokenInput = authTokenInput,
+            cwdInput = cwdInput,
+            modelInput = modelInput,
+            approvalModeInput = approvalModeInput,
+        ),
+    )
+}
+
+private fun AppSettings.sanitize(): AppSettings {
+    return copy(
+        endpoint = endpoint.trim(),
+        cwd = cwd.trim(),
+        model = model.trim().ifEmpty { "gpt-5.5" },
+        approvalMode = approvalMode.takeIf { it == "manual" || it == "auto" } ?: "manual",
+    )
 }
 
 private fun buildOrUpdateSessionFromStart(
@@ -710,27 +822,35 @@ private fun statusEventText(status: String): String {
 
 private fun connectedMessage(connectionState: BridgeConnectionState): String {
     val connectedState = connectionState as? BridgeConnectionState.Connected ?: return "已连接。"
-    return when (connectedState.provider) {
-        "fake-fallback" -> "真实桥接不可用，已切换到本地模拟数据。"
-        else -> "已通过 ${connectedState.transport} 连接桥接服务。"
-    }
+    return "已通过 ${connectedState.transport} 连接桥接服务。"
 }
 
 private fun defaultSettingsItems(
     connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
+    endpointInput: String = "",
     authTokenInput: String = "",
+    cwdInput: String = "",
+    modelInput: String = "gpt-5.5",
+    approvalModeInput: String = "manual",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     return listOf(
-        "桥接模式" to when (connectedState?.provider) {
-            "fake-fallback" -> "本地模拟"
-            else -> "真实桥接"
-        },
-        "桥接地址" to (connectedState?.endpoint ?: "http://192.168.31.66:8787"),
+        "桥接模式" to "真实桥接",
+        "桥接地址" to (connectedState?.endpoint ?: endpointInput.ifBlank { "未配置" }),
         "鉴权令牌" to if (authTokenInput.isBlank()) "未配置" else "已配置",
-        "运行器" to (connectedState?.runnerMode ?: "未知"),
+        "默认工作目录" to cwdInput.ifBlank { "未配置" },
+        "默认模型" to modelInput.ifBlank { "未配置" },
+        "审批模式" to localizedApprovalMode(approvalModeInput),
+        "运行器" to (connectedState?.runnerMode ?: "未连接"),
         "遥测" to "已关闭",
     )
+}
+
+private fun localizedApprovalMode(mode: String): String {
+    return when (mode) {
+        "auto" -> "自动"
+        else -> "手动"
+    }
 }
 
 private fun localizedSessionStatus(status: String): String {
@@ -752,11 +872,12 @@ private fun nowIsoString(): String = Instant.now().toString()
 class AppViewModelFactory(
     private val bridgeApi: BridgeApi,
     private val sessionRepository: SessionRepository,
+    private val settingsStore: AppSettingsStore,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AppViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return AppViewModel(bridgeApi, sessionRepository) as T
+            return AppViewModel(bridgeApi, sessionRepository, settingsStore) as T
         }
         error("Unknown ViewModel class: ${modelClass.name}")
     }
