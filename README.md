@@ -117,3 +117,38 @@ powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\build
 ```text
 D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk
 ```
+
+## 本地 Android 模拟器测试
+
+如果不想每次都手工把 APK 装到真机，可以直接使用仓库内的本地模拟器环境。
+
+### 已准备好的能力
+
+- 项目内 Android SDK 已补齐 `emulator`
+- 已创建项目内 AVD：`codex-mobile-api35`
+- 模拟器数据目录放在仓库本地资产：`.tmp/android-avd/`
+
+### 常用脚本
+
+启动模拟器：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\start-android-emulator.ps1
+```
+
+把当前 debug APK 安装到模拟器并拉起应用：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\install-android-debug-emulator.ps1
+```
+
+一键启动本地 bridge、构建 APK、启动模拟器并安装：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\run-local-android-test.ps1
+```
+
+### 模拟器连接 bridge
+
+- 模拟器访问 Windows 主机本地服务时，bridge 地址使用：`http://10.0.2.2:8787`
+- 如果 bridge 启用了 `CODEX_MOBILE_AUTH_TOKEN`，先在 App 的“设置”页填写 token，再连接 bridge

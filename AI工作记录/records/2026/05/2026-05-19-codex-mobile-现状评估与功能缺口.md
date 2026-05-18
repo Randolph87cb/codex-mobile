@@ -267,6 +267,26 @@
   - `android`：`gradlew testDebugUnitTest` 通过
   - `android`：`build-android-debug.ps1` 通过
 
+## 本地 Android 测试环境
+
+- 已在项目内补齐 Android 本地模拟器环境，避免每次都依赖真机手工安装。
+- 已安装：
+  - `emulator`
+  - `system-images;android-35;google_apis;x86_64`
+- 已创建项目内 AVD：
+  - `codex-mobile-api35`
+- AVD 数据目录：
+  - `.tmp/android-avd/`
+- 已新增脚本：
+  - `scripts/start-android-emulator.ps1`
+  - `scripts/install-android-debug-emulator.ps1`
+  - `scripts/run-local-android-test.ps1`
+- 已完成实际验证：
+  - 模拟器已可启动并被 `adb devices` 识别为 `emulator-5554`
+  - `install-android-debug-emulator.ps1` 已成功把 debug APK 安装到模拟器并拉起应用
+- 模拟器侧连接 bridge 时，应使用：
+  - `http://10.0.2.2:8787`
+
 ## 后续事项
 
 - [ ] 接通 `/api/session/:id/approve` 与 app-server 审批响应
