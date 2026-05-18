@@ -202,6 +202,32 @@
   - `android`：`build-android-debug.ps1`、`gradlew testDebugUnitTest`
 - 最终验证结果仍然全部通过。
 
+## 合并后缺口判断
+
+- 当前项目已经从“基础文本 MVP”推进到“可实时查看会话 + bridge 侧可审批 + 可选安全控制面”的阶段。
+- 合并后最主要缺口已经不再是基础链路，而是“移动端把 bridge 新能力真正消费起来”。
+- 当前优先级最高的未完成功能包括：
+  - Android token 透传：
+    - bridge 已支持 token 鉴权
+    - Android 仍缺 HTTP / WebSocket Bearer token 支持
+  - Android 审批 UI：
+    - bridge 已支持 `/api/session/:id/approve`
+    - Android 目前主要是实时展示状态和事件，还没有批准 / 拒绝操作入口
+  - Android 对 `tool.request` / `tool.result` 的可读展示：
+    - 已有实时流基础
+    - 但审批请求、工具执行结果的移动端交互还不完整
+  - 联调配置体验：
+    - token、默认工作目录、白名单说明、连接配置还未产品化
+  - 真实端到端联调验证：
+    - 当前自动化验证已通过
+    - 但还需要一次“启用 token + 真 bridge + 真 Android 实时流 + 审批操作”的完整联调
+
+## 当前推荐下一轮
+
+1. 先补 Android token 透传能力
+2. 再补 Android 审批 UI 和审批事件展示
+3. 最后做一轮带 token 的端到端联调
+
 ## 后续事项
 
 - [ ] 接通 `/api/session/:id/approve` 与 app-server 审批响应
