@@ -119,6 +119,47 @@
   - `bridge-approval` 负责审批链路，不负责 token 和白名单。
   - `android-realtime` 负责移动端实时流与详情页展示，不改 bridge 安全策略。
   - `bridge-security` 负责认证、目录白名单与配置入口，不接管审批协议设计。
+- 已收到 3 条并行分支回报：
+  - `codex/android-realtime`：已完成 Android 详情页实时流改造，并推送到远端分支。
+  - `codex/bridge-approval`：已完成 bridge 审批闭环，并推送到远端分支。
+  - `codex/bridge-security`：已完成 token 认证与 cwd 白名单，并推送到远端分支。
+- 已判断当前最优先事项不是继续各自扩写，而是先做一次 bridge 侧集成收口：
+  - `bridge-approval` 与 `bridge-security` 都会影响 bridge 契约和联调方式。
+  - Android 分支虽然当前范围已完成，但是否需要补 token、审批 UI，取决于 bridge 两条线合并后的最终契约。
+- 已形成建议收敛顺序：
+  1. 先集成 `bridge-approval` 与 `bridge-security`
+  2. 冻结最终 HTTP / WebSocket / approve / 鉴权契约
+  3. 再决定 Android 是否需要一个小的同步补丁分支
+  4. 最后再合并到 `main`
+
+## 当前集成判断
+
+- `android-realtime` 现在可以视为“功能完成但契约待确认”的状态。
+- 当前最大不确定性不在 Android，而在两个 bridge 分支的重叠文件与最终接口定义。
+- 需要重点确认的集成点：
+  - `/api/session/:id/approve` 的请求体最终结构
+  - `tool.request` / `tool.result` / `run.status` 的最终事件字段
+  - `/api/session/:id/ws` 在启用 token 后的鉴权方式
+  - `/api/*` 鉴权开启时 Android 是否必须同时补 HTTP 与 WebSocket token
+
+## 推荐下一步
+
+- 新建一个临时 bridge 集成分支或 worktree，先合并：
+  - `codex/bridge-approval`
+  - `codex/bridge-security`
+- 在 bridge 集成分支里解决这些高风险重叠文件的冲突：
+  - `bridge/src/app.ts`
+  - `bridge/src/app-server-runner.ts`
+  - `docs/api.md`
+  - `README.md`
+- 集成完成后先跑 bridge 验证：
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+- bridge 契约冻结后，再判断 Android 是否只需要一个“小同步分支”：
+  - 如果 token 默认关闭，Android 可先不补 token 设置 UI，只补底层 header/WS 支持即可。
+  - 如果本轮就要让手机端处理审批，则再补 Android 审批 UI。
+  - 如果本轮只要求 bridge 审批可用，Android 只需显示 `awaiting_approval` 和相关事件，不一定马上做批准/拒绝按钮。
 
 ## 后续事项
 
