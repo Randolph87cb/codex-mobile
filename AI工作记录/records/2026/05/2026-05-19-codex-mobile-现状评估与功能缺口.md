@@ -127,3 +127,60 @@
 - [ ] 为 Android 增加中断、审批、运行状态展示
 - [ ] 为 bridge 增加 token 认证与目录白名单
 - [ ] 为上述能力补齐 bridge / Android 测试
+
+---
+
+## 追加记录：bridge 审批闭环接通
+
+- 时间：2026-05-19
+- 工作目录：`D:\workspace\codex-mobile-bridge-approval`
+- 分支：`codex/bridge-approval`
+
+### 本次目标
+
+- 只接通 bridge 审批链路，不处理 token、目录白名单和 Android WebSocket。
+- 保持现有移动端协议尽量稳定，优先继续使用 `/api/session/:id/approve` 和 `tool.request` 事件模型。
+
+### 关键实现
+
+- `AppServerRunner` 不再在收到可审批的 server request 后立刻回 `not supported`。
+- 新增 bridge 内部 pending approval 管理：
+  - 按 `sessionId + requestId` 暂存待审批请求；
+  - 收到请求时把会话状态改为 `awaiting_approval`；
+  - 向事件流发出 `run.status(awaiting_approval)` 和 `tool.request`。
+- 接通 `/api/session/:id/approve`：
+  - 支持 `requestId` 选择待审批项；
+  - 支持 `decision=approve|approve_for_session|reject|reject_and_interrupt`；
+  - 回写 app-server 后发出 `tool.result` 和新的 `run.status`。
+- `thread/start` 与 `turn/start` 现在会根据 `approvalMode` 传递真实 `approvalPolicy`：
+  - `manual -> on-request`
+  - `auto -> never`
+- `AppServerRunner` 对附加历史线程也能补齐 `threadId -> sessionId` 映射，避免通知和审批事件丢失。
+
+### 修改文件
+
+- `bridge/src/app-server-client.ts`
+- `bridge/src/app-server-runner.ts`
+- `bridge/src/app.ts`
+- `bridge/src/bridge-runner.ts`
+- `bridge/src/mock-runner.ts`
+- `bridge/src/types.ts`
+- `bridge/tests/app.test.ts`
+- `bridge/tests/app-server-runner.test.ts`
+- `docs/api.md`
+
+### 验证
+
+- 初次执行 `cd bridge && npm run check` 失败，原因是本地缺少 `node_modules`，`tsc` 不存在。
+- 执行 `cd bridge && npm install` 补齐依赖，仅用于本地验证。
+- 执行通过：
+  - `cd bridge && npm run check`
+  - `cd bridge && npm test`
+
+### Android 同步影响
+
+- `/api/session/:id/approve` 现在需要可选请求体：
+  - `requestId`
+  - `decision`
+- 如果 Android 只做“批准当前唯一待审批项”，可以继续只调用同一路径并发送空体或 `{ "decision": "approve" }`。
+- 如果 Android 要支持拒绝或同会话多待审批项，需要同步传 `decision`，并在多待审批场景传 `requestId`。

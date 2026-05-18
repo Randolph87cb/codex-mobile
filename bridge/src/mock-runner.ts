@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { BridgeEventListener, BridgeRunner } from "./bridge-runner.js";
-import type { BridgeEvent } from "./types.js";
+import type { BridgeEvent, SessionApprovalInput, SessionApprovalResult } from "./types.js";
 import { SessionStore } from "./session-store.js";
 
 export class MockRunner implements BridgeRunner {
@@ -75,6 +75,22 @@ export class MockRunner implements BridgeRunner {
       timestamp: new Date().toISOString(),
       data: { status: "idle" },
     });
+  }
+
+  async approve(sessionId: string, input: SessionApprovalInput): Promise<SessionApprovalResult> {
+    const session = this.store.get(sessionId);
+    if (!session) {
+      throw new Error("session-not-found");
+    }
+
+    const status = input.decision === "reject_and_interrupt" ? "idle" : session.status;
+    this.store.update(sessionId, { status });
+    return {
+      requestId: input.requestId ?? "mock-request",
+      status,
+      decision: input.decision ?? "approve",
+      method: "mock/approval",
+    };
   }
 
   private emit(event: BridgeEvent): void {

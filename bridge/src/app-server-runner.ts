@@ -7,22 +7,66 @@ import {
   type AppServerThread,
 } from "./session-view.js";
 import { SessionStore } from "./session-store.js";
-import type { SessionRecord, SessionView } from "./types.js";
+import type {
+  ApprovalDecision,
+  JsonRpcRequestId,
+  SessionApprovalInput,
+  SessionApprovalResult,
+  SessionRecord,
+  SessionStatus,
+  SessionView,
+} from "./types.js";
+
+type ApprovalRequestMethod =
+  | "item/commandExecution/requestApproval"
+  | "item/fileChange/requestApproval"
+  | "item/permissions/requestApproval"
+  | "applyPatchApproval"
+  | "execCommandApproval";
+
+interface PendingApproval {
+  requestId: JsonRpcRequestId;
+  sessionId: string;
+  method: ApprovalRequestMethod;
+  params: Record<string, unknown>;
+}
+
+interface AppServerRpcClient {
+  request<TResult>(method: string, params: unknown): Promise<TResult>;
+  onNotification(listener: (message: JsonRpcNotification) => void): () => void;
+  onServerRequest(listener: (message: JsonRpcServerRequest) => void): () => void;
+  sendResponse(id: JsonRpcRequestId, result: unknown): void;
+  sendError(id: JsonRpcRequestId, code: number, message: string, data?: unknown): void;
+  close(): Promise<void>;
+}
+
+class ApprovalError extends Error {
+  constructor(readonly code: "session-not-found" | "approval-not-found" | "approval-request-id-required") {
+    super(code);
+  }
+}
 
 export class AppServerRunner implements HistoryCapableBridgeRunner {
   readonly mode = "app-server" as const;
   private readonly listeners = new Map<string, Set<BridgeEventListener>>();
   private readonly threadToSession = new Map<string, string>();
-  private readonly client: AppServerClient;
+  private readonly pendingApprovals = new Map<string, PendingApproval>();
+  private readonly sessionApprovalKeys = new Map<string, string[]>();
+  private readonly client: AppServerRpcClient;
 
-  constructor(private readonly store: SessionStore) {
-    this.client = new AppServerClient({
-      cwd: process.cwd(),
-      clientInfo: {
-        name: "codex-mobile-bridge",
-        version: "0.1.0",
-      },
-    });
+  constructor(
+    private readonly store: SessionStore,
+    client?: AppServerRpcClient,
+  ) {
+    this.client =
+      client ??
+      new AppServerClient({
+        cwd: process.cwd(),
+        clientInfo: {
+          name: "codex-mobile-bridge",
+          version: "0.1.0",
+        },
+      });
 
     this.client.onNotification((notification) => {
       this.handleNotification(notification);
@@ -41,10 +85,10 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     const result = await this.client.request<{ thread: { id: string } }>("thread/start", {
       cwd: session.cwd,
       model: session.model,
-      approvalPolicy: "never",
+      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
     });
 
-    this.threadToSession.set(result.thread.id, sessionId);
+    this.rememberThreadSession(result.thread.id, sessionId);
     this.store.update(sessionId, {
       threadId: result.thread.id,
       status: "idle",
@@ -70,6 +114,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       threadId: session.threadId,
       cwd: session.cwd,
       model: session.model,
+      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
       input: [
         {
           type: "text",
@@ -99,12 +144,55 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       activeTurnId: null,
       status: "idle",
     });
+    this.clearPendingApprovals(sessionId);
     this.emit(sessionId, {
       type: "run.interrupted",
       sessionId,
       timestamp: new Date().toISOString(),
       data: { status: "idle" },
     });
+  }
+
+  async approve(sessionId: string, input: SessionApprovalInput): Promise<SessionApprovalResult> {
+    const session = this.store.get(sessionId);
+    if (!session) {
+      throw new ApprovalError("session-not-found");
+    }
+
+    const pending = this.takePendingApproval(sessionId, input.requestId);
+    if (!pending) {
+      throw new ApprovalError(input.requestId === undefined ? "approval-not-found" : "approval-not-found");
+    }
+
+    const decision = input.decision ?? "approve";
+    const response = this.buildApprovalResponse(pending, decision);
+    this.client.sendResponse(pending.requestId, response);
+
+    const status = this.getStatusAfterApproval(sessionId, pending.method, decision);
+    this.store.update(sessionId, { status, lastError: null });
+    this.emit(sessionId, {
+      type: "tool.result",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        requestId: pending.requestId,
+        method: pending.method,
+        decision,
+        result: response,
+      },
+    });
+    this.emitStatus(sessionId, status, {
+      requestId: pending.requestId,
+      method: pending.method,
+      decision,
+    });
+
+    return {
+      requestId: pending.requestId,
+      status,
+      decision,
+      method: pending.method,
+    };
   }
 
   subscribe(sessionId: string, listener: BridgeEventListener): () => void {
@@ -184,7 +272,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return null;
     }
 
-    return this.store.attach({
+    const attached = this.store.attach({
       id: thread.id,
       cwd: thread.cwd,
       model: thread.modelProvider ?? "openai",
@@ -203,9 +291,11 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         typeof thread.updatedAt === "number"
           ? new Date(thread.updatedAt * 1000).toISOString()
           : typeof thread.updatedAt === "string" && thread.updatedAt.trim()
-            ? thread.updatedAt
+          ? thread.updatedAt
             : new Date().toISOString(),
     });
+    this.rememberThreadSession(thread.id, attached.id);
+    return attached;
   }
 
   private handleNotification(notification: JsonRpcNotification): void {
@@ -231,30 +321,44 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   }
 
   private handleServerRequest(request: JsonRpcServerRequest): void {
-    const threadId = typeof request.params === "object" && request.params && "threadId" in request.params
-      ? String((request.params as { threadId: string }).threadId)
-      : null;
-    const sessionId = threadId ? this.threadToSession.get(threadId) : undefined;
-
-    if (sessionId) {
-      this.store.update(sessionId, { status: "awaiting_approval" });
-      this.emit(sessionId, {
-        type: "tool.request",
-        sessionId,
-        timestamp: new Date().toISOString(),
-        data: {
-          requestId: request.id,
-          method: request.method,
-          params: request.params ?? {},
-        },
-      });
+    if (!isApprovalRequestMethod(request.method)) {
+      this.client.sendError(
+        request.id,
+        -32601,
+        `Server request ${request.method} is not supported by codex-mobile-bridge yet.`,
+      );
+      return;
     }
 
-    this.client.sendError(
-      request.id,
-      -32601,
-      `Server request ${request.method} is not supported by codex-mobile-bridge yet.`,
-    );
+    const params = isRecord(request.params) ? request.params : {};
+    const threadId = typeof params.threadId === "string" ? params.threadId : null;
+    const sessionId = threadId ? this.resolveSessionIdByThreadId(threadId) : undefined;
+    if (!sessionId) {
+      this.client.sendError(request.id, -32000, "approval-session-not-found");
+      return;
+    }
+
+    this.addPendingApproval({
+      requestId: request.id,
+      sessionId,
+      method: request.method,
+      params,
+    });
+    this.store.update(sessionId, { status: "awaiting_approval" });
+    this.emitStatus(sessionId, "awaiting_approval", {
+      requestId: request.id,
+      method: request.method,
+    });
+    this.emit(sessionId, {
+      type: "tool.request",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        requestId: request.id,
+        method: request.method,
+        params,
+      },
+    });
   }
 
   private handleThreadStatusChanged(params: unknown): void {
@@ -265,7 +369,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         activeFlags?: string[];
       };
     };
-    const sessionId = this.threadToSession.get(payload.threadId);
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
     if (!sessionId) {
       return;
     }
@@ -280,15 +384,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
             : "idle";
 
     this.store.update(sessionId, { status });
-    this.emit(sessionId, {
-      type: "run.status",
-      sessionId,
-      timestamp: new Date().toISOString(),
-      data: {
-        status,
-        sourceStatus: payload.status,
-      },
-    });
+    this.emitStatus(sessionId, status, { sourceStatus: payload.status });
   }
 
   private handleTurnStarted(params: unknown): void {
@@ -298,7 +394,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         id: string;
       };
     };
-    const sessionId = this.threadToSession.get(payload.threadId);
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
     if (!sessionId) {
       return;
     }
@@ -316,7 +412,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       itemId: string;
       delta: string;
     };
-    const sessionId = this.threadToSession.get(payload.threadId);
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
     if (!sessionId) {
       return;
     }
@@ -342,12 +438,13 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         error: unknown;
       };
     };
-    const sessionId = this.threadToSession.get(payload.threadId);
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
     if (!sessionId) {
       return;
     }
 
     const status = payload.turn.status === "failed" ? "error" : "idle";
+    this.clearPendingApprovals(sessionId);
     this.store.update(sessionId, {
       activeTurnId: null,
       status,
@@ -401,4 +498,183 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return null;
     }
   }
+
+  private getApprovalPolicy(mode: SessionRecord["approvalMode"]): "on-request" | "never" {
+    return mode === "manual" ? "on-request" : "never";
+  }
+
+  private rememberThreadSession(threadId: string, sessionId: string): void {
+    this.threadToSession.set(threadId, sessionId);
+  }
+
+  private resolveSessionIdByThreadId(threadId: string): string | undefined {
+    const mapped = this.threadToSession.get(threadId);
+    if (mapped) {
+      return mapped;
+    }
+
+    const session = this.store.findByThreadId(threadId);
+    if (!session) {
+      return undefined;
+    }
+
+    this.rememberThreadSession(threadId, session.id);
+    return session.id;
+  }
+
+  private emitStatus(sessionId: string, status: SessionStatus, extraData: Record<string, unknown> = {}): void {
+    this.emit(sessionId, {
+      type: "run.status",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        status,
+        ...extraData,
+      },
+    });
+  }
+
+  private addPendingApproval(pending: PendingApproval): void {
+    const requestKey = this.toRequestKey(pending.requestId);
+    this.pendingApprovals.set(requestKey, pending);
+
+    const keys = this.sessionApprovalKeys.get(pending.sessionId) ?? [];
+    keys.push(requestKey);
+    this.sessionApprovalKeys.set(pending.sessionId, keys);
+  }
+
+  private takePendingApproval(sessionId: string, requestId?: JsonRpcRequestId): PendingApproval | null {
+    const keys = [...(this.sessionApprovalKeys.get(sessionId) ?? [])];
+    if (keys.length === 0) {
+      return null;
+    }
+
+    let requestKey: string | undefined;
+    if (requestId !== undefined) {
+      requestKey = this.toRequestKey(requestId);
+      if (!keys.includes(requestKey)) {
+        return null;
+      }
+    } else if (keys.length === 1) {
+      [requestKey] = keys;
+    } else {
+      throw new ApprovalError("approval-request-id-required");
+    }
+
+    const pending = requestKey ? this.pendingApprovals.get(requestKey) ?? null : null;
+    if (!pending || !requestKey) {
+      return null;
+    }
+
+    this.pendingApprovals.delete(requestKey);
+    this.sessionApprovalKeys.set(
+      sessionId,
+      keys.filter((key) => key !== requestKey),
+    );
+    return pending;
+  }
+
+  private clearPendingApprovals(sessionId: string): void {
+    const keys = this.sessionApprovalKeys.get(sessionId) ?? [];
+    for (const key of keys) {
+      this.pendingApprovals.delete(key);
+    }
+    this.sessionApprovalKeys.delete(sessionId);
+  }
+
+  private buildApprovalResponse(pending: PendingApproval, decision: ApprovalDecision): Record<string, unknown> {
+    switch (pending.method) {
+      case "item/commandExecution/requestApproval":
+        return { decision: mapTurnApprovalDecision(decision) };
+      case "item/fileChange/requestApproval":
+        return { decision: mapTurnApprovalDecision(decision) };
+      case "item/permissions/requestApproval":
+        return decision === "approve_for_session"
+          ? {
+              permissions: getPermissionsPayload(pending.params),
+              scope: "session",
+            }
+          : decision === "approve"
+            ? {
+                permissions: getPermissionsPayload(pending.params),
+                scope: "turn",
+              }
+            : {
+                permissions: {},
+              };
+      case "applyPatchApproval":
+      case "execCommandApproval":
+        return { decision: mapLegacyApprovalDecision(decision) };
+    }
+  }
+
+  private getStatusAfterApproval(
+    sessionId: string,
+    method: ApprovalRequestMethod,
+    decision: ApprovalDecision,
+  ): SessionStatus {
+    const remaining = this.sessionApprovalKeys.get(sessionId) ?? [];
+    if (remaining.length > 0) {
+      return "awaiting_approval";
+    }
+
+    return isImmediateInterruptDecision(method, decision) ? "idle" : "running";
+  }
+
+  private toRequestKey(requestId: JsonRpcRequestId): string {
+    return `${typeof requestId}:${String(requestId)}`;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isApprovalRequestMethod(method: string): method is ApprovalRequestMethod {
+  return (
+    method === "item/commandExecution/requestApproval" ||
+    method === "item/fileChange/requestApproval" ||
+    method === "item/permissions/requestApproval" ||
+    method === "applyPatchApproval" ||
+    method === "execCommandApproval"
+  );
+}
+
+function mapTurnApprovalDecision(decision: ApprovalDecision): string {
+  switch (decision) {
+    case "approve":
+      return "accept";
+    case "approve_for_session":
+      return "acceptForSession";
+    case "reject":
+      return "decline";
+    case "reject_and_interrupt":
+      return "cancel";
+  }
+}
+
+function mapLegacyApprovalDecision(decision: ApprovalDecision): string {
+  switch (decision) {
+    case "approve":
+      return "approved";
+    case "approve_for_session":
+      return "approved_for_session";
+    case "reject":
+      return "denied";
+    case "reject_and_interrupt":
+      return "abort";
+  }
+}
+
+function isImmediateInterruptDecision(method: ApprovalRequestMethod, decision: ApprovalDecision): boolean {
+  if (decision !== "reject_and_interrupt") {
+    return false;
+  }
+
+  return method !== "item/permissions/requestApproval";
+}
+
+function getPermissionsPayload(params: Record<string, unknown>): Record<string, unknown> {
+  const permissions = params.permissions;
+  return isRecord(permissions) ? permissions : {};
 }

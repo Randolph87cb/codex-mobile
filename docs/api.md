@@ -54,6 +54,35 @@
 
 审批一次待确认操作。
 
+请求体：
+
+```json
+{
+  "requestId": "req_123",
+  "decision": "approve"
+}
+```
+
+- `requestId` 可选；当同一会话同时存在多个待审批请求时必须传。
+- `decision` 可选，默认 `approve`。
+- 当前支持的 `decision`：
+  - `approve`
+  - `approve_for_session`
+  - `reject`
+  - `reject_and_interrupt`
+
+响应：
+
+```json
+{
+  "ok": true,
+  "requestId": "req_123",
+  "decision": "approve",
+  "method": "item/commandExecution/requestApproval",
+  "status": "running"
+}
+```
+
 ## WebSocket
 
 ### `GET /api/session/:id/ws`
@@ -86,6 +115,19 @@
 
 ## 说明
 
-- `tool.request` 目前只是 bridge 侧占位事件，用于暴露真实 `app-server` 的 server request。
-- `/api/session/:id/approve` 当前尚未接通真实响应逻辑。
+- `tool.request` 现在用于透传真实可审批的 `app-server` server request，事件数据至少包含：
+  - `requestId`
+  - `method`
+  - `params`
+- `tool.result` 会在 bridge 向 `app-server` 回写审批结果后发出，事件数据至少包含：
+  - `requestId`
+  - `method`
+  - `decision`
+  - `result`
+- 当前仅接通可映射到 bridge 审批动作的 server request：
+  - `item/commandExecution/requestApproval`
+  - `item/fileChange/requestApproval`
+  - `item/permissions/requestApproval`
+  - `applyPatchApproval`
+  - `execCommandApproval`
 - Android 当前已经实际调用 `GET /health`、`GET /api/sessions`、`POST /api/session`、`GET /api/session/:id`、`POST /api/session/:id/input`。
