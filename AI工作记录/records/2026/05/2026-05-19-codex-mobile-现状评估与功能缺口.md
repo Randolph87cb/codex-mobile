@@ -161,6 +161,42 @@
   - 如果本轮就要让手机端处理审批，则再补 Android 审批 UI。
   - 如果本轮只要求 bridge 审批可用，Android 只需显示 `awaiting_approval` 和相关事件，不一定马上做批准/拒绝按钮。
 
+## 主线程集成执行结果
+
+- 主线程已新建临时集成分支：`codex/integration-main`
+- 已依次合并：
+  - `codex/bridge-approval`
+  - `codex/bridge-security`
+  - `codex/android-realtime`
+- `bridge-approval` 与 `bridge-security` 的主要冲突已在主线程裁决：
+  - `bridge/src/types.ts`
+  - `bridge/tests/app.test.ts`
+- 当前集成判断：
+  - bridge 审批闭环与安全控制面已同时落地
+  - Android 实时流分支已并入且不阻塞当前 bridge 集成结果
+  - token 认证默认仍是“配置启用”，未配置时不会阻断现有 Android 基础流程
+
+## 本轮验证结果
+
+- bridge：
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+  - 结果：通过，5 个测试文件、14 个测试用例全部通过
+- Android：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过，debug APK 构建成功，单元测试成功
+
+## 当前结论
+
+- 三个并行分支已完成主线程集成，并通过当前项目要求的最小验证。
+- 当前可以将集成结果正式合回 `main`。
+- 仍需后续关注但不阻塞本次合并的事项：
+  - Android 若要在启用 `CODEX_MOBILE_AUTH_TOKEN` 时正常访问，还需要补 token 透传能力
+  - Android 目前已能实时展示状态和事件，但审批按钮是否立即补做，可以放到下一轮
+
 ## 后续事项
 
 - [ ] 接通 `/api/session/:id/approve` 与 app-server 审批响应
