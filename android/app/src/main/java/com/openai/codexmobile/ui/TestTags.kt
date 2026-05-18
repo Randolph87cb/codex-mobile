@@ -18,6 +18,7 @@ object TestTags {
     const val SessionDetailSendButton = "session_detail_send_button"
     const val SessionDetailBackButton = "session_detail_back_button"
     const val SessionDetailApprovalCard = "session_detail_approval_card"
+    const val SessionDetailApprovalSummary = "session_detail_approval_summary"
     const val SessionDetailApproveButton = "session_detail_approve_button"
     const val SessionDetailApproveForSessionButton = "session_detail_approve_for_session_button"
     const val SessionDetailRejectButton = "session_detail_reject_button"

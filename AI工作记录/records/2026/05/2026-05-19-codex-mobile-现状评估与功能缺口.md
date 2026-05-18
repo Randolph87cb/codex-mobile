@@ -601,3 +601,49 @@
   - 历史线程首次 `turn/start` 报 `thread not found`
   - runner 自动 `thread/resume`
   - 随后重试 `turn/start` 成功
+
+## 追加记录：长审批内容遮挡按钮
+
+- 时间：2026-05-19
+- 问题现象：
+  - 待审批卡片里的请求内容过长时，会把底部审批按钮整体挤出可见区域。
+  - 卡片本身不能下滑，用户会卡在“等待审批”状态，无法继续操作。
+
+### 根因判断
+
+- `SessionDetailScreen` 里的 `ApprovalActionCard` 之前使用普通 `Column` 直接顺序铺开：
+  - 方法名
+  - `paramsSummary`
+  - 4 个审批按钮
+- 当 `paramsSummary` 很长时，会无限占用垂直空间，按钮虽然仍在布局里，但已经被挤出屏幕下方。
+- 卡片自身没有独立滚动区域，所以用户无法把按钮滑出来。
+
+### 本轮修复
+
+- 文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/TestTags.kt`
+  - `android/app/src/debug/java/com/openai/codexmobile/ReplayHarnessActivity.kt`
+- 修改内容：
+  - 将审批卡片上半部分改成独立可滚区域，限制最大高度。
+  - 审批按钮固定保留在卡片底部，不再被长文案顶出可见区域。
+  - 4 个审批按钮统一改为 `fillMaxWidth()`，提升小屏可点击性。
+  - 补充新的 `testTag`，便于后续自动化定位审批摘要区。
+- 回归验证强化：
+  - instrumentation 的回放宿主改成超长审批文案。
+  - 用例继续要求“批准”按钮可见且可点击，覆盖这次回归点。
+
+### 本轮验证
+
+- Android 单元测试：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过
+- Android 模拟器 instrumentation：
+  - `cd android`
+  - `.\gradlew.bat connectedDebugAndroidTest`
+  - 结果：通过
+- Android debug 构建：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：最终通过
+  - 说明：第一次构建曾出现一次 `dexBuilderDebug/desugar_graph` 临时目录竞态，重跑后恢复正常，判断为 Gradle 构建环境偶发问题，不是代码回归。

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.horizontalScroll
@@ -268,6 +269,8 @@ private fun ApprovalActionCard(
     approval: PendingApprovalUiState,
     onApprovalDecision: (ApprovalDecision) -> Unit,
 ) {
+    val approvalSummaryScrollState = rememberScrollState()
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -281,41 +284,58 @@ private fun ApprovalActionCard(
                 text = "待审批操作",
                 style = MaterialTheme.typography.titleMedium,
             )
-            Text(
-                text = approval.method ?: "未知工具请求",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            approval.paramsSummary?.let { summary ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 220.dp)
+                    .verticalScroll(approvalSummaryScrollState)
+                    .testTag(TestTags.SessionDetailApprovalSummary),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = approval.method ?: "未知工具请求",
+                    style = MaterialTheme.typography.bodyLarge,
                 )
+                approval.paramsSummary?.let { summary ->
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.Approve) },
                 enabled = !approval.isSubmitting,
-                modifier = Modifier.testTag(TestTags.SessionDetailApproveButton),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.SessionDetailApproveButton),
             ) {
                 Text("批准")
             }
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.ApproveForSession) },
                 enabled = !approval.isSubmitting,
-                modifier = Modifier.testTag(TestTags.SessionDetailApproveForSessionButton),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.SessionDetailApproveForSessionButton),
             ) {
                 Text("本会话都批准")
             }
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.Reject) },
                 enabled = !approval.isSubmitting,
-                modifier = Modifier.testTag(TestTags.SessionDetailRejectButton),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.SessionDetailRejectButton),
             ) {
                 Text("拒绝")
             }
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.RejectAndInterrupt) },
                 enabled = !approval.isSubmitting,
-                modifier = Modifier.testTag(TestTags.SessionDetailRejectAndInterruptButton),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.SessionDetailRejectAndInterruptButton),
             ) {
                 Text("拒绝并中断")
             }

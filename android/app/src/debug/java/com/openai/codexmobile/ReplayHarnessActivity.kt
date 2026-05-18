@@ -88,6 +88,13 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         },
         status = session.status,
     )
+    private val longApprovalSummary = buildString {
+        appendLine("等待审批：执行测试命令")
+        appendLine("命令：echo instrumentation")
+        repeat(18) { index ->
+            appendLine("参数说明 ${index + 1}：这里是一段很长的审批内容，用于确认长文本不会把按钮顶出可见区域。")
+        }
+    }.trim()
 
     override fun updateAuthToken(token: String) = Unit
 
@@ -131,7 +138,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
                     sessionId = sessionId,
                     requestId = requestId,
                     method = "item/commandExecution/requestApproval",
-                    paramsSummary = "等待审批：执行测试命令\n命令：echo instrumentation",
+                    paramsSummary = longApprovalSummary,
                     timestamp = "2026-05-19T02:40:00Z",
                 ),
             )
