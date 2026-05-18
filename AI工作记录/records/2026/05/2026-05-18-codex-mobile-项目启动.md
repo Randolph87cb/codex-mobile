@@ -92,6 +92,16 @@
   - `android`：`gradlew assembleDebug`
 - 已重启局域网 bridge，当前仍监听 `0.0.0.0:8787`，本机健康检查通过。
 - 已手工验证 `GET /api/sessions` 可返回历史线程，且 `GET /api/session/<threadId>` 能返回包含用户消息和 `Codex` 回复的详情内容。
+- 已初始化 Git 仓库，主分支为 `main`。
+- 已补充 `.gitignore`，排除本地缓存与工具链目录：
+  - `.logs/`
+  - `.tmp/`
+  - `.tools/`
+  - `.kotlin/`
+- 已创建首个提交：`401a08b1de70be9148e79e4787e48c4bf1ffb81c`
+  - 提交信息：`初始化 codex-mobile 项目`
+- 已推送到远端仓库：`https://github.com/Randolph87cb/codex-mobile.git`
+- 推送完成后已确认工作区干净，`origin/main` 跟踪关系已建立。
 
 ## 当前结果
 
@@ -101,7 +111,7 @@
 - Android 客户端已具备基础真机试用能力，不再只是静态骨架。
 - Android 客户端的主要界面文案已经切换为中文。
 - 已完成本机构建验证，当前已有可安装 `debug APK`。
-- 当前目录不是 Git 仓库，不涉及提交与推送。
+- 当前项目已接入 Git，并已完成首次推送。
 
 ## 后续事项
 
