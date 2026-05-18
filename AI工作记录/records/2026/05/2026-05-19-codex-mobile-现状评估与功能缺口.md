@@ -196,6 +196,11 @@
 - 仍需后续关注但不阻塞本次合并的事项：
   - Android 若要在启用 `CODEX_MOBILE_AUTH_TOKEN` 时正常访问，还需要补 token 透传能力
   - Android 目前已能实时展示状态和事件，但审批按钮是否立即补做，可以放到下一轮
+- 主线程随后已将 `codex/integration-main` 正式合回 `main`。
+- 已在 `main` 上重新执行一轮最终验证：
+  - `bridge`：`npm run check`、`npm test`
+  - `android`：`build-android-debug.ps1`、`gradlew testDebugUnitTest`
+- 最终验证结果仍然全部通过。
 
 ## 后续事项
 
