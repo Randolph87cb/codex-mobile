@@ -2,6 +2,7 @@ package com.openai.codexmobile.data
 
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
+import kotlinx.coroutines.flow.Flow
 
 data class CreateSessionRequest(
     val cwd: String = ".",
@@ -15,4 +16,5 @@ interface BridgeApi {
     suspend fun currentConnection(): BridgeConnectionState
     suspend fun createSession(request: CreateSessionRequest = CreateSessionRequest()): SessionDetail
     suspend fun sendInput(sessionId: String, text: String)
+    fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent>
 }

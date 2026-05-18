@@ -4,6 +4,8 @@ import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 class FakeCodexDataProvider : CodexDataProvider {
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
@@ -53,6 +55,8 @@ class FakeCodexDataProvider : CodexDataProvider {
     override suspend fun sendInput(sessionId: String, text: String) {
         delay(100)
     }
+
+    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = emptyFlow()
 
     override suspend fun listSessions(): List<SessionSummary> {
         delay(150)
