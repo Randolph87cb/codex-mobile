@@ -40,6 +40,13 @@ interface AppServerRpcClient {
   close(): Promise<void>;
 }
 
+interface ThreadResumeResult {
+  thread: AppServerThread;
+  cwd?: string;
+  model?: string;
+  approvalPolicy?: "on-request" | "never";
+}
+
 class ApprovalError extends Error {
   constructor(readonly code: "session-not-found" | "approval-not-found" | "approval-request-id-required") {
     super(code);
@@ -110,18 +117,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       data: { status: "running", mode: this.mode },
     });
 
-    const result = await this.client.request<{ turn: { id: string } }>("turn/start", {
-      threadId: session.threadId,
-      cwd: session.cwd,
-      model: session.model,
-      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
-      input: [
-        {
-          type: "text",
-          text,
-        },
-      ],
-    });
+    const result = await this.startTurnWithResumeRetry(session, text);
 
     this.store.update(sessionId, {
       activeTurnId: result.turn.id,
@@ -259,12 +255,17 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   async attachSession(sessionId: string): Promise<SessionRecord | null> {
     const existing = this.store.get(sessionId);
     if (existing) {
-      return existing;
+      return (await this.tryResumeAttachedSession(existing)) ?? existing;
     }
 
     const byThreadId = this.store.findByThreadId(sessionId);
     if (byThreadId) {
-      return byThreadId;
+      return (await this.tryResumeAttachedSession(byThreadId)) ?? byThreadId;
+    }
+
+    const resumed = await this.tryResumeThread(sessionId);
+    if (resumed) {
+      return this.attachResumedThread(sessionId, resumed);
     }
 
     const thread = await this.tryReadThread(sessionId);
@@ -291,7 +292,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         typeof thread.updatedAt === "number"
           ? new Date(thread.updatedAt * 1000).toISOString()
           : typeof thread.updatedAt === "string" && thread.updatedAt.trim()
-          ? thread.updatedAt
+            ? thread.updatedAt
             : new Date().toISOString(),
     });
     this.rememberThreadSession(thread.id, attached.id);
@@ -499,6 +500,112 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
   }
 
+  private async startTurnWithResumeRetry(
+    session: SessionRecord,
+    text: string,
+  ): Promise<{ turn: { id: string } }> {
+    try {
+      return await this.startTurn(session, text);
+    } catch (error) {
+      if (!shouldResumeMissingThread(error)) {
+        throw error;
+      }
+
+      const resumed = await this.resumeThreadSession(session);
+      return this.startTurn(resumed, text);
+    }
+  }
+
+  private async startTurn(
+    session: SessionRecord,
+    text: string,
+  ): Promise<{ turn: { id: string } }> {
+    return this.client.request<{ turn: { id: string } }>("turn/start", {
+      threadId: session.threadId,
+      cwd: session.cwd,
+      model: session.model,
+      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      input: [
+        {
+          type: "text",
+          text,
+        },
+      ],
+    });
+  }
+
+  private async tryResumeAttachedSession(session: SessionRecord): Promise<SessionRecord | null> {
+    try {
+      return await this.resumeThreadSession(session);
+    } catch {
+      return null;
+    }
+  }
+
+  private async resumeThreadSession(session: SessionRecord): Promise<SessionRecord> {
+    if (!session.threadId) {
+      return session;
+    }
+
+    const resumed = await this.client.request<ThreadResumeResult>("thread/resume", {
+      threadId: session.threadId,
+      cwd: session.cwd,
+      model: session.model,
+      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      excludeTurns: true,
+    });
+
+    this.rememberThreadSession(resumed.thread.id, session.id);
+    return (
+      this.store.update(session.id, {
+        threadId: resumed.thread.id,
+        cwd: resumed.cwd ?? session.cwd,
+        model: resumed.model ?? session.model,
+        approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? session.approvalMode,
+        status: mapThreadStatus(resumed.thread.status),
+        lastError: null,
+      }) ?? session
+    );
+  }
+
+  private async tryResumeThread(threadId: string): Promise<ThreadResumeResult | null> {
+    try {
+      return await this.client.request<ThreadResumeResult>("thread/resume", {
+        threadId,
+        excludeTurns: true,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  private attachResumedThread(sessionId: string, resumed: ThreadResumeResult): SessionRecord {
+    const attached = this.store.attach({
+      id: sessionId,
+      cwd: resumed.cwd ?? resumed.thread.cwd,
+      model: resumed.model ?? resumed.thread.modelProvider ?? "openai",
+      approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? "manual",
+      status: mapThreadStatus(resumed.thread.status),
+      threadId: resumed.thread.id,
+      activeTurnId: null,
+      lastError: null,
+      createdAt:
+        typeof resumed.thread.createdAt === "number"
+          ? new Date(resumed.thread.createdAt * 1000).toISOString()
+          : typeof resumed.thread.createdAt === "string" && resumed.thread.createdAt.trim()
+            ? resumed.thread.createdAt
+            : new Date().toISOString(),
+      updatedAt:
+        typeof resumed.thread.updatedAt === "number"
+          ? new Date(resumed.thread.updatedAt * 1000).toISOString()
+          : typeof resumed.thread.updatedAt === "string" && resumed.thread.updatedAt.trim()
+            ? resumed.thread.updatedAt
+            : new Date().toISOString(),
+    });
+    this.rememberThreadSession(resumed.thread.id, attached.id);
+    return attached;
+  }
+
   private getApprovalPolicy(mode: SessionRecord["approvalMode"]): "on-request" | "never" {
     return mode === "manual" ? "on-request" : "never";
   }
@@ -677,4 +784,22 @@ function isImmediateInterruptDecision(method: ApprovalRequestMethod, decision: A
 function getPermissionsPayload(params: Record<string, unknown>): Record<string, unknown> {
   const permissions = params.permissions;
   return isRecord(permissions) ? permissions : {};
+}
+
+function shouldResumeMissingThread(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /thread not found/i.test(error.message);
+}
+
+function mapApprovalMode(approvalPolicy: "on-request" | "never" | undefined): SessionRecord["approvalMode"] | null {
+  if (approvalPolicy === "on-request") {
+    return "manual";
+  }
+  if (approvalPolicy === "never") {
+    return "auto";
+  }
+  return null;
 }

@@ -554,3 +554,50 @@
   - `decision`
 - 如果 Android 只做“批准当前唯一待审批项”，可以继续只调用同一路径并发送空体或 `{ "decision": "approve" }`。
 - 如果 Android 要支持拒绝或同会话多待审批项，需要同步传 `decision`，并在多待审批场景传 `requestId`。
+
+## 追加记录：历史线程继续对话时 thread not found
+
+- 时间：2026-05-19
+- 问题现象：
+  - Android 新建线程可以多轮继续。
+  - 进入之前已经存在的线程后，详情页可打开，但再次发送消息会返回：
+    - `HTTP 502`
+    - `turn-start-failed`
+    - `thread not found: <threadId>`
+
+### 根因判断
+
+- bridge 对历史线程的“查看”和“继续对话”走了两套不完整流程：
+  - 查看详情时可以通过 `thread/read` 读取历史线程内容。
+  - 但真正发送输入时，runner 直接对旧 `threadId` 调 `turn/start`，没有先做 `thread/resume`。
+- 根据已提交的 app-server 协议类型，`thread/resume` 才是“按 thread_id 从磁盘加载并恢复线程”的正式入口。
+- 所以旧线程会出现：
+  - `thread/read` 能读
+  - `turn/start` 却报 `thread not found`
+
+### 本轮修复
+
+- 文件：
+  - `bridge/src/app-server-runner.ts`
+  - `bridge/tests/app-server-runner.test.ts`
+- 修改内容：
+  - 历史线程 attach 时优先尝试 `thread/resume`
+  - 对 `turn/start` 增加一次“缺线程自动恢复并重试”的兜底逻辑：
+    - 第一次 `turn/start`
+    - 若报 `thread not found`
+    - 自动执行 `thread/resume`
+    - 然后再次 `turn/start`
+- 这次修复不需要改 Android，现有 APK/客户端请求路径可直接受益。
+
+### 本轮验证
+
+- `cd bridge`
+- `npm run check`
+- `npm test`
+- 结果：
+  - 通过
+  - 当前 bridge 测试为 5 个测试文件、17 个用例全部通过
+- 新增测试覆盖：
+  - 历史线程首次 `turn/start` 报 `thread not found`
+  - runner 自动 `thread/resume`
+  - 随后重试 `turn/start` 成功

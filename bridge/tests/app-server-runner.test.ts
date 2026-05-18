@@ -259,4 +259,67 @@ describe("AppServerRunner", () => {
     ]);
     expect(store.get("sess-1")?.status).toBe("running");
   });
+
+  test("retries turn/start after resuming a historical thread when app-server reports thread not found", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "turn/start") {
+        if (client.request.mock.calls.filter(([calledMethod]) => calledMethod === "turn/start").length === 1) {
+          throw new Error("thread not found: thread-1");
+        }
+        return { turn: { id: "turn-2" } };
+      }
+
+      if (method === "thread/resume") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "inactive" },
+            turns: [],
+          },
+          cwd: "D:\\workspace\\codex-mobile",
+          model: "gpt-5.5",
+          approvalPolicy: "on-request",
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await runner.submitInput("sess-1", "继续这个历史线程");
+
+    expect(client.request).toHaveBeenNthCalledWith(
+      1,
+      "turn/start",
+      expect.objectContaining({
+        threadId: "thread-1",
+      }),
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
+      "thread/resume",
+      expect.objectContaining({
+        threadId: "thread-1",
+        excludeTurns: true,
+      }),
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      3,
+      "turn/start",
+      expect.objectContaining({
+        threadId: "thread-1",
+      }),
+    );
+    expect(store.get("sess-1")).toMatchObject({
+      activeTurnId: "turn-2",
+      status: "running",
+      lastError: null,
+    });
+  });
 });
