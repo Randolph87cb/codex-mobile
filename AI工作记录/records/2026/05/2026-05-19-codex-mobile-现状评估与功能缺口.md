@@ -575,6 +575,25 @@
 - 顶部大状态卡已压缩成图标条，详细状态可展开查看。
 - 与桌面 Codex app 同时看同一线程时，bridge 现在会更积极地同步真实线程状态，并在忙碌冲突时明确返回 `409`，不再默默把状态打乱。
 
+## 追加记录：详情页顶部配置按钮在小屏回放中不可见
+
+- 时间：2026-05-19
+- 问题现象：
+  - `connectedDebugAndroidTest` 回放里，详情页顶部 `service tier` 按钮在模拟器小屏上不可见，导致自动化断言失败。
+- 根因判断：
+  - 详情页配置条使用单行横向滚动布局。
+  - 在 API 35 模拟器竖屏宽度下，目录 / 模型 / 推理 / 速度 4 个按钮不能同时落在可视区域。
+- 修复：
+  - 将配置条从单行 `Row + horizontalScroll` 改成可换行的 `FlowRow`。
+  - 文件：
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 修复后验证：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - `.\gradlew.bat connectedDebugAndroidTest`
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：全部通过
+
 ---
 
 ## 追加记录：bridge 审批闭环接通
