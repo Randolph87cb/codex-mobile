@@ -228,6 +228,34 @@
 2. 再补 Android 审批 UI 和审批事件展示
 3. 最后做一轮带 token 的端到端联调
 
+## 本轮补齐结果
+
+- 主线程已完成 Android 侧剩余缺口的实现：
+  - 为 HTTP 请求与 WebSocket 实时流增加 Bearer token 透传
+  - 在设置页增加 token 输入入口
+  - 为实时流 `tool.request` / `tool.result` 增加可读展示
+  - 为待审批请求增加移动端批准 / 本会话批准 / 拒绝 / 拒绝并中断操作入口
+- 本轮主要修改文件：
+  - `android/app/src/main/java/com/openai/codexmobile/data/BridgeApi.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/data/BridgeApproval.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/data/RealBridgeDataProvider.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+  - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+- 本轮新增或更新测试覆盖：
+  - token 配置后连接时的 ViewModel 行为
+  - `tool.request -> approveSession` 的审批状态流
+- 本轮验证结果：
+  - `bridge`：`npm run check` 通过
+  - `bridge`：`npm test` 通过
+  - `android`：`powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过
+  - `android`：`.\gradlew.bat testDebugUnitTest` 通过
+
+## 当前剩余事项
+
+- 仍缺一次“启用真实 token 后的真机端到端联调”，但代码与自动化验证已具备条件。
+
 ## 后续事项
 
 - [ ] 接通 `/api/session/:id/approve` 与 app-server 审批响应

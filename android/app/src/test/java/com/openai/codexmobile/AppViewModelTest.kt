@@ -1,6 +1,9 @@
 package com.openai.codexmobile
 
+import com.openai.codexmobile.data.ApprovalActionResult
+import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
+import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
@@ -18,6 +21,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -162,6 +166,83 @@ class AppViewModelTest {
         assertEquals("空闲", viewModel.uiState.value.sessionRealtimeState.statusText)
         assertEquals(2, repository.getSessionDetailCallCount)
     }
+
+    @Test
+    fun connectUsesConfiguredTokenAndUpdatesSettings() = runTest(dispatcher.scheduler) {
+        val detail = SessionDetail(
+            id = "sess_3",
+            title = "鉴权测试",
+            subtitle = "gpt-5.5 • 手动批准 • 空闲",
+            lastUpdated = "2026-05-19T12:00:00.000Z",
+            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(sessionSummaryFor(detail)),
+            details = arrayDequeOf(detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository)
+
+        viewModel.updateAuthTokenInput("bridge-secret")
+        viewModel.connect()
+        advanceUntilIdle()
+
+        assertEquals("bridge-secret", bridgeApi.updatedAuthToken)
+        assertEquals("bridge-secret", bridgeApi.authTokenAtConnect)
+        assertTrue(
+            viewModel.uiState.value.settingsItems.any { (label, value) ->
+                label == "鉴权令牌" && value == "已配置"
+            },
+        )
+    }
+
+    @Test
+    fun pendingApprovalCanBeSubmittedFromRealtimeState() = runTest(dispatcher.scheduler) {
+        val detail = SessionDetail(
+            id = "sess_4",
+            title = "审批测试",
+            subtitle = "gpt-5.5 • 手动批准 • 空闲",
+            lastUpdated = "2026-05-19T13:00:00.000Z",
+            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(sessionSummaryFor(detail)),
+            details = arrayDequeOf(detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository)
+
+        viewModel.openSessionDetail("sess_4")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.ToolRequest(
+                sessionId = "sess_4",
+                requestId = BridgeRequestId.Text("req-1"),
+                method = "item/commandExecution/requestApproval",
+                paramsSummary = "等待审批：item/commandExecution/requestApproval",
+                timestamp = "2026-05-19T13:00:01.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.sessionRealtimeState.pendingApproval)
+        assertEquals("等待批准", viewModel.uiState.value.sessionRealtimeState.statusText)
+
+        viewModel.submitApproval(ApprovalDecision.Reject)
+        advanceUntilIdle()
+
+        assertEquals(1, bridgeApi.approvalCalls.size)
+        val approvalCall = bridgeApi.approvalCalls.single()
+        assertEquals("sess_4", approvalCall.sessionId)
+        assertEquals("req-1", approvalCall.requestId?.toString())
+        assertEquals(ApprovalDecision.Reject, approvalCall.decision)
+        assertEquals("已提交审批操作：拒绝", viewModel.uiState.value.message)
+        assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertEquals(null, viewModel.uiState.value.sessionRealtimeState.pendingApproval)
+    }
 }
 
 private class FakeBridgeApi(
@@ -169,8 +250,16 @@ private class FakeBridgeApi(
 ) : BridgeApi {
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     val sentInputs = mutableListOf<String>()
+    val approvalCalls = mutableListOf<ApprovalCall>()
+    var updatedAuthToken: String = ""
+    var authTokenAtConnect: String = ""
+
+    override fun updateAuthToken(token: String) {
+        updatedAuthToken = token
+    }
 
     override suspend fun connect(endpoint: String): BridgeConnectionState {
+        authTokenAtConnect = updatedAuthToken
         return BridgeConnectionState.Connected(endpoint = endpoint)
     }
 
@@ -184,12 +273,32 @@ private class FakeBridgeApi(
         sentInputs += text
     }
 
+    override suspend fun approveSession(
+        sessionId: String,
+        requestId: BridgeRequestId?,
+        decision: ApprovalDecision,
+    ): ApprovalActionResult {
+        approvalCalls += ApprovalCall(sessionId, requestId, decision)
+        return ApprovalActionResult(
+            requestId = requestId ?: BridgeRequestId.Text("req-fake"),
+            decision = decision,
+            status = "running",
+            method = "item/commandExecution/requestApproval",
+        )
+    }
+
     override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = events
 
     suspend fun emit(event: SessionStreamEvent) {
         events.emit(event)
     }
 }
+
+private data class ApprovalCall(
+    val sessionId: String,
+    val requestId: BridgeRequestId?,
+    val decision: ApprovalDecision,
+)
 
 private class FakeSessionRepository(
     private val sessionSummaries: List<SessionSummary>,

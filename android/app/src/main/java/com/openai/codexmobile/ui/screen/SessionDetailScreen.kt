@@ -18,7 +18,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.openai.codexmobile.PendingApprovalUiState
 import com.openai.codexmobile.SessionRealtimeUiState
+import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.model.SessionDetail
 
 @Composable
@@ -30,6 +32,7 @@ fun SessionDetailScreen(
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onSend: () -> Unit,
+    onApprovalDecision: (ApprovalDecision) -> Unit,
     onBack: () -> Unit,
 ) {
     val transcriptScrollState = rememberScrollState()
@@ -77,6 +80,12 @@ fun SessionDetailScreen(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
+        }
+        sessionRealtimeState.pendingApproval?.let { approval ->
+            ApprovalActionCard(
+                approval = approval,
+                onApprovalDecision = onApprovalDecision,
+            )
         }
         Card(
             modifier = Modifier
@@ -126,6 +135,58 @@ fun SessionDetailScreen(
         }
         Button(onClick = onBack) {
             Text("返回会话列表")
+        }
+    }
+}
+
+@Composable
+private fun ApprovalActionCard(
+    approval: PendingApprovalUiState,
+    onApprovalDecision: (ApprovalDecision) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "待审批操作",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = approval.method ?: "未知工具请求",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            approval.paramsSummary?.let { summary ->
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Button(
+                onClick = { onApprovalDecision(ApprovalDecision.Approve) },
+                enabled = !approval.isSubmitting,
+            ) {
+                Text("批准")
+            }
+            Button(
+                onClick = { onApprovalDecision(ApprovalDecision.ApproveForSession) },
+                enabled = !approval.isSubmitting,
+            ) {
+                Text("本会话都批准")
+            }
+            Button(
+                onClick = { onApprovalDecision(ApprovalDecision.Reject) },
+                enabled = !approval.isSubmitting,
+            ) {
+                Text("拒绝")
+            }
+            Button(
+                onClick = { onApprovalDecision(ApprovalDecision.RejectAndInterrupt) },
+                enabled = !approval.isSubmitting,
+            ) {
+                Text("拒绝并中断")
+            }
         }
     }
 }

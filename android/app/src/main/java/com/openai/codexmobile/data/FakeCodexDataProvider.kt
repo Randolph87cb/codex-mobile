@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.emptyFlow
 class FakeCodexDataProvider : CodexDataProvider {
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
 
+    override fun updateAuthToken(token: String) = Unit
+
     private val sessions = listOf(
         SessionSummary(
             id = "session-001",
@@ -54,6 +56,20 @@ class FakeCodexDataProvider : CodexDataProvider {
 
     override suspend fun sendInput(sessionId: String, text: String) {
         delay(100)
+    }
+
+    override suspend fun approveSession(
+        sessionId: String,
+        requestId: BridgeRequestId?,
+        decision: ApprovalDecision,
+    ): ApprovalActionResult {
+        delay(100)
+        return ApprovalActionResult(
+            requestId = requestId ?: BridgeRequestId.Text("fake-request"),
+            decision = decision,
+            status = "running",
+            method = "item/commandExecution/requestApproval",
+        )
     }
 
     override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = emptyFlow()

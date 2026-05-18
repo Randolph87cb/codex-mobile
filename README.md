@@ -94,6 +94,8 @@ powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\start
 
 这会用 `app-server` 模式把 bridge 监听到 `0.0.0.0:8787`。
 
+如果 bridge 配置了 `CODEX_MOBILE_AUTH_TOKEN`，Android 端需要先进入“设置”页填写 token，再发起连接并进入会话详情页实时流。
+
 ## 测试
 
 ```powershell

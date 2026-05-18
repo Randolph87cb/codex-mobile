@@ -127,6 +127,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onSend = appViewModel::sendInput,
+                    onApprovalDecision = appViewModel::submitApproval,
                     onBack = {
                         appViewModel.closeSessionDetail(sessionId)
                         navController.popBackStack()
@@ -137,6 +138,8 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 SettingsScreen(
                     paddingValues = paddingValues,
                     items = uiState.settingsItems,
+                    authTokenInput = uiState.authTokenInput,
+                    onAuthTokenChange = appViewModel::updateAuthTokenInput,
                     onBack = { navController.popBackStack() },
                 )
             }

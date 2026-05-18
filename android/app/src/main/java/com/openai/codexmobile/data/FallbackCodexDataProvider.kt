@@ -12,6 +12,11 @@ class FallbackCodexDataProvider(
     private var activeProvider: CodexDataProvider? = null
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
 
+    override fun updateAuthToken(token: String) {
+        primary.updateAuthToken(token)
+        fallback.updateAuthToken(token)
+    }
+
     override suspend fun connect(endpoint: String): BridgeConnectionState {
         return try {
             val primaryState = primary.connect(endpoint)
@@ -45,6 +50,14 @@ class FallbackCodexDataProvider(
 
     override suspend fun sendInput(sessionId: String, text: String) {
         requireActiveProvider().sendInput(sessionId, text)
+    }
+
+    override suspend fun approveSession(
+        sessionId: String,
+        requestId: BridgeRequestId?,
+        decision: ApprovalDecision,
+    ): ApprovalActionResult {
+        return requireActiveProvider().approveSession(sessionId, requestId, decision)
     }
 
     override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> {

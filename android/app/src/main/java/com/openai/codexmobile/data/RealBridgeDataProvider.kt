@@ -25,8 +25,13 @@ import java.nio.charset.StandardCharsets
 
 class RealBridgeDataProvider : CodexDataProvider {
     private var baseUrl: String? = null
+    private var authToken: String? = null
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
     private val webSocketClient = OkHttpClient()
+
+    override fun updateAuthToken(token: String) {
+        authToken = token.trim().takeIf { it.isNotEmpty() }
+    }
 
     override suspend fun connect(endpoint: String): BridgeConnectionState = withContext(Dispatchers.IO) {
         val normalizedEndpoint = normalizeEndpoint(endpoint)
@@ -87,10 +92,40 @@ class RealBridgeDataProvider : CodexDataProvider {
         }
     }
 
+    override suspend fun approveSession(
+        sessionId: String,
+        requestId: BridgeRequestId?,
+        decision: ApprovalDecision,
+    ): ApprovalActionResult = withContext(Dispatchers.IO) {
+        val payload = JSONObject().put("decision", decision.wireValue)
+        requestId?.let { payload.put("requestId", it.toJsonValue()) }
+
+        val response = request(
+            method = "POST",
+            url = "${requireBaseUrl()}/api/session/$sessionId/approve",
+            body = payload.toString(),
+        )
+        if (response.statusCode !in 200..299) {
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        val json = JSONObject(response.body)
+        ApprovalActionResult(
+            requestId = parseRequestId(json.opt("requestId"))
+                ?: requestId
+                ?: BridgeRequestId.Text("unknown-request"),
+            decision = ApprovalDecision.fromWireValue(json.optString("decision"))
+                ?: decision,
+            status = json.optString("status").ifBlank { "unknown" },
+            method = json.optString("method").takeIf { it.isNotBlank() },
+        )
+    }
+
     override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = callbackFlow {
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(toWebSocketUrl("${requireBaseUrl()}/api/session/$sessionId/ws"))
-            .build()
+        authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        val request = requestBuilder.build()
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 trySend(SessionStreamEvent.StreamOpened(sessionId = sessionId))
@@ -196,6 +231,7 @@ class RealBridgeDataProvider : CodexDataProvider {
             connectTimeout = 5_000
             readTimeout = 10_000
             setRequestProperty("Accept", "application/json")
+            authToken?.let { setRequestProperty("Authorization", "Bearer $it") }
             if (body != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -285,13 +321,22 @@ private fun parseSessionStreamEvent(
 
         "tool.request" -> SessionStreamEvent.ToolRequest(
             sessionId = eventSessionId,
+            requestId = parseRequestId(data.opt("requestId")),
             method = data.optString("method").takeIf { it.isNotBlank() },
+            paramsSummary = summarizeToolRequest(
+                method = data.optString("method").takeIf { it.isNotBlank() },
+                params = data.opt("params"),
+            ),
             timestamp = timestamp,
         )
 
         "tool.result" -> SessionStreamEvent.ToolResult(
             sessionId = eventSessionId,
-            summary = data.toString(),
+            requestId = parseRequestId(data.opt("requestId")),
+            method = data.optString("method").takeIf { it.isNotBlank() },
+            decision = ApprovalDecision.fromWireValue(data.optString("decision")),
+            status = data.optString("status").takeIf { it.isNotBlank() },
+            summary = summarizeToolResult(data),
             timestamp = timestamp,
         )
 
@@ -302,6 +347,53 @@ private fun parseSessionStreamEvent(
         )
 
         else -> null
+    }
+}
+
+private fun parseRequestId(value: Any?): BridgeRequestId? {
+    return when (value) {
+        null -> null
+        JSONObject.NULL -> null
+        is Int -> BridgeRequestId.Number(value.toLong())
+        is Long -> BridgeRequestId.Number(value)
+        is Number -> BridgeRequestId.Number(value.toLong())
+        is String -> value.takeIf { it.isNotBlank() }?.let(BridgeRequestId::Text)
+        else -> value.toString().takeIf { it.isNotBlank() }?.let(BridgeRequestId::Text)
+    }
+}
+
+private fun summarizeToolRequest(
+    method: String?,
+    params: Any?,
+): String {
+    val methodText = method ?: "未知方法"
+    val paramsText = when (params) {
+        null, JSONObject.NULL -> "无附加参数"
+        is JSONObject -> params.toString(2)
+        else -> params.toString()
+    }
+    return buildString {
+        append("等待审批：")
+        append(methodText)
+        append("\n")
+        append(paramsText)
+    }
+}
+
+private fun summarizeToolResult(data: JSONObject): String {
+    val method = data.optString("method").ifBlank { "未知方法" }
+    val decision = ApprovalDecision.fromWireValue(data.optString("decision"))?.label ?: "已处理"
+    val requestId = parseRequestId(data.opt("requestId"))?.toString()
+    return buildString {
+        append("审批结果：")
+        append(decision)
+        append("（")
+        append(method)
+        append("）")
+        if (!requestId.isNullOrBlank()) {
+            append("\n请求 ID：")
+            append(requestId)
+        }
     }
 }
 

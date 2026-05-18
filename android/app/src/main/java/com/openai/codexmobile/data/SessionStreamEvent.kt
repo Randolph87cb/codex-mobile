@@ -53,12 +53,18 @@ sealed interface SessionStreamEvent {
 
     data class ToolRequest(
         override val sessionId: String,
+        val requestId: BridgeRequestId?,
         val method: String?,
+        val paramsSummary: String?,
         override val timestamp: String?,
     ) : SessionStreamEvent
 
     data class ToolResult(
         override val sessionId: String,
+        val requestId: BridgeRequestId?,
+        val method: String?,
+        val decision: ApprovalDecision?,
+        val status: String?,
         val summary: String?,
         override val timestamp: String?,
     ) : SessionStreamEvent

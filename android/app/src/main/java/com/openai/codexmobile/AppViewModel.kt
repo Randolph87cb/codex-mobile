@@ -3,7 +3,10 @@ package com.openai.codexmobile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.openai.codexmobile.data.ApprovalActionResult
+import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
+import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
@@ -22,6 +25,7 @@ import java.time.Instant
 
 data class AppUiState(
     val endpointInput: String = "http://192.168.31.66:8787",
+    val authTokenInput: String = "",
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSession: SessionDetail? = null,
@@ -39,6 +43,14 @@ data class SessionRealtimeUiState(
     val statusText: String = "等待会话详情",
     val lastEventText: String? = null,
     val fallbackNotice: String? = null,
+    val pendingApproval: PendingApprovalUiState? = null,
+)
+
+data class PendingApprovalUiState(
+    val requestId: BridgeRequestId?,
+    val method: String?,
+    val paramsSummary: String?,
+    val isSubmitting: Boolean = false,
 )
 
 class AppViewModel(
@@ -61,6 +73,16 @@ class AppViewModel(
         _uiState.update { it.copy(endpointInput = value) }
     }
 
+    fun updateAuthTokenInput(value: String) {
+        bridgeApi.updateAuthToken(value)
+        _uiState.update {
+            it.copy(
+                authTokenInput = value,
+                settingsItems = defaultSettingsItems(it.connectionState, value),
+            )
+        }
+    }
+
     fun updateDraftMessage(value: String) {
         _uiState.update { it.copy(draftMessage = value) }
     }
@@ -80,7 +102,7 @@ class AppViewModel(
                         sessions = sessions,
                         selectedSession = selectedSession,
                         message = connectedMessage(connectionState),
-                        settingsItems = defaultSettingsItems(connectionState),
+                        settingsItems = defaultSettingsItems(connectionState, it.authTokenInput),
                     )
                 }
             } catch (error: Exception) {
@@ -91,7 +113,7 @@ class AppViewModel(
                         sessions = emptyList(),
                         selectedSession = null,
                         message = error.message ?: "连接桥接服务失败。",
-                        settingsItems = defaultSettingsItems(),
+                        settingsItems = defaultSettingsItems(authTokenInput = it.authTokenInput),
                     )
                 }
             }
@@ -108,7 +130,7 @@ class AppViewModel(
                     sessions = emptyList(),
                     selectedSession = null,
                     message = "已断开连接。",
-                    settingsItems = defaultSettingsItems(),
+                    settingsItems = defaultSettingsItems(authTokenInput = it.authTokenInput),
                 )
             }
         }
@@ -244,13 +266,45 @@ class AppViewModel(
         }
     }
 
+    fun submitApproval(decision: ApprovalDecision) {
+        val detail = uiState.value.selectedSession ?: return
+        val approval = uiState.value.sessionRealtimeState.pendingApproval ?: return
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    message = null,
+                    sessionRealtimeState = it.sessionRealtimeState.copy(
+                        pendingApproval = approval.copy(isSubmitting = true),
+                    ),
+                )
+            }
+
+            try {
+                val result = bridgeApi.approveSession(detail.id, approval.requestId, decision)
+                applyApprovalResult(result)
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "提交审批操作失败。",
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            pendingApproval = approval.copy(isSubmitting = false),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
     private fun refreshConnection() {
         viewModelScope.launch {
             val connectionState = bridgeApi.currentConnection()
             _uiState.update {
                 it.copy(
                     connectionState = connectionState,
-                    settingsItems = defaultSettingsItems(connectionState),
+                    settingsItems = defaultSettingsItems(connectionState, it.authTokenInput),
                 )
             }
         }
@@ -330,6 +384,7 @@ class AppViewModel(
                             connectionText = "实时流已断开",
                             lastEventText = event.reason ?: "实时流连接已关闭。",
                             fallbackNotice = "当前停留在最后一次收到的内容快照。",
+                            pendingApproval = null,
                         ),
                     )
                 }
@@ -349,6 +404,7 @@ class AppViewModel(
                             statusText = localizedSessionStatus(event.status),
                             lastEventText = "会话实时流已就绪。",
                             fallbackNotice = null,
+                            pendingApproval = null,
                         ),
                     )
                 }
@@ -394,6 +450,7 @@ class AppViewModel(
                                 else -> "本轮回复已结束。"
                             },
                             fallbackNotice = event.errorMessage,
+                            pendingApproval = null,
                         ),
                         message = event.errorMessage?.let { message -> "运行出错：$message" } ?: it.message,
                     )
@@ -412,7 +469,12 @@ class AppViewModel(
                             statusText = localizedSessionStatus(event.status),
                             lastEventText = statusEventText(event.status),
                             fallbackNotice = if (event.status == "awaiting_approval") {
-                                "bridge 已收到工具请求，但移动端审批动作尚未接通。"
+                                it.sessionRealtimeState.fallbackNotice
+                            } else {
+                                null
+                            },
+                            pendingApproval = if (event.status == "awaiting_approval") {
+                                it.sessionRealtimeState.pendingApproval
                             } else {
                                 null
                             },
@@ -433,6 +495,7 @@ class AppViewModel(
                             statusText = localizedSessionStatus("idle"),
                             lastEventText = "当前任务已中断。",
                             fallbackNotice = null,
+                            pendingApproval = null,
                         ),
                         message = "当前任务已中断。",
                     )
@@ -447,7 +510,12 @@ class AppViewModel(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("awaiting_approval"),
                             lastEventText = "收到工具请求：${event.method ?: "未知方法"}",
-                            fallbackNotice = "bridge 审批后端尚未接通，当前只展示等待状态。",
+                            fallbackNotice = "请在手机端确认这次工具请求。",
+                            pendingApproval = PendingApprovalUiState(
+                                requestId = event.requestId,
+                                method = event.method,
+                                paramsSummary = event.paramsSummary,
+                            ),
                         ),
                     )
                 }
@@ -456,8 +524,16 @@ class AppViewModel(
             is SessionStreamEvent.ToolResult -> {
                 _uiState.update {
                     it.copy(
+                        selectedSession = it.selectedSession?.copy(
+                            status = event.status ?: it.selectedSession.status,
+                            lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
+                        ),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             lastEventText = event.summary ?: "收到工具结果事件。",
+                            fallbackNotice = null,
+                            pendingApproval = null,
+                            statusText = event.status?.let(::localizedSessionStatus)
+                                ?: it.sessionRealtimeState.statusText,
                         ),
                     )
                 }
@@ -472,6 +548,7 @@ class AppViewModel(
                             statusText = localizedSessionStatus("error"),
                             lastEventText = "实时流返回错误事件。",
                             fallbackNotice = event.message,
+                            pendingApproval = null,
                         ),
                         message = "实时流错误：${event.message}",
                     )
@@ -507,6 +584,25 @@ class AppViewModel(
     override fun onCleared() {
         stopSessionStream()
         super.onCleared()
+    }
+
+    private fun applyApprovalResult(result: ApprovalActionResult) {
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                selectedSession = it.selectedSession?.copy(
+                    status = result.status,
+                    lastUpdated = nowIsoString(),
+                ),
+                message = "已提交审批操作：${result.decision.label}",
+                sessionRealtimeState = it.sessionRealtimeState.copy(
+                    statusText = localizedSessionStatus(result.status),
+                    lastEventText = buildApprovalResultText(result),
+                    fallbackNotice = null,
+                    pendingApproval = null,
+                ),
+            )
+        }
     }
 }
 
@@ -622,6 +718,7 @@ private fun connectedMessage(connectionState: BridgeConnectionState): String {
 
 private fun defaultSettingsItems(
     connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
+    authTokenInput: String = "",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     return listOf(
@@ -630,6 +727,7 @@ private fun defaultSettingsItems(
             else -> "真实桥接"
         },
         "桥接地址" to (connectedState?.endpoint ?: "http://192.168.31.66:8787"),
+        "鉴权令牌" to if (authTokenInput.isBlank()) "未配置" else "已配置",
         "运行器" to (connectedState?.runnerMode ?: "未知"),
         "遥测" to "已关闭",
     )
@@ -642,6 +740,11 @@ private fun localizedSessionStatus(status: String): String {
         "error" -> "出错"
         else -> "空闲"
     }
+}
+
+private fun buildApprovalResultText(result: ApprovalActionResult): String {
+    val method = result.method ?: "未知方法"
+    return "已提交${result.decision.label}：$method"
 }
 
 private fun nowIsoString(): String = Instant.now().toString()
