@@ -3,11 +3,14 @@ package com.openai.codexmobile
 import com.openai.codexmobile.data.BridgeApi
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SessionRepository
+import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -35,59 +38,136 @@ class AppViewModelTest {
     }
 
     @Test
-    fun sendInputPollsUntilSessionSettles() = runTest(dispatcher.scheduler) {
-        val createdDetail = SessionDetail(
+    fun detailStreamAppendsAssistantDeltaAndRefreshesFinalSnapshot() = runTest(dispatcher.scheduler) {
+        val initialDetail = SessionDetail(
             id = "sess_1",
-            title = "新会话",
-            subtitle = "gpt-5.5 • manual • 空闲",
+            title = "实时会话",
+            subtitle = "gpt-5.5 • 手动批准 • 空闲",
             lastUpdated = "2026-05-19T10:00:00.000Z",
-            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
+            transcriptPreview = "你：你好",
             status = "idle",
         )
-        val sessionSummary = SessionSummary(
-            id = "sess_1",
-            title = "新会话",
-            subtitle = "gpt-5.5 • 空闲 • D:\\workspace\\codex-mobile",
-            lastUpdated = "2026-05-19T10:00:00.000Z",
+        val finalDetail = initialDetail.copy(
+            lastUpdated = "2026-05-19T10:00:05.000Z",
+            transcriptPreview = "你：你好\n\nCodex：你好，我是实时流。",
             status = "idle",
         )
-        val bridgeApi = FakeBridgeApi(createdDetail)
+        val bridgeApi = FakeBridgeApi(createdDetail = initialDetail)
         val repository = FakeSessionRepository(
-            sessionSummaries = listOf(sessionSummary),
-            details = arrayDequeOf(
-                createdDetail.copy(
-                    lastUpdated = "2026-05-19T10:00:01.000Z",
-                    transcriptPreview = "你：你是谁",
-                    status = "running",
-                ),
-                createdDetail.copy(
-                    lastUpdated = "2026-05-19T10:00:02.000Z",
-                    transcriptPreview = "你：你是谁\n\nCodex：我是你的 Windows Codex 移动端入口。",
-                    status = "idle",
-                ),
-            ),
+            sessionSummaries = listOf(sessionSummaryFor(initialDetail)),
+            details = arrayDequeOf(initialDetail, finalDetail),
         )
         val viewModel = AppViewModel(bridgeApi, repository)
 
-        viewModel.createSession()
+        viewModel.openSessionDetail("sess_1")
         advanceUntilIdle()
 
-        viewModel.updateDraftMessage("你是谁")
+        bridgeApi.emit(
+            SessionStreamEvent.StreamOpened(sessionId = "sess_1"),
+        )
+        bridgeApi.emit(
+            SessionStreamEvent.SessionStarted(
+                sessionId = "sess_1",
+                status = "idle",
+                cwd = "D:\\workspace\\codex-mobile",
+                model = "gpt-5.5",
+                threadId = "thread_1",
+                timestamp = "2026-05-19T10:00:01.000Z",
+            ),
+        )
+        bridgeApi.emit(
+            SessionStreamEvent.RunStatus(
+                sessionId = "sess_1",
+                status = "running",
+                timestamp = "2026-05-19T10:00:02.000Z",
+            ),
+        )
+        bridgeApi.emit(
+            SessionStreamEvent.AssistantDelta(
+                sessionId = "sess_1",
+                text = "你好，",
+                turnId = "turn_1",
+                timestamp = "2026-05-19T10:00:03.000Z",
+            ),
+        )
+        bridgeApi.emit(
+            SessionStreamEvent.AssistantDelta(
+                sessionId = "sess_1",
+                text = "我是实时流。",
+                turnId = "turn_1",
+                timestamp = "2026-05-19T10:00:04.000Z",
+            ),
+        )
+        bridgeApi.emit(
+            SessionStreamEvent.AssistantDone(
+                sessionId = "sess_1",
+                turnStatus = "completed",
+                turnId = "turn_1",
+                errorMessage = null,
+                timestamp = "2026-05-19T10:00:05.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("已连接实时流", viewModel.uiState.value.sessionRealtimeState.connectionText)
+        assertEquals("空闲", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertEquals("本轮回复已结束。", viewModel.uiState.value.sessionRealtimeState.lastEventText)
+        assertEquals(finalDetail.transcriptPreview, viewModel.uiState.value.selectedSession?.transcriptPreview)
+        assertEquals(2, repository.getSessionDetailCallCount)
+    }
+
+    @Test
+    fun sendInputUsesRealtimeFlowAndInterruptedEventUpdatesUi() = runTest(dispatcher.scheduler) {
+        val detail = SessionDetail(
+            id = "sess_2",
+            title = "中断测试",
+            subtitle = "gpt-5.5 • 手动批准 • 空闲",
+            lastUpdated = "2026-05-19T11:00:00.000Z",
+            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
+            status = "idle",
+        )
+        val interruptedDetail = detail.copy(
+            lastUpdated = "2026-05-19T11:00:02.000Z",
+            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile\n\n你：停止当前任务",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(sessionSummaryFor(detail)),
+            details = arrayDequeOf(detail, interruptedDetail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository)
+
+        viewModel.openSessionDetail("sess_2")
+        advanceUntilIdle()
+
+        viewModel.updateDraftMessage("停止当前任务")
         viewModel.sendInput()
         advanceUntilIdle()
 
-        assertEquals(listOf("你是谁"), bridgeApi.sentInputs)
-        assertEquals("消息已发送。", viewModel.uiState.value.message)
-        assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("Codex：我是你的 Windows Codex 移动端入口。")
-                == true,
+        bridgeApi.emit(
+            SessionStreamEvent.RunInterrupted(
+                sessionId = "sess_2",
+                status = "idle",
+                timestamp = "2026-05-19T11:00:02.000Z",
+            ),
         )
+        advanceUntilIdle()
+
+        assertEquals(listOf("停止当前任务"), bridgeApi.sentInputs)
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("你：停止当前任务") == true,
+        )
+        assertEquals("当前任务已中断。", viewModel.uiState.value.message)
+        assertEquals("空闲", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertEquals(2, repository.getSessionDetailCallCount)
     }
 }
 
 private class FakeBridgeApi(
     private val createdDetail: SessionDetail,
 ) : BridgeApi {
+    private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     val sentInputs = mutableListOf<String>()
 
     override suspend fun connect(endpoint: String): BridgeConnectionState {
@@ -103,6 +183,12 @@ private class FakeBridgeApi(
     override suspend fun sendInput(sessionId: String, text: String) {
         sentInputs += text
     }
+
+    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = events
+
+    suspend fun emit(event: SessionStreamEvent) {
+        events.emit(event)
+    }
 }
 
 private class FakeSessionRepository(
@@ -111,16 +197,29 @@ private class FakeSessionRepository(
 ) : SessionRepository {
     private val detailsQueue = details
     private var lastDetail: SessionDetail? = details.lastOrNull()
+    var getSessionDetailCallCount: Int = 0
+        private set
 
     override suspend fun listSessions(): List<SessionSummary> = sessionSummaries
 
     override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
+        getSessionDetailCallCount += 1
         val next = if (detailsQueue.isEmpty()) lastDetail else detailsQueue.removeFirst()
         if (next != null) {
             lastDetail = next
         }
         return next
     }
+}
+
+private fun sessionSummaryFor(detail: SessionDetail): SessionSummary {
+    return SessionSummary(
+        id = detail.id,
+        title = detail.title,
+        subtitle = "gpt-5.5 • 空闲 • D:\\workspace\\codex-mobile",
+        lastUpdated = detail.lastUpdated,
+        status = detail.status,
+    )
 }
 
 private fun arrayDequeOf(vararg details: SessionDetail): ArrayDeque<SessionDetail> {

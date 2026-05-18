@@ -13,6 +13,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -93,7 +94,6 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     connectionState = uiState.connectionState,
                     isLoading = uiState.isLoading,
                     onOpenSession = { sessionId ->
-                        appViewModel.loadSession(sessionId)
                         navController.navigate("session/$sessionId")
                     },
                     onCreateSession = {
@@ -109,15 +109,28 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onOpenSettings = { navController.navigate(Routes.Settings) },
                 )
             }
-            composable(Routes.SessionDetail) {
+            composable(Routes.SessionDetail) { entry ->
+                val sessionId = entry.arguments?.getString("sessionId").orEmpty()
+                LaunchedEffect(sessionId) {
+                    appViewModel.openSessionDetail(sessionId)
+                }
+                DisposableEffect(sessionId) {
+                    onDispose {
+                        appViewModel.closeSessionDetail(sessionId)
+                    }
+                }
                 SessionDetailScreen(
                     paddingValues = paddingValues,
                     sessionDetail = uiState.selectedSession,
+                    sessionRealtimeState = uiState.sessionRealtimeState,
                     draftMessage = uiState.draftMessage,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onSend = appViewModel::sendInput,
-                    onBack = { navController.popBackStack() },
+                    onBack = {
+                        appViewModel.closeSessionDetail(sessionId)
+                        navController.popBackStack()
+                    },
                 )
             }
             composable(Routes.Settings) {

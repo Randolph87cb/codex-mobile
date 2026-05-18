@@ -4,21 +4,29 @@ import { z } from "zod";
 import { isHistoryCapableRunner, type BridgeRunner } from "./bridge-runner.js";
 import { AppServerRunner } from "./app-server-runner.js";
 import { MockRunner } from "./mock-runner.js";
+import { authorizeApiRequest, buildBridgeSecurityState, resolveBridgeSecurityConfig, validateSessionCwd } from "./security.js";
 import { SessionStore } from "./session-store.js";
+import type { BridgeSecurityConfig } from "./types.js";
 
 const createSessionSchema = z.object({
-  cwd: z.string().min(1),
-  model: z.string().min(1).default("gpt-5.5"),
+  cwd: z.string().trim().min(1),
+  model: z.string().trim().min(1).default("gpt-5.5"),
   approvalMode: z.enum(["manual", "auto"]).default("manual"),
 });
 
 const inputSchema = z.object({
-  text: z.string().min(1),
+  text: z.string().trim().min(1),
+});
+
+const approveSchema = z.object({
+  requestId: z.union([z.string().min(1), z.number()]).optional(),
+  decision: z.enum(["approve", "approve_for_session", "reject", "reject_and_interrupt"]).default("approve"),
 });
 
 interface BuildBridgeAppOptions {
   runner?: BridgeRunner;
   store?: SessionStore;
+  security?: BridgeSecurityConfig;
 }
 
 export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promise<FastifyInstance> {
@@ -26,6 +34,8 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   const store = options.store ?? new SessionStore();
   const runner = options.runner ?? createRunner(store);
   const historyRunner = isHistoryCapableRunner(runner) ? runner : null;
+  const security = options.security ?? resolveBridgeSecurityConfig();
+  const securityState = buildBridgeSecurityState(security);
 
   await app.register(websocket);
 
@@ -33,10 +43,27 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     await runner.close?.();
   });
 
+  app.addHook("onRequest", async (request, reply) => {
+    const pathname = new URL(request.raw.url ?? "/", "http://bridge.local").pathname;
+    if (!pathname.startsWith("/api/")) {
+      return;
+    }
+
+    const authorization = authorizeApiRequest(request.headers.authorization, security);
+    if (!authorization.ok) {
+      reply.header("WWW-Authenticate", "Bearer");
+      return reply.status(401).send({
+        error: "unauthorized",
+        message: authorization.message,
+      });
+    }
+  });
+
   app.get("/health", async () => ({
     ok: true,
     service: "codex-mobile-bridge",
     runnerMode: runner.mode,
+    security: securityState,
   }));
 
   app.get("/api/sessions", async () => ({
@@ -52,7 +79,18 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       });
     }
 
-    const session = store.create(parsed.data);
+    const validatedCwd = validateSessionCwd(parsed.data.cwd, security);
+    if (!validatedCwd.ok) {
+      return reply.status(validatedCwd.error === "invalid-cwd" ? 400 : 403).send({
+        error: validatedCwd.error,
+        message: validatedCwd.message,
+      });
+    }
+
+    const session = store.create({
+      ...parsed.data,
+      cwd: validatedCwd.cwd ?? parsed.data.cwd,
+    });
     try {
       await runner.initializeSession(session.id);
     } catch (error) {
@@ -131,10 +169,40 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       return reply.status(404).send({ error: "session-not-found" });
     }
 
-    return {
-      ok: false,
-      message: "approval workflow is not wired yet",
-    };
+    const body = approveSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: body.error.flatten(),
+      });
+    }
+
+    try {
+      const result = await runner.approve(params.id, body.data);
+      return {
+        ok: true,
+        requestId: result.requestId,
+        decision: result.decision,
+        method: result.method,
+        status: result.status,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "approval-request-id-required") {
+        return reply.status(409).send({ error: message });
+      }
+      if (message === "approval-not-found") {
+        return reply.status(409).send({ error: message });
+      }
+      if (message === "session-not-found") {
+        return reply.status(404).send({ error: message });
+      }
+
+      return reply.status(502).send({
+        error: "approval-submit-failed",
+        message,
+      });
+    }
   });
 
   app.get("/api/session/:id/ws", { websocket: true }, (socket, request) => {

@@ -37,7 +37,7 @@
 
 1. 扩展真实 `codex app-server` runner，补齐审批与更多事件映射。
 2. 给 Android 客户端接入真实 WebSocket 消息流。
-3. 增加 token 认证、目录白名单和审批事件链路。
+3. 补 Android 对 token 认证的请求头支持，并继续推进审批事件链路。
 
 ## Bridge 启动
 
@@ -58,6 +58,31 @@ npm run dev
 ```
 
 默认监听 `http://127.0.0.1:8787`。
+
+## Bridge 安全控制面
+
+bridge 当前提供两项最小安全控制，默认都关闭，便于保持 Android MVP 现有联调方式：
+
+- `CODEX_MOBILE_AUTH_TOKEN`：配置后，除 `GET /health` 外的所有 `/api/*` 都要求 `Authorization: Bearer <token>`。
+- `CODEX_MOBILE_ALLOWED_CWDS`：配置后，`POST /api/session` 的 `cwd` 必须是白名单内的绝对路径。多个目录使用分号 `;` 分隔。
+
+PowerShell 示例：
+
+```powershell
+cd D:\workspace\codex-mobile\bridge
+$env:CODEX_MOBILE_AUTH_TOKEN = 'replace-with-a-long-random-token'
+$env:CODEX_MOBILE_ALLOWED_CWDS = 'D:\workspace\codex-mobile;D:\workspace\other-safe-root'
+$env:CODEX_MOBILE_RUNNER = 'app-server'
+npm run dev
+```
+
+默认行为：
+
+- 不设置 `CODEX_MOBILE_AUTH_TOKEN`：`/api/*` 不做 token 鉴权。
+- 不设置 `CODEX_MOBILE_ALLOWED_CWDS`：bridge 不限制创建会话时的 `cwd`，当前 Android 默认请求体里的相对路径行为保持不变。
+- `/health` 始终可访问，并返回当前是否启用了 token 与白名单，便于局域网诊断。
+
+当前 Android MVP 还没有携带 Bearer token 的能力，因此一旦启用 `CODEX_MOBILE_AUTH_TOKEN`，Android 现有版本只能继续访问 `/health`，其余 `/api/*` 会收到 `401 unauthorized`，需要后续客户端补请求头支持。
 
 ### 手机联调
 

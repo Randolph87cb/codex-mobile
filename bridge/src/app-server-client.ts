@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 
+import type { JsonRpcRequestId } from "./types.js";
+
 export interface JsonRpcResponse<TResult> {
   id: number;
   result?: TResult;
@@ -19,7 +21,7 @@ export interface JsonRpcNotification {
 }
 
 export interface JsonRpcServerRequest {
-  id: number;
+  id: JsonRpcRequestId;
   method: string;
   params?: unknown;
 }
@@ -161,11 +163,11 @@ export class AppServerClient {
     };
   }
 
-  sendResponse(id: number, result: unknown): void {
+  sendResponse(id: JsonRpcRequestId, result: unknown): void {
     this.transport.sendLine(JSON.stringify({ id, result }));
   }
 
-  sendError(id: number, code: number, message: string, data?: unknown): void {
+  sendError(id: JsonRpcRequestId, code: number, message: string, data?: unknown): void {
     this.transport.sendLine(JSON.stringify({ id, error: { code, message, data } }));
   }
 

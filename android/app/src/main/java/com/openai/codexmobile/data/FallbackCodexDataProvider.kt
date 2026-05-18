@@ -3,6 +3,7 @@ package com.openai.codexmobile.data
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
+import kotlinx.coroutines.flow.Flow
 
 class FallbackCodexDataProvider(
     private val primary: CodexDataProvider,
@@ -44,6 +45,10 @@ class FallbackCodexDataProvider(
 
     override suspend fun sendInput(sessionId: String, text: String) {
         requireActiveProvider().sendInput(sessionId, text)
+    }
+
+    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> {
+        return requireActiveProvider().observeSessionEvents(sessionId)
     }
 
     override suspend fun listSessions(): List<SessionSummary> {

@@ -1,0 +1,262 @@
+import { describe, expect, test, vi } from "vitest";
+import { AppServerRunner } from "../src/app-server-runner.js";
+import type {
+  JsonRpcNotification,
+  JsonRpcServerRequest,
+} from "../src/app-server-client.js";
+import type { BridgeEvent } from "../src/types.js";
+import { SessionStore } from "../src/session-store.js";
+
+class FakeAppServerClient {
+  readonly request = vi.fn(async (_method: string, _params: unknown) => ({}));
+  readonly close = vi.fn(async () => undefined);
+  readonly sentResponses: Array<{ id: string | number; result: unknown }> = [];
+  readonly sentErrors: Array<{ id: string | number; code: number; message: string; data?: unknown }> = [];
+  private notificationListener?: (message: JsonRpcNotification) => void;
+  private serverRequestListener?: (message: JsonRpcServerRequest) => void;
+
+  onNotification(listener: (message: JsonRpcNotification) => void): () => void {
+    this.notificationListener = listener;
+    return () => {
+      this.notificationListener = undefined;
+    };
+  }
+
+  onServerRequest(listener: (message: JsonRpcServerRequest) => void): () => void {
+    this.serverRequestListener = listener;
+    return () => {
+      this.serverRequestListener = undefined;
+    };
+  }
+
+  sendResponse(id: string | number, result: unknown): void {
+    this.sentResponses.push({ id, result });
+  }
+
+  sendError(id: string | number, code: number, message: string, data?: unknown): void {
+    this.sentErrors.push({ id, code, message, data });
+  }
+
+  emitNotification(message: JsonRpcNotification): void {
+    this.notificationListener?.(message);
+  }
+
+  emitServerRequest(message: JsonRpcServerRequest): void {
+    this.serverRequestListener?.(message);
+  }
+}
+
+function createSessionStore(): SessionStore {
+  const store = new SessionStore();
+  store.attach({
+    id: "sess-1",
+    cwd: "D:\\workspace\\codex-mobile",
+    model: "gpt-5.5",
+    approvalMode: "manual",
+    status: "running",
+    threadId: "thread-1",
+    activeTurnId: "turn-1",
+    lastError: null,
+    createdAt: "2026-05-19T01:00:00.000Z",
+    updatedAt: "2026-05-19T01:00:00.000Z",
+  });
+  return store;
+}
+
+describe("AppServerRunner", () => {
+  test("uses session approval mode for thread/start and turn/start", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/start") {
+        return { thread: { id: "thread-2" } };
+      }
+
+      if (method === "turn/start") {
+        return { turn: { id: "turn-2" } };
+      }
+
+      return {};
+    });
+
+    store.attach({
+      id: "sess-2",
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      status: "idle",
+      threadId: null,
+      activeTurnId: null,
+      lastError: null,
+      createdAt: "2026-05-19T01:10:00.000Z",
+      updatedAt: "2026-05-19T01:10:00.000Z",
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await runner.initializeSession("sess-2");
+    await runner.submitInput("sess-2", "请继续");
+
+    expect(client.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/start",
+      expect.objectContaining({
+        approvalPolicy: "on-request",
+      }),
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
+      "turn/start",
+      expect.objectContaining({
+        approvalPolicy: "on-request",
+      }),
+    );
+  });
+
+  test("stores approval requests and resolves them through approve()", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    const runner = new AppServerRunner(store, client);
+    const events: BridgeEvent[] = [];
+    runner.subscribe("sess-1", (event) => {
+      events.push(event);
+    });
+
+    client.emitServerRequest({
+      id: "req-1",
+      method: "item/commandExecution/requestApproval",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "item-1",
+        command: "git push",
+      },
+    });
+
+    expect(store.get("sess-1")?.status).toBe("awaiting_approval");
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "run.status",
+          data: expect.objectContaining({
+            status: "awaiting_approval",
+            requestId: "req-1",
+          }),
+        }),
+        expect.objectContaining({
+          type: "tool.request",
+          data: expect.objectContaining({
+            requestId: "req-1",
+            method: "item/commandExecution/requestApproval",
+          }),
+        }),
+      ]),
+    );
+
+    const result = await runner.approve("sess-1", {
+      requestId: "req-1",
+      decision: "reject",
+    });
+
+    expect(result).toMatchObject({
+      requestId: "req-1",
+      decision: "reject",
+      status: "running",
+      method: "item/commandExecution/requestApproval",
+    });
+    expect(client.sentResponses).toEqual([
+      {
+        id: "req-1",
+        result: {
+          decision: "decline",
+        },
+      },
+    ]);
+    expect(store.get("sess-1")?.status).toBe("running");
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "tool.result",
+          data: expect.objectContaining({
+            requestId: "req-1",
+            decision: "reject",
+          }),
+        }),
+        expect.objectContaining({
+          type: "run.status",
+          data: expect.objectContaining({
+            status: "running",
+            requestId: "req-1",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  test("maps permission approvals to requested profile and session scope", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    const runner = new AppServerRunner(store, client);
+
+    client.emitServerRequest({
+      id: 7,
+      method: "item/permissions/requestApproval",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "item-7",
+        cwd: "D:\\workspace\\codex-mobile",
+        permissions: {
+          network: {
+            enabled: true,
+          },
+        },
+      },
+    });
+
+    await runner.approve("sess-1", {
+      requestId: 7,
+      decision: "approve_for_session",
+    });
+
+    expect(client.sentResponses).toEqual([
+      {
+        id: 7,
+        result: {
+          permissions: {
+            network: {
+              enabled: true,
+            },
+          },
+          scope: "session",
+        },
+      },
+    ]);
+  });
+
+  test("rejects unsupported non-approval server requests", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    const runner = new AppServerRunner(store, client);
+
+    client.emitServerRequest({
+      id: 99,
+      method: "item/tool/requestUserInput",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "item-99",
+        questions: [],
+      },
+    });
+
+    expect(client.sentErrors).toEqual([
+      {
+        id: 99,
+        code: -32601,
+        message: "Server request item/tool/requestUserInput is not supported by codex-mobile-bridge yet.",
+        data: undefined,
+      },
+    ]);
+    expect(store.get("sess-1")?.status).toBe("running");
+  });
+});

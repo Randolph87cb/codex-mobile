@@ -1,16 +1,19 @@
 export type SessionStatus = "idle" | "running" | "awaiting_approval" | "error";
+export type JsonRpcRequestId = string | number;
+export type ApprovalDecision = "approve" | "approve_for_session" | "reject" | "reject_and_interrupt";
+export type ApprovalMode = "manual" | "auto";
 
 export interface CreateSessionInput {
   cwd: string;
   model: string;
-  approvalMode: "manual" | "auto";
+  approvalMode: ApprovalMode;
 }
 
 export interface SessionRecord {
   id: string;
   cwd: string;
   model: string;
-  approvalMode: "manual" | "auto";
+  approvalMode: ApprovalMode;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;
@@ -28,7 +31,7 @@ export interface SessionView {
   source: "local" | "history";
   cwd: string;
   model: string;
-  approvalMode: "manual" | "auto";
+  approvalMode: ApprovalMode;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;
@@ -39,6 +42,18 @@ export interface SessionView {
 
 export interface SessionInput {
   text: string;
+}
+
+export interface SessionApprovalInput {
+  requestId?: JsonRpcRequestId;
+  decision?: ApprovalDecision;
+}
+
+export interface SessionApprovalResult {
+  requestId: JsonRpcRequestId;
+  status: SessionStatus;
+  decision: ApprovalDecision;
+  method: string;
 }
 
 export interface BridgeEvent {
@@ -54,4 +69,14 @@ export interface BridgeEvent {
   sessionId: string;
   timestamp: string;
   data: Record<string, unknown>;
+}
+
+export interface BridgeSecurityConfig {
+  token: string | null;
+  allowedCwds: string[];
+}
+
+export interface BridgeSecurityState {
+  tokenAuthEnabled: boolean;
+  cwdWhitelistEnabled: boolean;
 }

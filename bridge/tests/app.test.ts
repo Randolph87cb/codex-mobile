@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import type { HistoryCapableBridgeRunner } from "../src/bridge-runner.js";
 import { buildBridgeApp } from "../src/app.js";
 import { SessionStore } from "../src/session-store.js";
-import type { SessionView } from "../src/types.js";
+import type {
+  BridgeSecurityConfig,
+  SessionApprovalInput,
+  SessionApprovalResult,
+  SessionView,
+} from "../src/types.js";
 
 class TestRunner implements HistoryCapableBridgeRunner {
   readonly mode = "mock" as const;
@@ -10,6 +15,12 @@ class TestRunner implements HistoryCapableBridgeRunner {
     this.store.update(sessionId, { threadId: "thread-test" });
   });
   readonly submitInput = vi.fn(async () => undefined);
+  readonly approve = vi.fn(async (_sessionId: string, input: SessionApprovalInput): Promise<SessionApprovalResult> => ({
+    requestId: input.requestId ?? 1,
+    decision: input.decision ?? "approve",
+    method: "item/commandExecution/requestApproval",
+    status: input.decision === "reject_and_interrupt" ? "idle" : "running",
+  }));
   readonly interrupt = vi.fn(async () => undefined);
 
   constructor(private readonly store: SessionStore) {}
@@ -89,6 +100,14 @@ describe("buildBridgeApp", () => {
     vi.restoreAllMocks();
   });
 
+  function createSecurityConfig(overrides: Partial<BridgeSecurityConfig> = {}): BridgeSecurityConfig {
+    return {
+      token: null,
+      allowedCwds: [],
+      ...overrides,
+    };
+  }
+
   test("creates sessions and returns runner mode in health", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
@@ -96,7 +115,14 @@ describe("buildBridgeApp", () => {
 
     const health = await app.inject({ method: "GET", url: "/health" });
     expect(health.statusCode).toBe(200);
-    expect(health.json()).toMatchObject({ ok: true, runnerMode: "mock" });
+    expect(health.json()).toMatchObject({
+      ok: true,
+      runnerMode: "mock",
+      security: {
+        tokenAuthEnabled: false,
+        cwdWhitelistEnabled: false,
+      },
+    });
 
     const create = await app.inject({
       method: "POST",
@@ -115,6 +141,44 @@ describe("buildBridgeApp", () => {
       model: "gpt-5.5",
       threadId: "thread-test",
     });
+
+    await app.close();
+  });
+
+  test("keeps health public and protects api routes with bearer token", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({
+      store,
+      runner,
+      security: createSecurityConfig({ token: "bridge-secret" }),
+    });
+
+    const health = await app.inject({ method: "GET", url: "/health" });
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toMatchObject({
+      security: {
+        tokenAuthEnabled: true,
+        cwdWhitelistEnabled: false,
+      },
+    });
+
+    const unauthenticated = await app.inject({ method: "GET", url: "/api/sessions" });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(unauthenticated.headers["www-authenticate"]).toBe("Bearer");
+    expect(unauthenticated.json()).toMatchObject({
+      error: "unauthorized",
+      message: "missing bearer token",
+    });
+
+    const authenticated = await app.inject({
+      method: "GET",
+      url: "/api/sessions",
+      headers: {
+        authorization: "Bearer bridge-secret",
+      },
+    });
+    expect(authenticated.statusCode).toBe(200);
 
     await app.close();
   });
@@ -139,6 +203,71 @@ describe("buildBridgeApp", () => {
       },
     });
     expect(missingInput.statusCode).toBe(404);
+
+    const invalidApprove = await app.inject({
+      method: "POST",
+      url: "/api/session/missing/approve",
+      payload: {
+        decision: "approve",
+      },
+    });
+    expect(invalidApprove.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  test("enforces cwd whitelist only when configured", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({
+      store,
+      runner,
+      security: createSecurityConfig({
+        allowedCwds: ["d:\\workspace\\codex-mobile"],
+      }),
+    });
+
+    const relativeCreate = await app.inject({
+      method: "POST",
+      url: "/api/session",
+      payload: {
+        cwd: ".",
+        model: "gpt-5.5",
+        approvalMode: "manual",
+      },
+    });
+    expect(relativeCreate.statusCode).toBe(400);
+    expect(relativeCreate.json()).toMatchObject({
+      error: "invalid-cwd",
+    });
+
+    const forbiddenCreate = await app.inject({
+      method: "POST",
+      url: "/api/session",
+      payload: {
+        cwd: "D:\\other",
+        model: "gpt-5.5",
+        approvalMode: "manual",
+      },
+    });
+    expect(forbiddenCreate.statusCode).toBe(403);
+    expect(forbiddenCreate.json()).toMatchObject({
+      error: "cwd-not-allowed",
+    });
+
+    const allowedCreate = await app.inject({
+      method: "POST",
+      url: "/api/session",
+      payload: {
+        cwd: "D:\\workspace\\codex-mobile\\bridge",
+        model: "gpt-5.5",
+        approvalMode: "manual",
+      },
+    });
+    expect(allowedCreate.statusCode).toBe(201);
+    expect(allowedCreate.json()).toMatchObject({
+      cwd: "D:\\workspace\\codex-mobile\\bridge",
+    });
 
     await app.close();
   });
@@ -175,6 +304,40 @@ describe("buildBridgeApp", () => {
     });
     expect(input.statusCode).toBe(202);
     expect(runner.submitInput).toHaveBeenCalledWith("thread-history", "你是谁");
+
+    await app.close();
+  });
+
+  test("forwards approval decisions to the runner", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+    });
+
+    const approve = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/approve`,
+      payload: {
+        requestId: "req-1",
+        decision: "reject",
+      },
+    });
+
+    expect(approve.statusCode).toBe(200);
+    expect(approve.json()).toMatchObject({
+      ok: true,
+      requestId: "req-1",
+      decision: "reject",
+      status: "running",
+    });
+    expect(runner.approve).toHaveBeenCalledWith(session.id, {
+      requestId: "req-1",
+      decision: "reject",
+    });
 
     await app.close();
   });
