@@ -43,4 +43,36 @@ describe("session view mapping", () => {
     expect(view.transcriptPreview).toContain("Codex：我是连接到 Windows 上 Codex 的移动客户端。");
     expect(view.threadId).toBe("thread-1");
   });
+
+  test("prefers newer thread status over stale local running status", () => {
+    const view = buildSessionViewFromThread(
+      {
+        id: "thread-2",
+        cwd: "D:\\workspace\\codex-mobile",
+        modelProvider: "openai",
+        preview: "旧线程",
+        createdAt: "2026-05-19T03:00:00.000Z",
+        updatedAt: "2026-05-19T03:10:00.000Z",
+        status: {
+          type: "inactive",
+        },
+        turns: [],
+      },
+      {
+        id: "thread-2",
+        cwd: "D:\\workspace\\codex-mobile",
+        model: "gpt-5.5",
+        approvalMode: "manual",
+        status: "running",
+        threadId: "thread-2",
+        activeTurnId: "turn-old",
+        lastError: null,
+        createdAt: "2026-05-19T03:00:00.000Z",
+        updatedAt: "2026-05-19T03:05:00.000Z",
+      },
+    );
+
+    expect(view.status).toBe("idle");
+    expect(view.subtitle).toContain("空闲");
+  });
 });

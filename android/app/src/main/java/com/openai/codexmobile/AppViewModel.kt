@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.util.ArrayDeque
 
 data class AppUiState(
     val endpointInput: String,
@@ -39,6 +40,7 @@ data class AppUiState(
     val message: String? = null,
     val settingsItems: List<Pair<String, String>>,
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
+    val queuedInputs: List<String> = emptyList(),
 )
 
 data class SessionRealtimeUiState(
@@ -71,6 +73,8 @@ class AppViewModel(
     private var sessionStreamJob: Job? = null
     private var activeStreamSessionId: String? = null
     private var activeAssistantTurnId: String? = null
+    private val queuedInputsBySession = mutableMapOf<String, ArrayDeque<String>>()
+    private val flushingQueuedSessions = mutableSetOf<String>()
 
     init {
         bridgeApi.updateAuthToken(initialSettings.authToken)
@@ -147,12 +151,15 @@ class AppViewModel(
         viewModelScope.launch {
             stopSessionStream()
             bridgeApi.disconnect()
+            queuedInputsBySession.clear()
+            flushingQueuedSessions.clear()
             _uiState.update {
                 it.copy(
                     connectionState = BridgeConnectionState.Disconnected,
                     sessions = emptyList(),
                     selectedSession = null,
                     message = "已断开连接。",
+                    queuedInputs = emptyList(),
                 ).withSettingsItems()
             }
         }
@@ -173,6 +180,7 @@ class AppViewModel(
                     isLoading = true,
                     message = null,
                     selectedSession = it.selectedSession?.takeIf { detail -> detail.id == sessionId },
+                    queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = SessionRealtimeUiState(
                         isActive = true,
                         connectionText = "正在连接实时流",
@@ -193,6 +201,7 @@ class AppViewModel(
                         isLoading = false,
                         selectedSession = null,
                         message = error.message ?: "加载会话失败。",
+                        queuedInputs = emptyList(),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             isConnected = false,
                             connectionText = "会话加载失败",
@@ -210,6 +219,7 @@ class AppViewModel(
                         isLoading = false,
                         selectedSession = null,
                         message = "未找到会话：$sessionId",
+                        queuedInputs = emptyList(),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             isConnected = false,
                             connectionText = "找不到目标会话",
@@ -225,6 +235,7 @@ class AppViewModel(
                 state.copy(
                     isLoading = false,
                     selectedSession = detail,
+                    queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = state.sessionRealtimeState.copy(
                         statusText = localizedSessionStatus(detail.status),
                         fallbackNotice = null,
@@ -233,12 +244,16 @@ class AppViewModel(
             }
 
             startSessionStream(sessionId)
+            flushNextQueuedInputIfIdle(sessionId)
         }
     }
 
     fun closeSessionDetail(sessionId: String? = null) {
         if (sessionId == null || sessionId == activeStreamSessionId) {
             stopSessionStream()
+        }
+        if (sessionId == null || uiState.value.selectedSession?.id == sessionId) {
+            _uiState.update { it.copy(queuedInputs = emptyList()) }
         }
     }
 
@@ -276,28 +291,22 @@ class AppViewModel(
             return
         }
 
+        if (shouldQueueInput(detail, uiState.value.sessionRealtimeState)) {
+            enqueueQueuedInput(detail.id, text)
+            _uiState.update {
+                it.copy(
+                    draftMessage = "",
+                    message = "当前轮尚未结束，消息已加入排队。",
+                    queuedInputs = queuedInputsFor(detail.id),
+                )
+            }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, message = null) }
             try {
-                bridgeApi.sendInput(detail.id, text)
-                activeAssistantTurnId = null
-                val updatedDetail = appendUserMessage(detail, text)
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        selectedSession = updatedDetail,
-                        draftMessage = "",
-                        message = "消息已发送，等待实时输出。",
-                        sessionRealtimeState = it.sessionRealtimeState.copy(
-                            statusText = localizedSessionStatus("running"),
-                            lastEventText = "已发送消息，等待 Codex 回复。",
-                        ),
-                    )
-                }
-                refreshSessions()
-                if (activeStreamSessionId != detail.id || sessionStreamJob?.isActive != true) {
-                    startSessionStream(detail.id)
-                }
+                submitInputNow(detail, text, fromQueue = false)
             } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
@@ -481,6 +490,7 @@ class AppViewModel(
                             status = nextStatus,
                             lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
                         ),
+                        queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus(nextStatus),
                             lastEventText = when (event.turnStatus) {
@@ -493,6 +503,7 @@ class AppViewModel(
                     )
                 }
                 refreshSessionSnapshot(sessionId)
+                flushNextQueuedInputIfIdle(sessionId)
             }
 
             is SessionStreamEvent.RunStatus -> {
@@ -513,6 +524,9 @@ class AppViewModel(
                         ),
                     )
                 }
+                if (event.status == "idle") {
+                    flushNextQueuedInputIfIdle(sessionId)
+                }
             }
 
             is SessionStreamEvent.RunInterrupted -> {
@@ -522,6 +536,7 @@ class AppViewModel(
                         selectedSession = it.selectedSession
                             ?.let { detail -> appendSystemMessage(detail, "当前任务已中断。", event.timestamp) }
                             ?.copy(status = "idle"),
+                        queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("idle"),
                             lastEventText = "当前任务已中断。",
@@ -532,6 +547,7 @@ class AppViewModel(
                     )
                 }
                 refreshSessionSnapshot(sessionId)
+                flushNextQueuedInputIfIdle(sessionId)
             }
 
             is SessionStreamEvent.ToolRequest -> {
@@ -547,6 +563,7 @@ class AppViewModel(
                                 )
                             }
                             ?.copy(status = "awaiting_approval"),
+                        queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("awaiting_approval"),
                             lastEventText = "收到工具请求：${event.method ?: "未知方法"}",
@@ -573,6 +590,7 @@ class AppViewModel(
                                 )
                             }
                             ?.copy(status = event.status ?: it.selectedSession.status),
+                        queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             lastEventText = event.summary ?: "收到工具结果事件。",
                             fallbackNotice = null,
@@ -581,6 +599,9 @@ class AppViewModel(
                                 ?: it.sessionRealtimeState.statusText,
                         ),
                     )
+                }
+                if (event.status == "idle") {
+                    flushNextQueuedInputIfIdle(sessionId)
                 }
             }
 
@@ -613,7 +634,15 @@ class AppViewModel(
         }
 
         if (detail != null && uiState.value.selectedSession?.id == sessionId) {
-            _uiState.update { it.copy(selectedSession = detail) }
+            _uiState.update {
+                it.copy(
+                    selectedSession = detail,
+                    queuedInputs = queuedInputsFor(sessionId),
+                )
+            }
+            if (detail.status == "idle") {
+                flushNextQueuedInputIfIdle(sessionId)
+            }
         }
 
         refreshSessions()
@@ -688,6 +717,7 @@ class AppViewModel(
                     }
                     ?.copy(status = result.status),
                 message = "已提交审批操作：${result.decision.label}",
+                queuedInputs = queuedInputsFor(it.selectedSession?.id),
                 sessionRealtimeState = it.sessionRealtimeState.copy(
                     statusText = localizedSessionStatus(result.status),
                     lastEventText = buildApprovalResultText(result),
@@ -695,6 +725,100 @@ class AppViewModel(
                     pendingApproval = null,
                 ),
             )
+        }
+    }
+
+    private suspend fun submitInputNow(
+        detail: SessionDetail,
+        text: String,
+        fromQueue: Boolean,
+    ) {
+        bridgeApi.sendInput(detail.id, text)
+        activeAssistantTurnId = null
+        val updatedDetail = appendUserMessage(detail, text)
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                selectedSession = updatedDetail,
+                draftMessage = "",
+                message = if (fromQueue) {
+                    "已发送排队消息。"
+                } else {
+                    "消息已发送，等待实时输出。"
+                },
+                queuedInputs = queuedInputsFor(detail.id),
+                sessionRealtimeState = it.sessionRealtimeState.copy(
+                    statusText = localizedSessionStatus("running"),
+                    lastEventText = if (fromQueue) {
+                        "已发送一条排队消息，等待 Codex 回复。"
+                    } else {
+                        "已发送消息，等待 Codex 回复。"
+                    },
+                ),
+            )
+        }
+        refreshSessions()
+        if (activeStreamSessionId != detail.id || sessionStreamJob?.isActive != true) {
+            startSessionStream(detail.id)
+        }
+    }
+
+    private fun shouldQueueInput(
+        detail: SessionDetail,
+        realtimeState: SessionRealtimeUiState,
+    ): Boolean {
+        return realtimeState.pendingApproval != null ||
+            detail.status == "awaiting_approval" ||
+            detail.status == "running"
+    }
+
+    private fun enqueueQueuedInput(sessionId: String, text: String) {
+        val queue = queuedInputsBySession.getOrPut(sessionId) { ArrayDeque() }
+        queue.addLast(text)
+    }
+
+    private fun queuedInputsFor(sessionId: String?): List<String> {
+        if (sessionId == null) {
+            return emptyList()
+        }
+        return queuedInputsBySession[sessionId]?.toList().orEmpty()
+    }
+
+    private suspend fun flushNextQueuedInputIfIdle(sessionId: String) {
+        if (sessionId in flushingQueuedSessions) {
+            return
+        }
+
+        val queue = queuedInputsBySession[sessionId]
+        if (queue.isNullOrEmpty()) {
+            return
+        }
+
+        val detail = uiState.value.selectedSession?.takeIf { it.id == sessionId } ?: return
+        if (detail.status != "idle") {
+            return
+        }
+
+        val nextMessage = queue.removeFirst()
+        if (queue.isEmpty()) {
+            queuedInputsBySession.remove(sessionId)
+        }
+        flushingQueuedSessions += sessionId
+
+        try {
+            submitInputNow(detail, nextMessage, fromQueue = true)
+        } catch (error: Exception) {
+            val restoredQueue = queuedInputsBySession.getOrPut(sessionId) { ArrayDeque() }
+            restoredQueue.addFirst(nextMessage)
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    message = error.message ?: "排队消息发送失败。",
+                    queuedInputs = queuedInputsFor(sessionId),
+                )
+            }
+        } finally {
+            flushingQueuedSessions -= sessionId
         }
     }
 }

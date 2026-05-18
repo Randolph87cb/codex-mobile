@@ -123,6 +123,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     paddingValues = paddingValues,
                     sessionDetail = uiState.selectedSession,
                     sessionRealtimeState = uiState.sessionRealtimeState,
+                    queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,

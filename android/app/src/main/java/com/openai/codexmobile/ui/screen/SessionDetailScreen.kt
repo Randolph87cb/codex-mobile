@@ -38,6 +38,7 @@ fun SessionDetailScreen(
     paddingValues: PaddingValues,
     sessionDetail: SessionDetail?,
     sessionRealtimeState: SessionRealtimeUiState,
+    queuedInputs: List<String>,
     draftMessage: String,
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
@@ -106,6 +107,9 @@ fun SessionDetailScreen(
                 onApprovalDecision = onApprovalDecision,
             )
         }
+        if (queuedInputs.isNotEmpty()) {
+            QueuedInputCard(messages = queuedInputs)
+        }
         Card(
             modifier = Modifier
                 .testTag(TestTags.SessionDetailTranscript)
@@ -159,6 +163,54 @@ fun SessionDetailScreen(
             modifier = Modifier.testTag(TestTags.SessionDetailBackButton),
         ) {
             Text("返回会话列表")
+        }
+    }
+}
+
+@Composable
+private fun QueuedInputCard(
+    messages: List<String>,
+) {
+    val queueScrollState = rememberScrollState()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailQueuedInputsCard),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "排队中的消息（${messages.size}）",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "当前轮结束后会按顺序自动发送。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 160.dp)
+                    .verticalScroll(queueScrollState),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                messages.forEachIndexed { index, message ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        ),
+                    ) {
+                        Text(
+                            text = "${index + 1}. $message",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
         }
     }
 }

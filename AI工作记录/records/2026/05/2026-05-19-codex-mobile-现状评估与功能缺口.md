@@ -647,3 +647,63 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
   - 结果：最终通过
   - 说明：第一次构建曾出现一次 `dexBuilderDebug/desugar_graph` 临时目录竞态，重跑后恢复正常，判断为 Gradle 构建环境偶发问题，不是代码回归。
+
+## 追加记录：审批中发送消息与重载状态不刷新
+
+- 时间：2026-05-19
+- 用户反馈：
+  - 审批卡住时又发送了一条消息，这条消息应该进入排队，但当前看不到，也没有后续自动发送。
+  - 重新载入线程时，状态有时不会按真实线程刷新，明明已经停止，界面还显示“进行中”。
+
+### 根因判断
+
+- Android 端：
+  - `sendInput()` 之前没有“当前轮仍在运行/等待审批”的专门分支。
+  - 所以审批中再次发消息时，不会形成可见队列，也不会在当前轮结束后自动补发。
+- bridge 端：
+  - `buildSessionViewFromThread()` 会在本地 `session.status != idle` 时优先沿用本地状态。
+  - 当本地还保留旧的 `running`，但 `thread/read` 返回的真实线程状态已经是 `inactive` 时，旧状态会把真实状态覆盖掉。
+
+### 本轮修复
+
+- Android：
+  - 文件：
+    - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/TestTags.kt`
+  - 修改内容：
+    - 当前轮处于 `running / awaiting_approval` 时，再次发送的消息改为本地排队。
+    - 详情页新增“排队中的消息”卡片，明确显示待发送内容和数量。
+    - 当当前轮回到 `idle` 后，自动按顺序补发第一条排队消息。
+    - 排队消息真正发出前，不会伪装成已经进入 transcript。
+- bridge：
+  - 文件：
+    - `bridge/src/session-view.ts`
+    - `bridge/tests/session-view.test.ts`
+  - 修改内容：
+    - 线程详情状态改为优先信任 `thread/read` 中更新更晚的线程状态。
+    - 防止旧的本地 `running` 把已经停止的真实线程覆盖掉。
+
+### 本轮新增测试覆盖
+
+- bridge：
+  - 当 `thread.updatedAt` 晚于本地 session 时，状态应以真实线程状态为准。
+- Android：
+  - 审批中再次发送消息会进入本地队列。
+  - 当前轮回到 `idle` 后会自动补发队列中的消息。
+  - 排队消息发送前不会提前混入 transcript，发送后才写入对话。
+
+### 本轮验证
+
+- bridge：
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+  - 结果：通过，5 个测试文件、18 个用例全部通过
+- Android：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - `.\gradlew.bat connectedDebugAndroidTest`
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：通过

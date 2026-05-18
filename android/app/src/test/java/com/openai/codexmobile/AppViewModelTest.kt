@@ -256,6 +256,64 @@ class AppViewModelTest {
     }
 
     @Test
+    fun inputDuringApprovalIsQueuedAndSentAfterSessionReturnsToIdle() = runTest(dispatcher.scheduler) {
+        val detail = SessionDetail(
+            id = "sess_queue",
+            title = "排队测试",
+            subtitle = "gpt-5.5 • 手动批准 • 空闲",
+            lastUpdated = "2026-05-19T16:00:00.000Z",
+            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(sessionSummaryFor(detail)),
+            details = arrayDequeOf(detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+
+        viewModel.openSessionDetail("sess_queue")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.ToolRequest(
+                sessionId = "sess_queue",
+                requestId = BridgeRequestId.Text("req-queue"),
+                method = "item/commandExecution/requestApproval",
+                paramsSummary = "等待审批：长操作",
+                timestamp = "2026-05-19T16:00:01.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.updateDraftMessage("这条消息应该排队")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertTrue(bridgeApi.sentInputs.isEmpty())
+        assertEquals(listOf("这条消息应该排队"), viewModel.uiState.value.queuedInputs)
+        assertEquals("", viewModel.uiState.value.draftMessage)
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("这条消息应该排队") == false,
+        )
+
+        bridgeApi.emit(
+            SessionStreamEvent.RunStatus(
+                sessionId = "sess_queue",
+                status = "idle",
+                timestamp = "2026-05-19T16:00:03.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("这条消息应该排队"), bridgeApi.sentInputs)
+        assertTrue(viewModel.uiState.value.queuedInputs.isEmpty())
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("你：这条消息应该排队") == true,
+        )
+    }
+
+    @Test
     fun createSessionUsesEditableSavedSettings() = runTest(dispatcher.scheduler) {
         val detail = SessionDetail(
             id = "sess_5",

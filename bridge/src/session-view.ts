@@ -66,7 +66,7 @@ export function buildSessionViewFromThread(
   session?: SessionRecord,
 ): SessionView {
   const fallbackStatus = mapThreadStatus(thread.status);
-  const status = session && session.status !== "idle" ? session.status : fallbackStatus;
+  const status = resolveThreadBackedStatus(thread, session, fallbackStatus);
   const createdAt = pickLatestTimestamp(toIsoString(thread.createdAt), session?.createdAt, false);
   const updatedAt = pickLatestTimestamp(toIsoString(thread.updatedAt), session?.updatedAt, true);
   const transcriptPreview = buildThreadTranscriptPreview(thread);
@@ -244,6 +244,23 @@ function toIsoString(value: number | string | null | undefined): string | null {
     return value;
   }
   return null;
+}
+
+function resolveThreadBackedStatus(
+  thread: AppServerThread,
+  session: SessionRecord | undefined,
+  fallbackStatus: SessionStatus,
+): SessionStatus {
+  if (!session || session.status === "idle") {
+    return fallbackStatus;
+  }
+
+  const threadUpdatedAt = toIsoString(thread.updatedAt);
+  if (threadUpdatedAt && threadUpdatedAt > session.updatedAt) {
+    return fallbackStatus;
+  }
+
+  return session.status;
 }
 
 function formatStatusLabel(status: SessionStatus): string {
