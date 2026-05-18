@@ -194,6 +194,48 @@ class AppViewModelTest {
     }
 
     @Test
+    fun snapshotWithUnknownFieldsDoesNotOverwriteKnownSessionConfig() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(
+            id = "sess_known",
+            model = "gpt-5.4",
+            reasoningEffort = "high",
+            serviceTier = "flex",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(
+                    model = "未知模型",
+                    approvalMode = "未知审批模式",
+                    reasoningEffort = "unknown",
+                    serviceTier = "unknown",
+                ),
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+
+        viewModel.openSessionDetail("sess_known")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.RunInterrupted(
+                sessionId = "sess_known",
+                status = "idle",
+                timestamp = "2026-05-19T18:00:00.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("gpt-5.4", viewModel.uiState.value.selectedSession?.model)
+        assertEquals("manual", viewModel.uiState.value.selectedSession?.approvalMode)
+        assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
+        assertEquals("flex", viewModel.uiState.value.selectedSession?.serviceTier)
+    }
+
+    @Test
     fun connectUsesConfiguredTokenAndUpdatesSettings() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_auth", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -306,9 +348,15 @@ private class FakeSessionRepository(
     private val sessionSummaries: List<SessionSummary>,
     private val detailsById: Map<String, SessionDetail>,
 ) : SessionRepository {
+    private val getCounts = mutableMapOf<String, Int>()
+
     override suspend fun listSessions(): List<SessionSummary> = sessionSummaries
 
-    override suspend fun getSessionDetail(sessionId: String): SessionDetail? = detailsById[sessionId]
+    override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
+        val count = getCounts.getOrDefault(sessionId, 0)
+        getCounts[sessionId] = count + 1
+        return detailsById["$sessionId#refresh"].takeIf { count > 0 } ?: detailsById[sessionId]
+    }
 }
 
 private class FakeAppSettingsStore(

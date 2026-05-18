@@ -803,3 +803,71 @@
   - `.\gradlew.bat connectedDebugAndroidTest`
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
   - 结果：通过
+
+## 追加记录：详情页布局收紧与配置未知值回写修复
+
+- 时间：2026-05-19
+- 用户反馈：
+  - 会话详情里的对话区域仍然偏窄，上方状态和配置区占地太大。
+  - 修改速度等模型相关选项后，其它配置字段会退回“未知”。
+  - 发送按钮希望放到输入框右侧，像聊天软件。
+  - 底部“返回会话列表”按钮冗余，应移除。
+
+### 根因判断
+
+- 详情页布局：
+  - 状态条、配置按钮和标题区垂直堆叠，占用了过多首屏空间。
+  - transcript 气泡的最大宽度限制过窄，小屏上会显得对话区很挤。
+- 配置字段退回“未知”：
+  - bridge 返回的详情快照在部分路径下会带占位值，如 `unknown`、`未知模型`。
+  - Android 在刷新详情或更新单个配置项后，直接用新快照整体覆盖旧状态，导致已知配置被占位值冲掉。
+- instrumentation 稳定性：
+  - 回放测试依赖的 `ReplayHarnessActivity` 与 debug 源集边界不稳定。
+  - `androidx.startup.InitializationProvider` 在 instrumentation 目标进程里触发过一次启动崩溃，需要 debug 专用兜底。
+
+### 本轮修复
+
+- 详情页布局：
+  - 文件：
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - 修改内容：
+    - 去掉详情页内部重复标题，缩小外层留白。
+    - 把状态条收成最上方一行，整行点击展开/收起。
+    - 展开区里再显示详细状态、刷新按钮和模型配置项。
+    - 配置按钮改为 `FlowRow` 自动换行，小屏不再横向挤爆。
+    - transcript 气泡宽度改成接近全宽，提升对话可读性。
+    - 输入区改成“输入框在左，发送按钮在右”的聊天样式。
+    - 删除底部“返回会话列表”按钮，仅保留左上角和系统返回。
+- 配置未知值保护：
+  - 文件：
+    - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+    - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+  - 修改内容：
+    - 新增 `mergeSessionDetail()`，在详情刷新、配置更新返回、手动同步时合并会话快照。
+    - 对 `model / approvalMode / reasoningEffort / serviceTier / cwd / status` 这些字段，若新快照只是占位值，则保留当前已知值。
+    - 补充单元测试，覆盖“刷新快照带 unknown 时不应覆盖已知配置”。
+- instrumentation 回放稳定化：
+  - 文件：
+    - `android/app/src/androidTest/java/com/openai/codexmobile/SessionDetailReplayTest.kt`
+    - `android/app/src/debug/AndroidManifest.xml`
+    - `android/app/src/main/java/com/openai/codexmobile/ReplayHarnessActivity.kt`
+  - 修改内容：
+    - 回放测试改成运行时按类名启动 harness activity，避免编译期直接绑定 debug 源集类。
+    - `ReplayHarnessActivity` 的实现移到主源码，但仍只在 debug manifest 注册，不对正式入口暴露。
+    - debug manifest 移除 `androidx.startup.InitializationProvider`，规避 instrumentation 目标进程启动崩溃。
+
+### 本轮验证
+
+- Android 单元测试：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过
+- Android 模拟器 instrumentation：
+  - `cd android`
+  - `.\gradlew.bat connectedDebugAndroidTest --rerun-tasks`
+  - 结果：通过
+  - 说明：普通 `connectedDebugAndroidTest` 先后暴露了 `androidx.startup` 启动崩溃和 harness 类未重新打包两个问题；修复后用 `--rerun-tasks` 强制重编译确认通过。
+- Android debug 构建：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：通过

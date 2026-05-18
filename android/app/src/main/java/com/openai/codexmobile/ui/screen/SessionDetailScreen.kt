@@ -1,5 +1,6 @@
 package com.openai.codexmobile.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -87,7 +87,6 @@ fun SessionDetailScreen(
     onUpdateReasoningEffort: (String) -> Unit,
     onUpdateServiceTier: (String) -> Unit,
     onRefreshSession: () -> Unit,
-    onBack: () -> Unit,
 ) {
     val detail = remember(sessionDetail, draftSession) {
         sessionDetail ?: draftSession?.toDraftDetail()
@@ -119,13 +118,9 @@ fun SessionDetailScreen(
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = if (draftSession != null) "草稿线程" else "会话详情",
-            style = MaterialTheme.typography.headlineMedium,
-        )
         StatusStrip(
             detail = detail,
             sessionRealtimeState = sessionRealtimeState,
@@ -133,11 +128,8 @@ fun SessionDetailScreen(
             isDraft = draftSession != null,
             expanded = statusExpanded,
             onToggleExpanded = { statusExpanded = !statusExpanded },
-            onRefreshSession = onRefreshSession,
-        )
-        SessionConfigRow(
-            detail = detail,
             onOpenEditor = { activeEditor = it },
+            onRefreshSession = onRefreshSession,
         )
         sessionRealtimeState.pendingApproval?.let { approval ->
             ApprovalActionCard(
@@ -156,59 +148,56 @@ fun SessionDetailScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
                     .verticalScroll(transcriptScrollState),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = detail?.title ?: "未选择会话",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
                     text = detail?.subtitle ?: "请先从会话列表中选择一个会话。",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
                     text = detail?.lastUpdated ?: "等待会话元数据",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                 )
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
                 )
             }
         }
-        OutlinedTextField(
-            value = draftMessage,
-            onValueChange = onDraftMessageChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(TestTags.SessionDetailDraftField),
-            label = {
-                Text(
-                    if (draftSession != null) {
-                        "先写下首条消息，发送后才真正创建线程"
-                    } else {
-                        "发送给 Codex"
-                    },
-                )
-            },
-        )
-        Button(
-            onClick = onSend,
-            enabled = !isLoading && detail != null && draftMessage.isNotBlank(),
-            modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(strokeWidth = 2.dp)
-            } else {
-                Text(if (draftSession != null) "开始对话" else "发送")
+            OutlinedTextField(
+                value = draftMessage,
+                onValueChange = onDraftMessageChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailDraftField),
+                label = {
+                    Text(
+                        if (draftSession != null) {
+                            "首条消息发送后才真正创建线程"
+                        } else {
+                            "发送给 Codex"
+                        },
+                    )
+                },
+                maxLines = 4,
+            )
+            Button(
+                onClick = onSend,
+                enabled = !isLoading && detail != null && draftMessage.isNotBlank(),
+                modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(strokeWidth = 2.dp)
+                } else {
+                    Text(if (draftSession != null) "开始" else "发送")
+                }
             }
-        }
-        Button(
-            onClick = onBack,
-            modifier = Modifier.testTag(TestTags.SessionDetailBackButton),
-        ) {
-            Text("返回会话列表")
         }
     }
 }
@@ -221,6 +210,7 @@ private fun StatusStrip(
     isDraft: Boolean,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
+    onOpenEditor: (SessionConfigEditor) -> Unit,
     onRefreshSession: () -> Unit,
 ) {
     val statusIcon = when {
@@ -245,15 +235,16 @@ private fun StatusStrip(
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag(TestTags.SessionDetailStatusButton),
+                    .testTag(TestTags.SessionDetailStatusButton)
+                    .clickable { onToggleExpanded() },
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 StatusGlyph(icon = statusIcon, label = localizedStatusLabel(detail?.status ?: "idle"))
                 StatusGlyph(
@@ -264,7 +255,8 @@ private fun StatusStrip(
                 if (sessionRealtimeState.pendingApproval != null) {
                     StatusGlyph(icon = Icons.Filled.HourglassTop, label = "待审批")
                 }
-                IconButton(onClick = onToggleExpanded, modifier = Modifier.weight(1f, fill = false)) {
+                Box(modifier = Modifier.weight(1f))
+                IconButton(onClick = onToggleExpanded) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                         contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
@@ -306,6 +298,10 @@ private fun StatusStrip(
                             )
                         }
                     }
+                    SessionConfigRow(
+                        detail = detail,
+                        onOpenEditor = onOpenEditor,
+                    )
                 }
             }
         }
@@ -322,7 +318,7 @@ private fun StatusGlyph(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(imageVector = icon, contentDescription = null)
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
+        Text(text = label, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -597,7 +593,7 @@ private fun TranscriptBubbleList(
                 Card(
                     modifier = Modifier
                         .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                        .widthIn(max = 320.dp),
+                        .fillMaxWidth(0.92f),
                     colors = CardDefaults.cardColors(containerColor = backgroundColor),
                 ) {
                     Column(

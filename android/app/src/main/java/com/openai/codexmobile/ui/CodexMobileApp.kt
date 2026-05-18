@@ -145,10 +145,6 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onRefreshSession = appViewModel::refreshSelectedSession,
-                    onBack = {
-                        appViewModel.discardDraftSession()
-                        navController.popBackStack()
-                    },
                 )
             }
             composable(Routes.SessionDetail) { entry ->
@@ -177,10 +173,6 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onRefreshSession = appViewModel::refreshSelectedSession,
-                    onBack = {
-                        appViewModel.closeSessionDetail(sessionId)
-                        navController.popBackStack()
-                    },
                 )
             }
             composable(Routes.Settings) {

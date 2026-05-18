@@ -1,20 +1,29 @@
 package com.openai.codexmobile
 
+import android.content.Intent
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ActivityScenario
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Before
 import com.openai.codexmobile.ui.TestTags
 import org.junit.Rule
 import org.junit.Test
 
 class SessionDetailReplayTest {
     @get:Rule
-    val composeRule = createAndroidComposeRule<ReplayHarnessActivity>()
+    val composeRule = createEmptyComposeRule()
+
+    @Before
+    fun launchHarness() {
+        ActivityScenario.launch<MainActivity>(replayHarnessIntent())
+    }
 
     @Test
     fun canReplayConnectionSessionListAndStructuredTranscript() {
@@ -28,6 +37,8 @@ class SessionDetailReplayTest {
         composeRule.onNodeWithTag(TestTags.SessionListItemPrefix + "session-test-001").performClick()
 
         waitForTag(TestTags.SessionDetailScreen)
+        composeRule.onNodeWithTag(TestTags.SessionDetailStatusButton).performClick()
+        waitForTag(TestTags.SessionDetailStatusDetails)
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigModelButton).assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigReasoningButton).assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigServiceTierButton).assertIsDisplayed()
@@ -55,5 +66,10 @@ class SessionDetailReplayTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()
         }
+    }
+
+    private fun replayHarnessIntent(): Intent {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        return Intent().setClassName(context, "com.openai.codexmobile.ReplayHarnessActivity")
     }
 }

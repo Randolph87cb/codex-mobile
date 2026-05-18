@@ -315,7 +315,7 @@ class AppViewModel(
             _uiState.update { state ->
                 state.copy(
                     isLoading = false,
-                    selectedSession = detail,
+                    selectedSession = mergeSessionDetail(state.selectedSession, detail),
                     queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = state.sessionRealtimeState.copy(
                         statusText = localizedSessionStatus(detail.status),
@@ -572,7 +572,10 @@ class AppViewModel(
                 )
                 _uiState.update {
                     if (it.selectedSession?.id == detail.id) {
-                        it.copy(selectedSession = updated, message = "已更新会话配置。")
+                        it.copy(
+                            selectedSession = mergeSessionDetail(it.selectedSession, updated),
+                            message = "已更新会话配置。",
+                        )
                     } else {
                         it
                     }
@@ -901,7 +904,7 @@ class AppViewModel(
         if (detail != null && uiState.value.selectedSession?.id == sessionId) {
             _uiState.update {
                 it.copy(
-                    selectedSession = detail,
+                    selectedSession = mergeSessionDetail(it.selectedSession, detail),
                     queuedInputs = queuedInputsFor(sessionId),
                 )
             }
@@ -1220,6 +1223,44 @@ private fun buildSessionSubtitle(
     status: String,
 ): String {
     return "$model • ${localizedApprovalMode(approvalMode)} • ${localizedSessionStatus(status)}"
+}
+
+private fun mergeSessionDetail(
+    current: SessionDetail?,
+    incoming: SessionDetail,
+): SessionDetail {
+    val model = incoming.model.takeUnless { it.isBlank() || it == "未知模型" }
+        ?: current?.model
+        ?: "gpt-5.5"
+    val approvalMode = incoming.approvalMode.takeUnless { it.isBlank() || it.startsWith("未知") }
+        ?: current?.approvalMode
+        ?: "manual"
+    val reasoningEffort = incoming.reasoningEffort.takeUnless { it.isBlank() || it == "unknown" }
+        ?: current?.reasoningEffort
+        ?: "medium"
+    val serviceTier = incoming.serviceTier.takeUnless { it.isBlank() || it == "unknown" }
+        ?: current?.serviceTier
+        ?: "fast"
+    val cwd = incoming.cwd.takeUnless { it.isBlank() || it == "未提供工作目录" }
+        ?: current?.cwd
+        ?: ""
+    val status = incoming.status.takeUnless { it.isBlank() || it == "unknown" }
+        ?: current?.status
+        ?: "idle"
+
+    return incoming.copy(
+        cwd = cwd,
+        model = model,
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
+        status = status,
+        subtitle = buildSessionSubtitle(
+            model = model,
+            approvalMode = approvalMode,
+            status = status,
+        ),
+    )
 }
 
 private fun appendUserMessage(
