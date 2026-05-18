@@ -2,9 +2,46 @@
 
 ## HTTP
 
+### `GET /health`
+
+公开诊断接口，不要求 token。
+
+响应示例：
+
+```json
+{
+  "ok": true,
+  "service": "codex-mobile-bridge",
+  "runnerMode": "mock",
+  "security": {
+    "tokenAuthEnabled": false,
+    "cwdWhitelistEnabled": false
+  }
+}
+```
+
+### 认证
+
+除 `/health` 外，所有 `/api/*` 接口在配置 `CODEX_MOBILE_AUTH_TOKEN` 后都要求：
+
+```http
+Authorization: Bearer <token>
+```
+
+未带 token 或 token 不匹配时返回：
+
+```json
+{
+  "error": "unauthorized",
+  "message": "missing bearer token"
+}
+```
+
 ### `POST /api/session`
 
 创建一个新会话。
+
+当配置 `CODEX_MOBILE_ALLOWED_CWDS` 后，`cwd` 必须是绝对路径，并且位于白名单目录内。
 
 请求体：
 
@@ -27,6 +64,15 @@
   "approvalMode": "manual",
   "createdAt": "2026-05-18T15:00:00.000Z",
   "updatedAt": "2026-05-18T15:00:00.000Z"
+}
+```
+
+白名单错误示例：
+
+```json
+{
+  "error": "cwd-not-allowed",
+  "message": "cwd is outside the allowed directories"
 }
 ```
 
@@ -131,3 +177,5 @@
   - `applyPatchApproval`
   - `execCommandApproval`
 - Android 当前已经实际调用 `GET /health`、`GET /api/sessions`、`POST /api/session`、`GET /api/session/:id`、`POST /api/session/:id/input`。
+- 默认不启用 token 认证；只有在设置 `CODEX_MOBILE_AUTH_TOKEN` 后才对 `/api/*` 生效。
+- 默认不启用 `cwd` 白名单；只有在设置 `CODEX_MOBILE_ALLOWED_CWDS` 后才限制创建会话目录。
