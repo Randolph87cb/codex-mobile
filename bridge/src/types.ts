@@ -1,4 +1,6 @@
 export type SessionStatus = "idle" | "running" | "awaiting_approval" | "error";
+export type JsonRpcRequestId = string | number;
+export type ApprovalDecision = "approve" | "approve_for_session" | "reject" | "reject_and_interrupt";
 
 export interface CreateSessionInput {
   cwd: string;
@@ -39,6 +41,18 @@ export interface SessionView {
 
 export interface SessionInput {
   text: string;
+}
+
+export interface SessionApprovalInput {
+  requestId?: JsonRpcRequestId;
+  decision?: ApprovalDecision;
+}
+
+export interface SessionApprovalResult {
+  requestId: JsonRpcRequestId;
+  status: SessionStatus;
+  decision: ApprovalDecision;
+  method: string;
 }
 
 export interface BridgeEvent {
