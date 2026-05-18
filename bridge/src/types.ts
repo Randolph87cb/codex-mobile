@@ -1,16 +1,17 @@
 export type SessionStatus = "idle" | "running" | "awaiting_approval" | "error";
+export type ApprovalMode = "manual" | "auto";
 
 export interface CreateSessionInput {
   cwd: string;
   model: string;
-  approvalMode: "manual" | "auto";
+  approvalMode: ApprovalMode;
 }
 
 export interface SessionRecord {
   id: string;
   cwd: string;
   model: string;
-  approvalMode: "manual" | "auto";
+  approvalMode: ApprovalMode;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;
@@ -28,7 +29,7 @@ export interface SessionView {
   source: "local" | "history";
   cwd: string;
   model: string;
-  approvalMode: "manual" | "auto";
+  approvalMode: ApprovalMode;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;
@@ -54,4 +55,14 @@ export interface BridgeEvent {
   sessionId: string;
   timestamp: string;
   data: Record<string, unknown>;
+}
+
+export interface BridgeSecurityConfig {
+  token: string | null;
+  allowedCwds: string[];
+}
+
+export interface BridgeSecurityState {
+  tokenAuthEnabled: boolean;
+  cwdWhitelistEnabled: boolean;
 }

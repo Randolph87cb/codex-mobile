@@ -4,21 +4,24 @@ import { z } from "zod";
 import { isHistoryCapableRunner, type BridgeRunner } from "./bridge-runner.js";
 import { AppServerRunner } from "./app-server-runner.js";
 import { MockRunner } from "./mock-runner.js";
+import { authorizeApiRequest, buildBridgeSecurityState, resolveBridgeSecurityConfig, validateSessionCwd } from "./security.js";
 import { SessionStore } from "./session-store.js";
+import type { BridgeSecurityConfig } from "./types.js";
 
 const createSessionSchema = z.object({
-  cwd: z.string().min(1),
-  model: z.string().min(1).default("gpt-5.5"),
+  cwd: z.string().trim().min(1),
+  model: z.string().trim().min(1).default("gpt-5.5"),
   approvalMode: z.enum(["manual", "auto"]).default("manual"),
 });
 
 const inputSchema = z.object({
-  text: z.string().min(1),
+  text: z.string().trim().min(1),
 });
 
 interface BuildBridgeAppOptions {
   runner?: BridgeRunner;
   store?: SessionStore;
+  security?: BridgeSecurityConfig;
 }
 
 export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promise<FastifyInstance> {
@@ -26,6 +29,8 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   const store = options.store ?? new SessionStore();
   const runner = options.runner ?? createRunner(store);
   const historyRunner = isHistoryCapableRunner(runner) ? runner : null;
+  const security = options.security ?? resolveBridgeSecurityConfig();
+  const securityState = buildBridgeSecurityState(security);
 
   await app.register(websocket);
 
@@ -33,10 +38,27 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     await runner.close?.();
   });
 
+  app.addHook("onRequest", async (request, reply) => {
+    const pathname = new URL(request.raw.url ?? "/", "http://bridge.local").pathname;
+    if (!pathname.startsWith("/api/")) {
+      return;
+    }
+
+    const authorization = authorizeApiRequest(request.headers.authorization, security);
+    if (!authorization.ok) {
+      reply.header("WWW-Authenticate", "Bearer");
+      return reply.status(401).send({
+        error: "unauthorized",
+        message: authorization.message,
+      });
+    }
+  });
+
   app.get("/health", async () => ({
     ok: true,
     service: "codex-mobile-bridge",
     runnerMode: runner.mode,
+    security: securityState,
   }));
 
   app.get("/api/sessions", async () => ({
@@ -52,7 +74,18 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       });
     }
 
-    const session = store.create(parsed.data);
+    const validatedCwd = validateSessionCwd(parsed.data.cwd, security);
+    if (!validatedCwd.ok) {
+      return reply.status(validatedCwd.error === "invalid-cwd" ? 400 : 403).send({
+        error: validatedCwd.error,
+        message: validatedCwd.message,
+      });
+    }
+
+    const session = store.create({
+      ...parsed.data,
+      cwd: validatedCwd.cwd ?? parsed.data.cwd,
+    });
     try {
       await runner.initializeSession(session.id);
     } catch (error) {
