@@ -102,6 +102,15 @@
   - 提交信息：`初始化 codex-mobile 项目`
 - 已推送到远端仓库：`https://github.com/Randolph87cb/codex-mobile.git`
 - 推送完成后已确认工作区干净，`origin/main` 跟踪关系已建立。
+- 已新增仓库根目录 `AGENTS.md`，用于后续 AI 持续开发协作。
+- `AGENTS.md` 已沉淀的重点包括：
+  - 项目固定架构与非目标
+  - bridge / Android 分层职责与改动边界
+  - `docs/generated/` 作为生成物的维护规则
+  - bridge / Android 的最小验证命令
+  - 中文 UI 文案默认约束
+  - 工作记录、Git 提交与推送流程
+  - 当前最重要的后续开发方向
 
 ## 当前结果
 
@@ -112,6 +121,7 @@
 - Android 客户端的主要界面文案已经切换为中文。
 - 已完成本机构建验证，当前已有可安装 `debug APK`。
 - 当前项目已接入 Git，并已完成首次推送。
+- 当前项目已具备项目级 `AGENTS.md` 协作约束，可直接供后续 AI 线程复用。
 
 ## 后续事项
 
