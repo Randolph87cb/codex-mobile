@@ -229,7 +229,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       });
     }
 
-    const session = await resolveSessionRecord(params.id, store, historyRunner);
+    const session = store.get(params.id) ?? await historyRunner?.attachSession(params.id) ?? null;
     if (!session) {
       return reply.status(404).send({ error: "session-not-found" });
     }
@@ -246,14 +246,17 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       cwd = validatedCwd.cwd ?? cwd;
     }
 
-    const updated = store.update(session.id, {
-      cwd,
-      model: body.data.model,
-      approvalMode: body.data.approvalMode,
-      reasoningEffort: body.data.reasoningEffort,
-      serviceTier: body.data.serviceTier,
-      sandboxMode: body.data.sandboxMode,
-    });
+    const updated = store.update(
+      session.id,
+      omitUndefinedFields({
+        cwd,
+        model: body.data.model,
+        approvalMode: body.data.approvalMode,
+        reasoningEffort: body.data.reasoningEffort,
+        serviceTier: body.data.serviceTier,
+        sandboxMode: body.data.sandboxMode,
+      }),
+    );
     return updated ?? session;
   });
 
@@ -581,6 +584,12 @@ async function resolveSessionRecord(
   }
 
   return store.get(sessionId);
+}
+
+function omitUndefinedFields<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as Partial<T>;
 }
 
 function createRunner(store: SessionStore): BridgeRunner {

@@ -115,6 +115,15 @@ enum class PendingImageUploadState {
     Failed,
 }
 
+private data class RequestedSessionConfigChange(
+    val cwd: String? = null,
+    val model: String? = null,
+    val approvalMode: String? = null,
+    val reasoningEffort: String? = null,
+    val serviceTier: String? = null,
+    val sandboxMode: String? = null,
+)
+
 class AppViewModel(
     private val bridgeApi: BridgeApi,
     private val sessionRepository: SessionRepository,
@@ -882,6 +891,14 @@ class AppViewModel(
         }
 
         val detail = uiState.value.selectedSession ?: return
+        val requestedChange = RequestedSessionConfigChange(
+            cwd = cwd,
+            model = model,
+            approvalMode = approvalMode,
+            reasoningEffort = reasoningEffort,
+            serviceTier = serviceTier,
+            sandboxMode = sandboxMode,
+        )
         val nextDetail = detail.copy(
             cwd = cwd ?: detail.cwd,
             model = model ?: detail.model,
@@ -919,7 +936,11 @@ class AppViewModel(
                 _uiState.update {
                     if (it.selectedSession?.id == detail.id) {
                         it.copy(
-                            selectedSession = mergeSessionDetail(it.selectedSession, updated),
+                            selectedSession = mergeSessionConfigUpdateResult(
+                                current = it.selectedSession,
+                                incoming = updated,
+                                requestedChange = requestedChange,
+                            ),
                             message = "已更新会话配置。",
                         )
                     } else {
@@ -1912,6 +1933,71 @@ private fun mergeSessionDetail(
             model = model,
             approvalMode = approvalMode,
             status = status,
+        ),
+    )
+}
+
+private fun mergeSessionConfigUpdateResult(
+    current: SessionDetail?,
+    incoming: SessionDetail,
+    requestedChange: RequestedSessionConfigChange,
+): SessionDetail {
+    val existing = current ?: return incoming
+    val cwd = if (requestedChange.cwd != null) {
+        incoming.cwd.takeUnless { it.isBlank() || it == "未提供工作目录" }
+            ?: requestedChange.cwd
+    } else {
+        existing.cwd
+    }
+    val model = if (requestedChange.model != null) {
+        incoming.model.takeUnless { it.isBlank() || it == "未知模型" }
+            ?: requestedChange.model
+    } else {
+        existing.model
+    }
+    val approvalMode = if (requestedChange.approvalMode != null) {
+        incoming.approvalMode.takeUnless { it.isBlank() || it.startsWith("未知") }
+            ?: requestedChange.approvalMode
+    } else {
+        existing.approvalMode
+    }
+    val reasoningEffort = if (requestedChange.reasoningEffort != null) {
+        incoming.reasoningEffort.takeUnless { it.isBlank() || it == "unknown" }
+            ?: requestedChange.reasoningEffort
+    } else {
+        existing.reasoningEffort
+    }
+    val serviceTier = if (requestedChange.serviceTier != null) {
+        incoming.serviceTier.takeUnless { it.isBlank() || it == "unknown" }
+            ?: requestedChange.serviceTier
+    } else {
+        existing.serviceTier
+    }
+    val sandboxMode = if (requestedChange.sandboxMode != null) {
+        incoming.sandboxMode.takeUnless { it.isBlank() || it == "unknown" }
+            ?: requestedChange.sandboxMode
+    } else {
+        existing.sandboxMode
+    }
+    val transcriptPreview = chooseMoreCompleteTranscript(
+        current = existing.transcriptPreview,
+        incoming = incoming.transcriptPreview,
+    )
+
+    return existing.copy(
+        title = incoming.title.takeUnless { it.isBlank() } ?: existing.title,
+        lastUpdated = incoming.lastUpdated.takeUnless { it.isBlank() } ?: existing.lastUpdated,
+        transcriptPreview = transcriptPreview,
+        cwd = cwd,
+        model = model,
+        approvalMode = approvalMode,
+        reasoningEffort = reasoningEffort,
+        serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
+        subtitle = buildSessionSubtitle(
+            model = model,
+            approvalMode = approvalMode,
+            status = existing.status,
         ),
     )
 }

@@ -403,6 +403,39 @@ class AppViewModelTest {
     }
 
     @Test
+    fun updatingSessionConfigWhileAwaitingApprovalKeepsUpdatedReasoningAndSandbox() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_pending_config", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_pending_config")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.ToolRequest(
+                sessionId = "sess_pending_config",
+                requestId = BridgeRequestId.Text("req-config"),
+                method = "item/commandExecution/requestApproval",
+                paramsSummary = "等待审批：配置变更前已有工具请求",
+                timestamp = "2026-05-19T20:00:00.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.updateSelectedSessionReasoningEffort("high")
+        viewModel.updateSelectedSessionSandboxMode("danger-full-access")
+        advanceUntilIdle()
+
+        assertEquals("awaiting_approval", viewModel.uiState.value.selectedSession?.status)
+        assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
+        assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
+    }
+
+    @Test
     fun updatingDraftConfigDoesNotOverwriteGlobalSettings() = runTest(dispatcher.scheduler) {
         val createdDetail = sampleDetail(id = "sess_draft_config", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = createdDetail)

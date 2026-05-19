@@ -46,14 +46,28 @@
 - 已修改文件：
   - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
   - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+  - `bridge/src/app.ts`
+  - `bridge/tests/app.test.ts`
+  - `android/app/src/androidTest/java/com/openai/codexmobile/SessionDetailConfigIsolationTest.kt`
+  - `android/app/src/androidTest/java/com/openai/codexmobile/SessionDetailConfigDialogRoutingTest.kt`
 - 结果：
   - 线程详情和草稿线程的配置编辑不再覆盖全局默认设置。
   - 新草稿线程仍然从全局默认设置初始化。
   - 草稿线程在局部改配后，真正创建远端会话时会使用草稿自己的配置。
+  - 已修复线程详情页“修改推理强度/文件权限后互相串值”的问题。
+  - 根因最终确认有两层：
+    - bridge `PATCH /api/session/:id/config` 对已存在会话会携带 `undefined` 字段写回 store，未修改字段会被清空；
+    - Android 在处理配置更新响应时，会把响应里未修改但已过时的字段和运行状态合并回当前会话。
+  - 本次修复：
+    - bridge 侧对已存在会话的配置 PATCH 不再先 attach/refresh，会话配置 patch 只写入有定义的字段；
+    - Android 侧新增“配置更新响应专用合并逻辑”，只接受当前请求真正修改的字段，并保留当前运行状态。
 - 验证：
+  - `cd bridge; npm run check`
+  - `cd bridge; npm test`
   - `cd android; .\gradlew.bat testDebugUnitTest`
+  - `cd android; .\gradlew.bat app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailConfigIsolationTest'`
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
-  - 两项均通过。
+  - 上述验证均通过。
 
 ## 可复用经验
 
@@ -72,3 +86,9 @@
 - [x] 与用户确认“全局默认设置”和“线程配置”是否需要彻底解耦。
 - [x] 若确认实施，调整 `AppViewModel.kt` 状态结构与回写逻辑。
 - [x] 补充 `AppViewModelTest.kt`，覆盖“线程配置不污染全局设置”和“新草稿仍使用全局默认值”。
+- [x] 使用模拟器和 Android instrumentation test 复现“线程详情页配置按钮显示串位/不刷新”的问题。
+- [x] 确认 `SessionDetailScreen` 独立交互路径正常：直接渲染页面时，推理强度与文件权限弹窗回调都指向正确字段，且外部 `SessionDetail` 变化能刷新按钮文案。
+- [x] 确认 `AppViewModel` 入参路径正常：日志显示修改推理强度时收到 `reasoningEffort=high`，修改文件权限时收到 `sandboxMode=danger-full-access`。
+- [x] 确认问题不在 bridge 字段名映射：Android PATCH payload、bridge `/api/session/:id/config` schema 与 store 更新字段均为 `reasoningEffort` / `sandboxMode`。
+- [x] 最终定位到真实根因不是按钮回调串位，而是“配置更新响应带回旧字段并被重新合并”：bridge PATCH 会把未定义字段写回 store，Android 又会把过时响应覆盖到当前会话。
+- [x] 已完成 bridge 与 Android 双侧修复，并通过模拟器回归用例验证。

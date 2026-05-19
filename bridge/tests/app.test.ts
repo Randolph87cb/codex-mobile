@@ -27,7 +27,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
   }));
   readonly interrupt = vi.fn(async () => undefined);
 
-  constructor(private readonly store: SessionStore) {}
+  constructor(protected readonly store: SessionStore) {}
 
   subscribe(): () => void {
     return () => undefined;
@@ -479,6 +479,49 @@ describe("buildBridgeApp", () => {
       serviceTier: "fast",
       sandboxMode: "danger-full-access",
     });
+
+    await app.close();
+  });
+
+  test("patching an existing session config does not refresh stale thread values first", async () => {
+    const store = new SessionStore();
+    const runner = new class extends TestRunner {
+      override async attachSession(sessionId: string) {
+        return this.store.update(sessionId, {
+          reasoningEffort: "medium",
+          sandboxMode: "workspace-write",
+          status: "idle",
+        }) ?? null;
+      }
+    }(store);
+    const attachSpy = vi.spyOn(runner, "attachSession");
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "high",
+      serviceTier: "fast",
+      sandboxMode: "danger-full-access",
+    });
+    store.update(session.id, { status: "awaiting_approval" });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/session/${session.id}/config`,
+      payload: {
+        sandboxMode: "workspace-write",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: session.id,
+      reasoningEffort: "high",
+      sandboxMode: "workspace-write",
+      status: "awaiting_approval",
+    });
+    expect(attachSpy).not.toHaveBeenCalled();
 
     await app.close();
   });
