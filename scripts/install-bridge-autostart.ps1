@@ -30,7 +30,7 @@ if ($AtStartup) {
     Write-Host "Registering startup scheduled task: $TaskName (SYSTEM)"
 } else {
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
-    $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType InteractiveToken -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Highest
     Write-Host "Registering logon scheduled task: $TaskName ($currentUser)"
 }
 

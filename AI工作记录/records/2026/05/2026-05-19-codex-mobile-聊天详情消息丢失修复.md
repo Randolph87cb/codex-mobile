@@ -431,3 +431,15 @@
   - `Invoke-RestMethod http://127.0.0.1:18787/health` 返回 `ok=true`
   - `powershell -ExecutionPolicy Bypass -File .\scripts\stop-bridge-background.ps1` 成功停止后台 bridge
 
+## 后续补充处理（十二）
+- 用户要求直接注册 bridge 为“登录自启动”。
+- 实际处理：
+  - 先用 `scripts/install-bridge-autostart.ps1` 注册计划任务。
+  - 过程中发现 `New-ScheduledTaskPrincipal -LogonType InteractiveToken` 在当前系统枚举名不兼容，修正为 `Interactive`。
+  - 计划任务最终注册为：
+    - 任务名：`CodexMobileBridge`
+    - 触发方式：`At logon time`
+    - 运行用户：`Administrator`
+    - 执行命令：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/restart-bridge-background.ps1 ...`
+  - 实际执行 `Start-ScheduledTask -TaskName "CodexMobileBridge"` 后，`http://127.0.0.1:8787/health` 返回 `ok=true`，确认登录自启动链路有效。
+
