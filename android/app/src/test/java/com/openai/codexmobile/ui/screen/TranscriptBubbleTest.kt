@@ -1,5 +1,6 @@
 package com.openai.codexmobile.ui.screen
 
+import com.openai.codexmobile.model.SessionActivityEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -140,5 +141,47 @@ class TranscriptBubbleTest {
         val group = items[1] as TranscriptDisplayItem.ExecutionGroup
         assertEquals(listOf("命令执行", "文件编辑"), group.activities.map { it.summaryLine })
         assertEquals("命令执行 · 文件编辑", group.summaryLine)
+    }
+
+    @Test
+    fun parseTranscriptBubblesTreatsSingleLineExecutionTitlesAsActivities() {
+        val transcript = "系统：推理摘要"
+
+        val bubble = parseTranscriptBubbles(transcript).single()
+
+        assertEquals("推理摘要", bubble.title)
+        assertTrue(bubble.parts.isEmpty())
+        assertTrue(bubble.belongsToExecutionProcess)
+    }
+
+    @Test
+    fun buildTranscriptDisplayItemsAppendsLiveActivitiesIntoExecutionGroup() {
+        val transcript = """
+            你：继续
+
+            Codex：我先检查一下。
+        """.trimIndent()
+
+        val items = buildTranscriptDisplayItems(
+            transcript = transcript,
+            liveActivities = listOf(
+                SessionActivityEntry(
+                    stableId = "reasoning-1",
+                    itemType = "reasoning",
+                    itemId = "reasoning-1",
+                    title = "推理摘要",
+                    body = "README 大体跟上了。",
+                    summary = "README 大体跟上了。",
+                    transcriptBlock = "系统：推理摘要\nREADME 大体跟上了。",
+                    updatedAt = "2026-05-19T10:05:00Z",
+                ),
+            ),
+        )
+
+        assertEquals(3, items.size)
+        assertTrue(items[2] is TranscriptDisplayItem.ExecutionGroup)
+        val group = items[2] as TranscriptDisplayItem.ExecutionGroup
+        assertEquals(listOf("推理摘要"), group.activities.map { it.summaryLine })
+        assertEquals("README 大体跟上了。", (group.activities.single().parts.single() as TranscriptPart.Text).text)
     }
 }

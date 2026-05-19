@@ -471,3 +471,53 @@
 - 说明：
   - 本次仅修改协作规则与工作记录，没有涉及代码逻辑，未执行测试。
 
+## 后续补充处理（十五）
+- 用户反馈会话详情里的“系统摘要”表现异常：
+  - 有些卡片折叠后只剩“系统 / 推理摘要”；
+  - 有些标题很长，像把正文塞进了标题；
+  - 有些非对话型系统消息没有并入“执行过程”。
+- 本次先做只读排查，不修改代码。
+- 当前定位到的主要原因：
+  - `bridge/src/app-server-runner.ts` 对 `reasoning` 使用 `item/reasoning/summaryTextDelta` 逐段发 `activity` 事件，每个 delta 都会变成一条单独的系统块。
+  - Android `AppViewModel.kt` 在收到 `SessionStreamEvent.Activity` 后，只把 `transcriptBlock` 作为纯文本追加进 transcript，丢弃了 `itemType`、`itemId` 和 `summary` 元数据，后续无法按同一执行项做聚合。
+  - Android `TranscriptBubble.kt` 当前只靠文本规则判断是否属于“执行过程”：`speaker == System && title != null`。只要系统块不是标准的“系统：标题 + 换行 + 正文”两行结构，就会退化成单独系统卡片，且 `summaryLine` 会直接取正文首行，导致标题过长、看起来像正文。
+  - “执行过程”目前只会合并连续的系统活动块；一旦中间插入无法识别为活动的系统块，分组就会被打断。
+- 说明：
+  - 这次是原因分析，没有改代码，也未执行测试。
+
+## 后续补充处理（十六）
+- 用户确认按“彻底修复”推进，而不是只做标题截断或 UI 层止血。
+- 实际修改：
+  - `bridge/src/app-server-runner.ts`
+    - 为 `activity` 事件补充结构化字段 `title`、`body`、`summary`。
+    - `reasoning` 改为按 `sessionId + itemId` 聚合增量文本；同一个 reasoning item 持续更新同一条活动，而不是每个 delta 生成一张新卡片。
+    - 在 turn 结束、线程转空闲/错误、中断时清理对应会话的 reasoning 聚合缓存。
+  - `bridge/src/session-view.ts`
+    - 历史线程里的 `reasoning` 如果没有任何正文内容，不再生成空的“推理摘要”系统块。
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+    - `SessionRealtimeUiState` 新增结构化 `liveExecutionActivities`。
+    - 收到 `SessionStreamEvent.Activity` 后不再把系统活动直接拼进 `transcriptPreview` 文本，而是按 `itemId`/稳定键更新实时执行活动列表。
+    - 会话快照刷新到 `idle/error` 时清空实时执行活动，避免历史详情落地后出现重复。
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptBubble.kt`
+    - 增加执行类系统标题集合，单行 `系统：推理摘要` 这类块会被识别为真正的执行活动标题，而不是正文。
+    - `buildTranscriptDisplayItems` 支持把实时活动列表追加/并入“执行过程”。
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+    - 详情页 transcript 现在同时渲染历史 transcript 和实时结构化执行活动。
+    - 折叠标题限制为最多两行，超出省略，避免正文占满标题区。
+- 测试补充：
+  - `bridge/tests/app-server-runner.test.ts`
+    - 覆盖结构化 `activity` 字段和 reasoning delta 聚合。
+  - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+    - 覆盖实时活动不再写回 transcript、按 `itemId` 合并 reasoning。
+  - `android/app/src/test/java/com/openai/codexmobile/ui/screen/TranscriptBubbleTest.kt`
+    - 覆盖单行执行标题识别和 live activity 进入执行过程。
+  - `android/app/src/androidTest/java/com/openai/codexmobile/SessionDetailTranscriptCollapseTest.kt`
+    - 覆盖实时执行活动在模拟器上的折叠/展开显示。
+- 本次验证：
+  - `cd bridge && npm run check`：通过
+  - `cd bridge && npm test`：通过
+  - `cd android && .\gradlew.bat testDebugUnitTest`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+  - 为满足模拟器验证，本次额外创建并启动了测试专用 AVD：`codex-mobile-api35`（headless）
+

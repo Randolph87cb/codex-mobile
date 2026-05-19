@@ -36,6 +36,15 @@ interface PendingApproval {
   params: Record<string, unknown>;
 }
 
+interface ActivityPayload {
+  itemType: string;
+  itemId?: string;
+  title: string;
+  body: string | null;
+  transcriptBlock: string;
+  summary: string;
+}
+
 interface AppServerRpcClient {
   request<TResult>(method: string, params: unknown): Promise<TResult>;
   onNotification(listener: (message: JsonRpcNotification) => void): () => void;
@@ -80,6 +89,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   private readonly threadToSession = new Map<string, string>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   private readonly sessionApprovalKeys = new Map<string, string[]>();
+  private readonly reasoningActivityBodies = new Map<string, string>();
   private readonly client: AppServerRpcClient;
 
   constructor(
@@ -198,6 +208,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       status: "idle",
     });
     this.clearPendingApprovals(sessionId);
+    this.clearActivityState(sessionId);
     this.emit(sessionId, {
       type: "run.interrupted",
       sessionId,
@@ -481,6 +492,9 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     if (status !== "awaiting_approval") {
       this.clearPendingApprovals(sessionId);
     }
+    if (status === "idle" || status === "error") {
+      this.clearActivityState(sessionId);
+    }
     this.emitStatus(sessionId, status, { sourceStatus: payload.status });
   }
 
@@ -542,6 +556,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
 
     const status = payload.turn.status === "failed" ? "error" : "idle";
     this.clearPendingApprovals(sessionId);
+    this.clearActivityState(sessionId);
     this.store.update(sessionId, {
       activeTurnId: null,
       status,
@@ -578,22 +593,16 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return;
     }
 
-    const transcriptBlock = formatThreadItemAsTranscriptBlock(payload.item);
-    if (!transcriptBlock) {
+    const activity = buildActivityPayload(
+      payload.item.type ?? "unknown",
+      payload.item.id,
+      formatThreadItemAsTranscriptBlock(payload.item),
+    );
+    if (!activity) {
       return;
     }
 
-    this.emit(sessionId, {
-      type: "activity",
-      sessionId,
-      timestamp: new Date().toISOString(),
-      data: {
-        itemType: payload.item.type ?? "unknown",
-        itemId: payload.item.id,
-        transcriptBlock,
-        summary: summarizeTranscriptBlock(transcriptBlock),
-      },
-    });
+    this.emitActivity(sessionId, activity);
   }
 
   private handleFileChangePatchUpdated(params: unknown): void {
@@ -617,21 +626,16 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return;
     }
 
-    const transcriptBlock = [
-      "系统：文件修改进度",
-      ...changedPaths.slice(0, 6).map((path) => `涉及：${path}`),
-    ].join("\n");
-
-    this.emit(sessionId, {
-      type: "activity",
-      sessionId,
-      timestamp: new Date().toISOString(),
-      data: {
-        itemType: "fileChange",
-        itemId: payload.itemId,
-        transcriptBlock,
-        summary: "文件修改进度",
-      },
+    this.emitActivity(sessionId, {
+      itemType: "fileChange",
+      itemId: payload.itemId,
+      title: "文件修改进度",
+      body: changedPaths.slice(0, 6).map((path) => `涉及：${path}`).join("\n"),
+      transcriptBlock: [
+        "系统：文件修改进度",
+        ...changedPaths.slice(0, 6).map((path) => `涉及：${path}`),
+      ].join("\n"),
+      summary: "文件修改进度",
     });
   }
 
@@ -651,17 +655,13 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return;
     }
 
-    const transcriptBlock = `系统：工具调用进度\n${message}`;
-    this.emit(sessionId, {
-      type: "activity",
-      sessionId,
-      timestamp: new Date().toISOString(),
-      data: {
-        itemType: "mcpToolCall",
-        itemId: payload.itemId,
-        transcriptBlock,
-        summary: message,
-      },
+    this.emitActivity(sessionId, {
+      itemType: "mcpToolCall",
+      itemId: payload.itemId,
+      title: "工具调用进度",
+      body: message,
+      transcriptBlock: `系统：工具调用进度\n${message}`,
+      summary: message,
     });
   }
 
@@ -681,17 +681,16 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return;
     }
 
-    const transcriptBlock = `系统：推理摘要\n${delta}`;
-    this.emit(sessionId, {
-      type: "activity",
-      sessionId,
-      timestamp: new Date().toISOString(),
-      data: {
-        itemType: "reasoning",
-        itemId: payload.itemId,
-        transcriptBlock,
-        summary: delta,
-      },
+    const activityKey = buildActivityKey(sessionId, payload.itemId, "reasoning");
+    const nextBody = mergeActivityBodies(this.reasoningActivityBodies.get(activityKey) ?? null, delta);
+    this.reasoningActivityBodies.set(activityKey, nextBody);
+    this.emitActivity(sessionId, {
+      itemType: "reasoning",
+      itemId: payload.itemId,
+      title: "推理摘要",
+      body: nextBody,
+      transcriptBlock: `系统：推理摘要\n${nextBody}`,
+      summary: delta,
     });
   }
 
@@ -958,6 +957,30 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       this.pendingApprovals.delete(key);
     }
     this.sessionApprovalKeys.delete(sessionId);
+  }
+
+  private clearActivityState(sessionId: string): void {
+    for (const key of this.reasoningActivityBodies.keys()) {
+      if (key.startsWith(`${sessionId}:`)) {
+        this.reasoningActivityBodies.delete(key);
+      }
+    }
+  }
+
+  private emitActivity(sessionId: string, activity: ActivityPayload): void {
+    this.emit(sessionId, {
+      type: "activity",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        itemType: activity.itemType,
+        itemId: activity.itemId,
+        title: activity.title,
+        body: activity.body,
+        transcriptBlock: activity.transcriptBlock,
+        summary: activity.summary,
+      },
+    });
   }
 
   private buildApprovalResponse(pending: PendingApproval, decision: ApprovalDecision): Record<string, unknown> {
@@ -1242,4 +1265,49 @@ function summarizeTranscriptBlock(block: string): string {
   }
 
   return firstMeaningfulLine;
+}
+
+function buildActivityPayload(
+  itemType: string,
+  itemId: string | undefined,
+  transcriptBlock: string | null,
+): ActivityPayload | null {
+  if (!transcriptBlock) {
+    return null;
+  }
+
+  const lines = transcriptBlock
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const firstLine = lines[0] ?? "";
+  const title = firstLine.startsWith("系统：") ? firstLine.slice("系统：".length).trim() : firstLine;
+  if (!title) {
+    return null;
+  }
+
+  const body = lines.slice(1).join("\n").trim() || null;
+  return {
+    itemType,
+    itemId,
+    title,
+    body,
+    transcriptBlock,
+    summary: body ? title : summarizeTranscriptBlock(transcriptBlock),
+  };
+}
+
+function buildActivityKey(sessionId: string, itemId: string | undefined, itemType: string): string {
+  return `${sessionId}:${itemId ?? itemType}`;
+}
+
+function mergeActivityBodies(currentBody: string | null, delta: string): string {
+  if (!currentBody) {
+    return delta;
+  }
+  return `${currentBody}\n${delta}`.trim();
 }

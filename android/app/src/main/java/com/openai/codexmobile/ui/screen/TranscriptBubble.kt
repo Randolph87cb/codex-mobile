@@ -1,5 +1,7 @@
 package com.openai.codexmobile.ui.screen
 
+import com.openai.codexmobile.model.SessionActivityEntry
+
 internal enum class TranscriptSpeaker {
     User,
     Assistant,
@@ -35,6 +37,21 @@ internal data class TranscriptBubble(
     val parts: List<TranscriptPart>,
 )
 
+private val ExecutionActivityTitles = setOf(
+    "计划更新",
+    "推理摘要",
+    "命令执行",
+    "文件编辑",
+    "文件修改进度",
+    "工具调用进度",
+    "网页搜索",
+    "查看图片",
+    "图片生成",
+    "进入审查模式",
+    "退出审查模式",
+    "上下文压缩",
+)
+
 internal sealed interface TranscriptDisplayItem {
     data class BubbleItem(
         val bubble: TranscriptBubble,
@@ -49,10 +66,14 @@ internal val TranscriptBubble.prefersExpandedByDefault: Boolean
     get() = speaker == TranscriptSpeaker.User || (speaker == TranscriptSpeaker.Assistant && kind == TranscriptBubbleKind.Message)
 
 internal val TranscriptBubble.summaryLine: String
-    get() = title
+    get() = title?.takeIf { it.isNotBlank() }
         ?: parts.firstNotNullOfOrNull { part ->
             when (part) {
-                is TranscriptPart.Text -> part.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+                is TranscriptPart.Text -> part.text
+                    .lineSequence()
+                    .firstOrNull { it.isNotBlank() }
+                    ?.trim()
+                    ?.take(120)
                 is TranscriptPart.Image -> part.altText.ifBlank { "图片" }
                 is TranscriptPart.CodeBlock -> part.language?.takeIf { it.isNotBlank() } ?: "代码块"
             }
@@ -60,7 +81,16 @@ internal val TranscriptBubble.summaryLine: String
         ?: label
 
 internal val TranscriptBubble.belongsToExecutionProcess: Boolean
-    get() = speaker == TranscriptSpeaker.System && title != null && !prefersExpandedByDefault
+    get() = speaker == TranscriptSpeaker.System &&
+        !prefersExpandedByDefault &&
+        when (kind) {
+            TranscriptBubbleKind.ToolRequest,
+            TranscriptBubbleKind.ToolResult,
+            -> true
+
+            TranscriptBubbleKind.Status -> title?.let { it in ExecutionActivityTitles } == true
+            TranscriptBubbleKind.Message -> false
+        }
 
 internal val TranscriptDisplayItem.ExecutionGroup.summaryLine: String
     get() {
@@ -106,12 +136,11 @@ internal fun parseTranscriptBubbles(transcript: String): List<TranscriptBubble> 
     return bubbles
 }
 
-internal fun buildTranscriptDisplayItems(transcript: String): List<TranscriptDisplayItem> {
+internal fun buildTranscriptDisplayItems(
+    transcript: String,
+    liveActivities: List<SessionActivityEntry> = emptyList(),
+): List<TranscriptDisplayItem> {
     val bubbles = parseTranscriptBubbles(transcript)
-    if (bubbles.isEmpty()) {
-        return emptyList()
-    }
-
     val items = mutableListOf<TranscriptDisplayItem>()
     val pendingActivities = mutableListOf<TranscriptBubble>()
 
@@ -132,6 +161,18 @@ internal fun buildTranscriptDisplayItems(transcript: String): List<TranscriptDis
         }
     }
     flushActivities()
+
+    val liveActivityBubbles = liveActivities.map { it.toTranscriptBubble() }
+    if (liveActivityBubbles.isNotEmpty()) {
+        val lastItem = items.lastOrNull()
+        if (lastItem is TranscriptDisplayItem.ExecutionGroup) {
+            items[items.lastIndex] = lastItem.copy(
+                activities = lastItem.activities + liveActivityBubbles,
+            )
+        } else {
+            items += TranscriptDisplayItem.ExecutionGroup(liveActivityBubbles)
+        }
+    }
 
     return items
 }
@@ -244,7 +285,12 @@ private fun splitTitleAndParts(body: String): Pair<String?, List<TranscriptPart>
 
     val lines = normalized.lines()
     if (lines.size <= 1) {
-        return null to parseTranscriptParts(normalized)
+        val singleLine = lines.firstOrNull()?.trim().orEmpty()
+        return if (singleLine in ExecutionActivityTitles) {
+            singleLine to emptyList()
+        } else {
+            null to parseTranscriptParts(normalized)
+        }
     }
 
     val title = lines.first().trim().ifBlank { null }
@@ -299,4 +345,18 @@ private fun parseTranscriptParts(body: String): List<TranscriptPart> {
     }
 
     return parts.ifEmpty { listOf(TranscriptPart.Text(trimmed)) }
+}
+
+private fun SessionActivityEntry.toTranscriptBubble(): TranscriptBubble {
+    val parts = body
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::parseTranscriptParts)
+        ?: emptyList()
+    return TranscriptBubble(
+        speaker = TranscriptSpeaker.System,
+        kind = TranscriptBubbleKind.Status,
+        label = "系统",
+        title = title,
+        parts = parts,
+    )
 }

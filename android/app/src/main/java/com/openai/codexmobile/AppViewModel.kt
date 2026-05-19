@@ -19,6 +19,7 @@ import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
+import com.openai.codexmobile.model.SessionActivityEntry
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.CancellationException
@@ -88,6 +89,7 @@ data class SessionRealtimeUiState(
     val lastEventText: String? = null,
     val fallbackNotice: String? = null,
     val pendingApproval: PendingApprovalUiState? = null,
+    val liveExecutionActivities: List<SessionActivityEntry> = emptyList(),
 )
 
 data class PendingApprovalUiState(
@@ -1102,6 +1104,11 @@ class AppViewModel(
                             lastEventText = "会话实时流已就绪。",
                             fallbackNotice = null,
                             pendingApproval = null,
+                            liveExecutionActivities = if (event.status == "running" || event.status == "awaiting_approval") {
+                                it.sessionRealtimeState.liveExecutionActivities
+                            } else {
+                                emptyList()
+                            },
                         ),
                     )
                 }
@@ -1167,19 +1174,15 @@ class AppViewModel(
                     return
                 }
 
+                val activityEntry = event.toActivityEntry() ?: return
                 _uiState.update {
                     it.copy(
-                        selectedSession = it.selectedSession
-                            ?.let { detail ->
-                                appendSystemMessage(
-                                    detail = detail,
-                                    message = event.transcriptBlock,
-                                    timestamp = event.timestamp,
-                                )
-                            }
-                            ?.copy(lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             lastEventText = summarizeActivityEvent(event),
+                            liveExecutionActivities = upsertLiveExecutionActivity(
+                                current = it.sessionRealtimeState.liveExecutionActivities,
+                                incoming = activityEntry,
+                            ),
                         ),
                     )
                 }
@@ -1376,6 +1379,11 @@ class AppViewModel(
                             it.sessionRealtimeState.pendingApproval
                         } else {
                             null
+                        },
+                        liveExecutionActivities = if (merged.status == "running" || merged.status == "awaiting_approval") {
+                            it.sessionRealtimeState.liveExecutionActivities
+                        } else {
+                            emptyList()
                         },
                     ),
                 )
@@ -2112,6 +2120,61 @@ private data class AssistantDeltaRenderResult(
     val detail: SessionDetail,
     val activeTurnId: String,
 )
+
+private fun SessionStreamEvent.Activity.toActivityEntry(): SessionActivityEntry? {
+    val normalizedTitle = title?.trim().takeUnless { it.isNullOrEmpty() }
+        ?: transcriptBlock
+            .lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() }
+            ?.removePrefix("系统：")
+            ?.trim()
+            ?.takeUnless { it.isEmpty() }
+        ?: return null
+    val normalizedBody = body?.trim().takeUnless { it.isNullOrEmpty() }
+    val normalizedSummary = summary?.trim().takeUnless { it.isNullOrEmpty() }
+        ?: normalizedBody
+            ?.lineSequence()
+            ?.map { it.trim() }
+            ?.firstOrNull { it.isNotEmpty() }
+            ?.take(120)
+        ?: normalizedTitle
+    val stableId = itemId?.trim().takeUnless { it.isNullOrEmpty() }
+        ?: buildString {
+            append(itemType?.trim().takeUnless { it.isNullOrEmpty() } ?: "system")
+            append(":")
+            append(normalizedTitle)
+            append(":")
+            append(timestamp ?: "live")
+        }
+    return SessionActivityEntry(
+        stableId = stableId,
+        itemType = itemType,
+        itemId = itemId,
+        title = normalizedTitle,
+        body = normalizedBody,
+        summary = normalizedSummary,
+        transcriptBlock = transcriptBlock,
+        updatedAt = timestamp,
+    )
+}
+
+private fun upsertLiveExecutionActivity(
+    current: List<SessionActivityEntry>,
+    incoming: SessionActivityEntry,
+): List<SessionActivityEntry> {
+    val existingIndex = current.indexOfFirst { entry -> entry.stableId == incoming.stableId }
+    if (existingIndex < 0) {
+        return current + incoming
+    }
+    return current.mapIndexed { index, entry ->
+        if (index != existingIndex) {
+            entry
+        } else {
+            incoming
+        }
+    }
+}
 
 private fun summarizeActivityEvent(event: SessionStreamEvent.Activity): String {
     val summary = event.summary?.trim()

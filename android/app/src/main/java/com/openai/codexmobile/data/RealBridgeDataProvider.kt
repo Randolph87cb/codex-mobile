@@ -520,6 +520,8 @@ private fun parseSessionStreamEvent(
                     sessionId = eventSessionId,
                     itemType = data.optString("itemType").takeIf { it.isNotBlank() },
                     itemId = data.optString("itemId").takeIf { it.isNotBlank() },
+                    title = data.optString("title").takeIf { it.isNotBlank() },
+                    body = data.optString("body").takeIf { it.isNotBlank() },
                     transcriptBlock = transcriptBlock,
                     summary = data.optString("summary").takeIf { it.isNotBlank() },
                     timestamp = timestamp,

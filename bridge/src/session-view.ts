@@ -224,13 +224,13 @@ export function formatThreadItemAsTranscriptBlock(item: AppServerThreadItem): st
     case "plan":
       return buildSystemBlock("计划更新", [normalizeText(item.text)]);
     case "reasoning":
-      return buildSystemBlock(
-        "推理摘要",
-        [
+      {
+        const reasoningLines = [
           item.summary?.map((part) => part.trim()).filter(Boolean).join("\n"),
           item.text,
-        ],
-      );
+        ].map((part) => normalizeText(part)).filter((part): part is string => part !== null);
+        return reasoningLines.length > 0 ? buildSystemBlock("推理摘要", reasoningLines) : null;
+      }
     case "commandExecution":
       return buildCommandExecutionBlock(item);
     case "fileChange":

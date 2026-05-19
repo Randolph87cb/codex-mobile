@@ -131,7 +131,7 @@ class AppViewModelTest {
     }
 
     @Test
-    fun activityEventAppendsOperationTranscriptAndUpdatesRealtimeSummary() = runTest(dispatcher.scheduler) {
+    fun activityEventTracksStructuredExecutionActivityAndUpdatesRealtimeSummary() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_activity", status = "running")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
@@ -148,6 +148,8 @@ class AppViewModelTest {
                 sessionId = "sess_activity",
                 itemType = "commandExecution",
                 itemId = "item-1",
+                title = "命令执行",
+                body = "命令：npm test",
                 transcriptBlock = "系统：命令执行\n命令：npm test",
                 summary = "命令执行",
                 timestamp = "2026-05-19T10:05:00Z",
@@ -155,10 +157,62 @@ class AppViewModelTest {
         )
         advanceUntilIdle()
 
-        assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("系统：命令执行\n命令：npm test") == true,
-        )
+        assertEquals("工作目录：D:\\workspace\\codex-mobile", viewModel.uiState.value.selectedSession?.transcriptPreview)
         assertEquals("命令执行", viewModel.uiState.value.sessionRealtimeState.lastEventText)
+        assertEquals(1, viewModel.uiState.value.sessionRealtimeState.liveExecutionActivities.size)
+        val activity = viewModel.uiState.value.sessionRealtimeState.liveExecutionActivities.single()
+        assertEquals("item-1", activity.stableId)
+        assertEquals("命令执行", activity.title)
+        assertEquals("命令：npm test", activity.body)
+    }
+
+    @Test
+    fun activityEventMergesReasoningDeltasByItemId() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_reasoning", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_reasoning")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.Activity(
+                sessionId = "sess_reasoning",
+                itemType = "reasoning",
+                itemId = "reasoning-1",
+                title = "推理摘要",
+                body = "README 大体跟上了。",
+                transcriptBlock = "系统：推理摘要\nREADME 大体跟上了。",
+                summary = "README 大体跟上了。",
+                timestamp = "2026-05-19T10:05:00Z",
+            ),
+        )
+        bridgeApi.emit(
+            SessionStreamEvent.Activity(
+                sessionId = "sess_reasoning",
+                itemType = "reasoning",
+                itemId = "reasoning-1",
+                title = "推理摘要",
+                body = "README 大体跟上了。\n还要检查 docs/api.md。",
+                transcriptBlock = "系统：推理摘要\nREADME 大体跟上了。\n还要检查 docs/api.md。",
+                summary = "还要检查 docs/api.md。",
+                timestamp = "2026-05-19T10:05:01Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        val activities = viewModel.uiState.value.sessionRealtimeState.liveExecutionActivities
+        assertEquals(1, activities.size)
+        assertEquals("推理摘要", activities.single().title)
+        assertEquals(
+            "README 大体跟上了。\n还要检查 docs/api.md。",
+            activities.single().body,
+        )
+        assertEquals("还要检查 docs/api.md。", viewModel.uiState.value.sessionRealtimeState.lastEventText)
     }
 
     @Test

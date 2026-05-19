@@ -419,6 +419,8 @@ describe("AppServerRunner", () => {
             itemType: "commandExecution",
             itemId: "item-command",
             summary: "命令执行",
+            title: "命令执行",
+            body: expect.stringContaining("命令：npm test"),
             transcriptBlock: expect.stringContaining("命令：npm test"),
           }),
         }),
@@ -428,10 +430,64 @@ describe("AppServerRunner", () => {
             itemType: "fileChange",
             itemId: "item-file",
             summary: "文件修改进度",
+            title: "文件修改进度",
+            body: expect.stringContaining("涉及：android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt"),
             transcriptBlock: expect.stringContaining("涉及：android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt"),
           }),
         }),
       ]),
+    );
+  });
+
+  test("aggregates reasoning summary deltas by item id", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    const runner = new AppServerRunner(store, client);
+    const events: BridgeEvent[] = [];
+    runner.subscribe("sess-1", (event) => {
+      events.push(event);
+    });
+
+    client.emitNotification({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        threadId: "thread-1",
+        itemId: "reasoning-1",
+        delta: "README 大体跟上了。",
+      },
+    });
+    client.emitNotification({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        threadId: "thread-1",
+        itemId: "reasoning-1",
+        delta: "还要检查 docs/api.md。",
+      },
+    });
+
+    const reasoningEvents = events.filter((event) => event.type === "activity");
+    expect(reasoningEvents).toHaveLength(2);
+    expect(reasoningEvents[0]).toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          itemType: "reasoning",
+          itemId: "reasoning-1",
+          title: "推理摘要",
+          body: "README 大体跟上了。",
+          summary: "README 大体跟上了。",
+        }),
+      }),
+    );
+    expect(reasoningEvents[1]).toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          itemType: "reasoning",
+          itemId: "reasoning-1",
+          title: "推理摘要",
+          body: "README 大体跟上了。\n还要检查 docs/api.md。",
+          summary: "还要检查 docs/api.md。",
+        }),
+      }),
     );
   });
 

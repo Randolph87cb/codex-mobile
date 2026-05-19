@@ -47,6 +47,8 @@ sealed interface SessionStreamEvent {
         override val sessionId: String,
         val itemType: String?,
         val itemId: String?,
+        val title: String?,
+        val body: String?,
         val transcriptBlock: String,
         val summary: String?,
         override val timestamp: String?,

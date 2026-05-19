@@ -216,6 +216,7 @@ fun SessionDetailScreen(
                 )
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
+                    liveActivities = sessionRealtimeState.liveExecutionActivities,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onOpenImagePreview = { title, source ->
@@ -828,11 +829,15 @@ private fun QueuedInputCard(
 @Composable
 private fun TranscriptBubbleList(
     transcript: String,
+    liveActivities: List<com.openai.codexmobile.model.SessionActivityEntry>,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
-    val items = buildTranscriptDisplayItems(transcript)
+    val items = buildTranscriptDisplayItems(
+        transcript = transcript,
+        liveActivities = liveActivities,
+    )
     if (items.isEmpty()) {
         Text(
             text = "这里会显示会话内容、实时回复和结束状态。",
@@ -913,6 +918,8 @@ private fun TranscriptBubbleCard(
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -1044,6 +1051,8 @@ private fun TranscriptToggleHeader(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Icon(
