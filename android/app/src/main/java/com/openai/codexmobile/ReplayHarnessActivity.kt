@@ -157,6 +157,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
             id = "replay-image",
             displayName = request.displayName,
             mimeType = request.mimeType,
+            stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\replay-image.png",
         )
     }
 

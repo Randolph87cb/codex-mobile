@@ -12,6 +12,7 @@ interface CreateImageAttachmentInput {
 
 export class AttachmentStore {
   private readonly attachments = new Map<string, UploadedImageAttachment>();
+  private readonly attachmentsByPath = new Map<string, UploadedImageAttachment>();
 
   constructor(
     private readonly rootDir = join(tmpdir(), "codex-mobile-bridge", "attachments"),
@@ -38,11 +39,16 @@ export class AttachmentStore {
       createdAt: new Date().toISOString(),
     };
     this.attachments.set(id, attachment);
+    this.attachmentsByPath.set(normalizePathForComparison(filePath), attachment);
     return attachment;
   }
 
   getImage(id: string): UploadedImageAttachment | undefined {
     return this.attachments.get(id);
+  }
+
+  getImageByPath(filePath: string): UploadedImageAttachment | undefined {
+    return this.attachmentsByPath.get(normalizePathForComparison(filePath));
   }
 
   containsPath(filePath: string): boolean {

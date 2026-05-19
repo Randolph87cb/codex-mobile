@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
@@ -70,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingImageAttachmentUiState
+import com.openai.codexmobile.PendingImageUploadState
 import com.openai.codexmobile.PendingApprovalUiState
 import com.openai.codexmobile.SessionRealtimeUiState
 import com.openai.codexmobile.data.ApprovalDecision
@@ -105,6 +108,7 @@ fun SessionDetailScreen(
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
     onRemovePendingImageAttachment: (String) -> Unit,
+    onRetryPendingImageAttachment: (String) -> Unit,
     onSend: () -> Unit,
     onApprovalDecision: (ApprovalDecision) -> Unit,
     onUpdateCwd: (String) -> Unit,
@@ -124,6 +128,9 @@ fun SessionDetailScreen(
     var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
     var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
+    val hasPendingUploadBlockers = pendingImageAttachments.any {
+        it.uploadState == PendingImageUploadState.Uploading || it.uploadState == PendingImageUploadState.Failed
+    }
 
     LaunchedEffect(
         detail?.transcriptPreview,
@@ -228,10 +235,11 @@ fun SessionDetailScreen(
                 onOpenImagePreview = { attachment ->
                     imagePreviewState = ImagePreviewState(
                         title = attachment.displayName,
-                        source = attachment.toInlineImageSource(),
+                        source = attachment.previewSource,
                     )
                 },
                 onRemoveAttachment = onRemovePendingImageAttachment,
+                onRetryAttachment = onRetryPendingImageAttachment,
             )
         }
         Row(
@@ -269,7 +277,10 @@ fun SessionDetailScreen(
             }
             Button(
                 onClick = onSend,
-                enabled = !isLoading && detail != null && (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()),
+                enabled = !isLoading &&
+                    detail != null &&
+                    (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
+                    !hasPendingUploadBlockers,
                 modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
             ) {
                 if (isLoading) {
@@ -290,7 +301,10 @@ private fun PendingImageAttachmentTray(
     bridgeAuthToken: String,
     onOpenImagePreview: (PendingImageAttachmentUiState) -> Unit,
     onRemoveAttachment: (String) -> Unit,
+    onRetryAttachment: (String) -> Unit,
 ) {
+    val uploadingCount = attachments.count { it.uploadState == PendingImageUploadState.Uploading }
+    val failedCount = attachments.count { it.uploadState == PendingImageUploadState.Failed }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -309,19 +323,27 @@ private fun PendingImageAttachmentTray(
                 Icon(imageVector = Icons.Filled.Image, contentDescription = null)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = "已附加图片（${attachments.size}）", style = MaterialTheme.typography.labelLarge)
-                    Text(text = "原图上传，不做压缩。", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = when {
+                            failedCount > 0 -> "有 $failedCount 张上传失败，请重试或移除。"
+                            uploadingCount > 0 -> "原图预上传中，还剩 $uploadingCount 张。"
+                            else -> "原图已预上传，发送时只引用 bridge 路径。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
-            FlowRow(
+            LazyRow(
+                modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                attachments.forEach { attachment ->
+                items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
                         attachment = attachment,
                         bridgeEndpoint = bridgeEndpoint,
                         bridgeAuthToken = bridgeAuthToken,
                         onOpen = { onOpenImagePreview(attachment) },
+                        onRetry = { onRetryAttachment(attachment.localId) },
                         onRemove = { onRemoveAttachment(attachment.localId) },
                     )
                 }
@@ -336,18 +358,19 @@ private fun PendingImageThumbnailCard(
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onOpen: () -> Unit,
+    onRetry: () -> Unit,
     onRemove: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.width(132.dp),
+        modifier = Modifier.width(104.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             TranscriptImageThumbnail(
-                source = attachment.toInlineImageSource(),
+                source = attachment.previewSource,
                 title = attachment.displayName,
                 bridgeEndpoint = bridgeEndpoint,
                 bridgeAuthToken = bridgeAuthToken,
@@ -357,14 +380,61 @@ private fun PendingImageThumbnailCard(
             Text(
                 text = attachment.displayName,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
             )
-            TextButton(
-                onClick = onRemove,
-                modifier = Modifier.testTag(TestTags.SessionDetailClearImageButton + "_" + attachment.localId),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("移除")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.testTag(TestTags.SessionDetailPendingImageStatusPrefix + attachment.localId),
+                ) {
+                    when (attachment.uploadState) {
+                        PendingImageUploadState.Uploading -> {
+                            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                            Text("上传中", style = MaterialTheme.typography.labelSmall)
+                        }
+
+                        PendingImageUploadState.Uploaded -> {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text("已就绪", style = MaterialTheme.typography.labelSmall)
+                        }
+
+                        PendingImageUploadState.Failed -> {
+                            Icon(
+                                imageVector = Icons.Filled.Error,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text("失败", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = onRemove,
+                    modifier = Modifier.testTag(TestTags.SessionDetailClearImageButton + "_" + attachment.localId),
+                ) {
+                    Text("移除")
+                }
+            }
+            if (attachment.uploadState == PendingImageUploadState.Failed) {
+                TextButton(
+                    onClick = onRetry,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SessionDetailPendingImageRetryButtonPrefix + attachment.localId),
+                ) {
+                    Text("重试")
+                }
             }
         }
     }
@@ -1334,10 +1404,6 @@ private fun DraftSessionUiState.toDraftDetail(): SessionDetail {
         sandboxMode = sandboxMode,
         status = "draft",
     )
-}
-
-private fun PendingImageAttachmentUiState.toInlineImageSource(): String {
-    return "data:$mimeType;base64,$contentBase64"
 }
 
 private fun localizedReasoning(value: String): String {

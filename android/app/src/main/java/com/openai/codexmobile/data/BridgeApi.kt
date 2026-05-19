@@ -23,7 +23,7 @@ data class SessionConfigUpdate(
 )
 
 data class SessionInputAttachmentRef(
-    val id: String,
+    val stagedPath: String,
 )
 
 data class SendInputRequest(
@@ -41,6 +41,7 @@ data class UploadedImageAttachment(
     val id: String,
     val displayName: String,
     val mimeType: String,
+    val stagedPath: String,
 )
 
 interface BridgeApi {

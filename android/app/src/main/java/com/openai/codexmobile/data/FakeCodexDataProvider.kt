@@ -86,6 +86,7 @@ class FakeCodexDataProvider : CodexDataProvider {
             id = "fake-image-attachment",
             displayName = request.displayName,
             mimeType = request.mimeType,
+            stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\fake-image-attachment.png",
         )
     }
 

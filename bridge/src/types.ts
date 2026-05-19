@@ -58,7 +58,8 @@ export interface SessionInput {
 }
 
 export interface SessionInputAttachmentRef {
-  id: string;
+  id?: string;
+  path?: string;
 }
 
 export interface ResolvedSessionInput {

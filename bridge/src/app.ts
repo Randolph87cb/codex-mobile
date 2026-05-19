@@ -34,7 +34,18 @@ const inputSchema = z.object({
   text: z.string().optional(),
   attachments: z.array(
     z.object({
-      id: z.string().trim().min(1),
+      id: z.string().trim().min(1).optional(),
+      path: z.string().trim().min(1).optional(),
+    }).superRefine((value, context) => {
+      if (value.id || value.path) {
+        return;
+      }
+
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "attachment id or path is required",
+        path: ["id"],
+      });
     }),
   ).optional(),
 }).superRefine((value, context) => {
@@ -127,6 +138,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       const attachment = await attachmentStore.createImage(body.data);
       return reply.status(201).send({
         id: attachment.id,
+        path: attachment.path,
         kind: attachment.kind,
         displayName: attachment.displayName,
         mimeType: attachment.mimeType,
@@ -278,9 +290,13 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
 
     try {
       const resolvedAttachments = (body.data.attachments ?? []).map((attachment) => {
-        const uploaded = attachmentStore.getImage(attachment.id);
+        const uploaded = attachment.path
+          ? attachmentStore.getImageByPath(path.resolve(attachment.path))
+          : attachment.id
+            ? attachmentStore.getImage(attachment.id)
+            : undefined;
         if (!uploaded) {
-          throw new Error(`attachment-not-found:${attachment.id}`);
+          throw new Error(`attachment-not-found:${attachment.path ?? attachment.id ?? "unknown"}`);
         }
 
         return {

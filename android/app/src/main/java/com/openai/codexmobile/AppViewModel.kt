@@ -30,6 +30,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.ArrayDeque
 import java.util.UUID
@@ -96,8 +100,17 @@ data class PendingImageAttachmentUiState(
     val localId: String,
     val displayName: String,
     val mimeType: String,
-    val contentBase64: String,
+    val previewSource: String,
+    val uploadState: PendingImageUploadState,
+    val stagedPath: String? = null,
+    val uploadError: String? = null,
 )
+
+enum class PendingImageUploadState {
+    Uploading,
+    Uploaded,
+    Failed,
+}
 
 class AppViewModel(
     private val bridgeApi: BridgeApi,
@@ -119,6 +132,9 @@ class AppViewModel(
     private var isAppInForeground: Boolean = true
     private val queuedInputsBySession = mutableMapOf<String, ArrayDeque<String>>()
     private val flushingQueuedSessions = mutableSetOf<String>()
+    private val pendingImageUploadRequests = mutableMapOf<String, UploadImageAttachmentRequest>()
+    private val pendingImageUploadJobs = mutableMapOf<String, Job>()
+    private val imageUploadMutex = Mutex()
 
     init {
         bridgeApi.updateAuthToken(initialSettings.authToken)
@@ -203,27 +219,37 @@ class AppViewModel(
             return
         }
 
-        _uiState.update {
-            val appended = validAttachments.map { attachment ->
-                PendingImageAttachmentUiState(
-                    localId = UUID.randomUUID().toString(),
-                    displayName = attachment.displayName.ifBlank { "image" },
+        val appended = validAttachments.map { attachment ->
+            val localId = UUID.randomUUID().toString()
+            pendingImageUploadRequests[localId] = attachment
+            PendingImageAttachmentUiState(
+                localId = localId,
+                displayName = attachment.displayName.ifBlank { "image" },
+                mimeType = attachment.mimeType.ifBlank { "image/jpeg" },
+                previewSource = buildInlineImageSource(
                     mimeType = attachment.mimeType.ifBlank { "image/jpeg" },
                     contentBase64 = attachment.contentBase64,
-                )
-            }
+                ),
+                uploadState = PendingImageUploadState.Uploading,
+            )
+        }
+
+        _uiState.update {
             it.copy(
                 pendingImageAttachments = it.pendingImageAttachments + appended,
-                message = if (appended.size == 1) {
-                    "已附加图片：${appended.first().displayName}"
-                } else {
-                    "已附加 ${appended.size} 张图片。"
-                },
+                message = if (appended.size == 1) "已附加图片，开始上传。" else "已附加 ${appended.size} 张图片，开始上传。",
             )
+        }
+
+        appended.forEach { entry ->
+            val request = pendingImageUploadRequests[entry.localId] ?: return@forEach
+            startPendingImageUpload(entry.localId, request)
         }
     }
 
     fun removePendingImageAttachment(localId: String) {
+        pendingImageUploadJobs.remove(localId)?.cancel()
+        pendingImageUploadRequests.remove(localId)
         _uiState.update {
             val remaining = it.pendingImageAttachments.filterNot { attachment -> attachment.localId == localId }
             it.copy(
@@ -231,6 +257,112 @@ class AppViewModel(
                 message = "已移除图片附件。",
             )
         }
+    }
+
+    fun retryPendingImageAttachment(localId: String) {
+        val request = pendingImageUploadRequests[localId]
+        if (request == null) {
+            _uiState.update { it.copy(message = "这张图片没有可重试的上传任务。") }
+            return
+        }
+
+        _uiState.update { state ->
+            state.copy(
+                pendingImageAttachments = state.pendingImageAttachments.map { attachment ->
+                    if (attachment.localId != localId) {
+                        attachment
+                    } else {
+                        attachment.copy(
+                            uploadState = PendingImageUploadState.Uploading,
+                            uploadError = null,
+                        )
+                    }
+                },
+                message = "正在重新上传图片：${request.displayName}",
+            )
+        }
+        startPendingImageUpload(localId, request)
+    }
+
+    private fun startPendingImageUpload(
+        localId: String,
+        request: UploadImageAttachmentRequest,
+    ) {
+        pendingImageUploadJobs.remove(localId)?.cancel()
+        pendingImageUploadJobs[localId] = viewModelScope.launch {
+            imageUploadMutex.withLock {
+                val stillPending = uiState.value.pendingImageAttachments.any { it.localId == localId }
+                if (!stillPending) {
+                    return@withLock
+                }
+
+                appLogger.info(
+                    "AppViewModel",
+                    "开始预上传图片：localId=$localId, displayName=${request.displayName}, mimeType=${request.mimeType}",
+                )
+                runCatching {
+                    bridgeApi.uploadImageAttachment(request)
+                }.onSuccess { uploaded ->
+                    pendingImageUploadRequests.remove(localId)
+                    _uiState.update { state ->
+                        state.copy(
+                            pendingImageAttachments = state.pendingImageAttachments.map { attachment ->
+                                if (attachment.localId != localId) {
+                                    attachment
+                                } else {
+                                    attachment.copy(
+                                        previewSource = buildBridgeImageSource(uploaded.stagedPath),
+                                        uploadState = PendingImageUploadState.Uploaded,
+                                        stagedPath = uploaded.stagedPath,
+                                        uploadError = null,
+                                    )
+                                }
+                            },
+                            message = "图片已上传：${uploaded.displayName}",
+                        )
+                    }
+                    appLogger.info(
+                        "AppViewModel",
+                        "图片预上传完成：localId=$localId, stagedPath=${uploaded.stagedPath}",
+                    )
+                }.onFailure { error ->
+                    if (error is CancellationException) {
+                        throw error
+                    }
+                    _uiState.update { state ->
+                        state.copy(
+                            pendingImageAttachments = state.pendingImageAttachments.map { attachment ->
+                                if (attachment.localId != localId) {
+                                    attachment
+                                } else {
+                                    attachment.copy(
+                                        uploadState = PendingImageUploadState.Failed,
+                                        uploadError = error.message ?: "上传失败",
+                                    )
+                                }
+                            },
+                            message = error.message ?: "图片上传失败。",
+                        )
+                    }
+                    appLogger.error(
+                        "AppViewModel",
+                        "图片预上传失败：localId=$localId, displayName=${request.displayName}",
+                        error,
+                    )
+                }
+                refreshDiagnosticsLog()
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                pendingImageUploadJobs.remove(localId)
+            }
+        }
+    }
+
+    private fun clearPendingImageUploads() {
+        pendingImageUploadJobs.values.forEach { it.cancel() }
+        pendingImageUploadJobs.clear()
+        pendingImageUploadRequests.clear()
     }
 
     fun connect() {
@@ -285,6 +417,7 @@ class AppViewModel(
         viewModelScope.launch {
             appLogger.info("AppViewModel", "用户主动断开桥接连接。")
             stopSessionStream()
+            clearPendingImageUploads()
             bridgeApi.disconnect()
             queuedInputsBySession.clear()
             flushingQueuedSessions.clear()
@@ -367,6 +500,7 @@ class AppViewModel(
 
     fun discardDraftSession() {
         stopSessionStream()
+        clearPendingImageUploads()
         _uiState.update {
             it.copy(
                 selectedDraftSession = null,
@@ -475,6 +609,9 @@ class AppViewModel(
             stopSessionStream()
         }
         if (sessionId == null || uiState.value.selectedSession?.id == sessionId || sessionId == DraftSessionId) {
+            if (sessionId == null || sessionId == DraftSessionId) {
+                clearPendingImageUploads()
+            }
             _uiState.update { it.copy(queuedInputs = emptyList()) }
         }
     }
@@ -485,6 +622,16 @@ class AppViewModel(
         val text = uiState.value.draftMessage.trim()
         val pendingImageAttachments = uiState.value.pendingImageAttachments
         if (text.isEmpty() && pendingImageAttachments.isEmpty()) {
+            return
+        }
+        if (pendingImageAttachments.any { it.uploadState == PendingImageUploadState.Uploading }) {
+            appLogger.warn("AppViewModel", "用户尝试发送，但仍有图片上传中。")
+            _uiState.update { it.copy(message = "图片仍在上传，请稍后再发送。") }
+            return
+        }
+        if (pendingImageAttachments.any { it.uploadState == PendingImageUploadState.Failed }) {
+            appLogger.warn("AppViewModel", "用户尝试发送，但存在上传失败的图片。")
+            _uiState.update { it.copy(message = "有图片上传失败，请重试或移除后再发送。") }
             return
         }
 
@@ -507,20 +654,20 @@ class AppViewModel(
                         "草稿线程转正式会话：cwd=${draftSession.cwd}, firstMessageLength=${text.length}",
                     )
                     val created = bridgeApi.createSession(buildCreateSessionRequest(draftSession))
-                    _uiState.update {
-                        it.copy(
-                            selectedDraftSession = null,
-                            selectedSession = created,
-                            message = "已创建会话，正在发送首条消息。",
-                        )
-                    }
-                    refreshSessions()
                     submitInputNow(
                         detail = created,
                         text = text,
                         pendingImageAttachments = pendingImageAttachments,
                         fromQueue = false,
                     )
+                    _uiState.update {
+                        it.copy(
+                            selectedDraftSession = null,
+                            selectedSession = it.selectedSession ?: created,
+                            message = "已创建会话并发送首条消息。",
+                        )
+                    }
+                    refreshSessions()
                 } catch (error: Exception) {
                     appLogger.error("AppViewModel", "创建草稿对应远端会话失败。", error)
                     _uiState.update {
@@ -1438,15 +1585,16 @@ class AppViewModel(
             "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, imageCount=${pendingImageAttachments.size}, fromQueue=$fromQueue",
         )
         val uploadedImages = pendingImageAttachments.map { pendingImageAttachment ->
-            bridgeApi.uploadImageAttachment(
-                UploadImageAttachmentRequest(
-                    displayName = pendingImageAttachment.displayName,
-                    mimeType = pendingImageAttachment.mimeType,
-                    contentBase64 = pendingImageAttachment.contentBase64,
-                ),
+            val stagedPath = pendingImageAttachment.stagedPath
+                ?: throw IllegalStateException("图片尚未完成预上传：${pendingImageAttachment.displayName}")
+            UploadedImageAttachment(
+                id = pendingImageAttachment.localId,
+                displayName = pendingImageAttachment.displayName,
+                mimeType = pendingImageAttachment.mimeType,
+                stagedPath = stagedPath,
             )
         }
-        val attachmentRefs = uploadedImages.map { uploaded -> SessionInputAttachmentRef(id = uploaded.id) }
+        val attachmentRefs = uploadedImages.map { uploaded -> SessionInputAttachmentRef(stagedPath = uploaded.stagedPath) }
         bridgeApi.sendInput(
             detail.id,
             SendInputRequest(
@@ -1455,6 +1603,7 @@ class AppViewModel(
             ),
         )
         activeAssistantTurnId = null
+        clearPendingImageUploads()
         val updatedDetail = appendUserMessage(
             detail = detail,
             message = text,
@@ -1858,8 +2007,8 @@ private fun appendUserMessage(
             }
             append("![")
             append(image.displayName)
-            append("](bridge-attachment://")
-            append(image.id)
+            append("](")
+            append(buildBridgeImageSource(image.stagedPath))
             append(")")
         }
     }
@@ -1874,6 +2023,18 @@ private fun appendUserMessage(
         ),
         lastUpdated = nowIsoString(),
     )
+}
+
+private fun buildInlineImageSource(
+    mimeType: String,
+    contentBase64: String,
+): String {
+    return "data:$mimeType;base64,$contentBase64"
+}
+
+private fun buildBridgeImageSource(stagedPath: String): String {
+    val encodedPath = URLEncoder.encode(stagedPath, StandardCharsets.UTF_8.name())
+    return "bridge-file://$encodedPath"
 }
 
 private fun appendSystemMessage(

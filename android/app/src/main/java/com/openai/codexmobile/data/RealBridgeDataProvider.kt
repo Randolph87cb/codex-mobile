@@ -21,6 +21,7 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
+import java.net.SocketException
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
@@ -151,12 +152,29 @@ class RealBridgeDataProvider(
             .put("displayName", request.displayName)
             .put("mimeType", request.mimeType)
             .put("contentBase64", request.contentBase64)
-        val response = request(
-            method = "POST",
-            url = "${requireBaseUrl()}/api/attachment/image",
-            body = payload.toString(),
-            summary = "upload image attachment, displayName=${request.displayName}",
-        )
+        val uploadUrl = "${requireBaseUrl()}/api/attachment/image"
+        val requestBody = payload.toString()
+        val response = try {
+            request(
+                method = "POST",
+                url = uploadUrl,
+                body = requestBody,
+                summary = "upload image attachment, displayName=${request.displayName}",
+                forceClose = true,
+            )
+        } catch (error: SocketException) {
+            appLogger.warn(
+                "BridgeApi",
+                "图片上传遇到 SocketException，准备重试一次：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+            )
+            request(
+                method = "POST",
+                url = uploadUrl,
+                body = requestBody,
+                summary = "retry upload image attachment, displayName=${request.displayName}",
+                forceClose = true,
+            )
+        }
         if (response.statusCode !in 200..299) {
             appLogger.warn(
                 "BridgeApi",
@@ -170,6 +188,7 @@ class RealBridgeDataProvider(
                 id = json.optString("id").ifBlank { error("bridge 未返回附件 ID。") },
                 displayName = json.optString("displayName").ifBlank { request.displayName },
                 mimeType = json.optString("mimeType").ifBlank { request.mimeType },
+                stagedPath = json.optString("path").ifBlank { error("bridge 未返回暂存路径。") },
             )
         }
     }
@@ -184,7 +203,7 @@ class RealBridgeDataProvider(
         if (request.attachments.isNotEmpty()) {
             val attachments = JSONArray()
             request.attachments.forEach { attachment ->
-                attachments.put(JSONObject().put("id", attachment.id))
+                attachments.put(JSONObject().put("path", attachment.stagedPath))
             }
             payload.put("attachments", attachments)
         }
@@ -377,6 +396,7 @@ class RealBridgeDataProvider(
         url: String,
         body: String? = null,
         summary: String? = null,
+        forceClose: Boolean = false,
     ): HttpResponse {
         appLogger.debug("BridgeApi", "HTTP 请求：$method $url${summary?.let { " ($it)" } ?: ""}")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -385,6 +405,9 @@ class RealBridgeDataProvider(
             readTimeout = 10_000
             setRequestProperty("Accept", "application/json")
             authToken?.let { setRequestProperty("Authorization", "Bearer $it") }
+            if (forceClose) {
+                setRequestProperty("Connection", "close")
+            }
             if (body != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")

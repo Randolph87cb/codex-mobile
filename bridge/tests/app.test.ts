@@ -346,7 +346,9 @@ describe("buildBridgeApp", () => {
     });
 
     expect(upload.statusCode).toBe(201);
-    const attachmentId = upload.json<{ id: string }>().id;
+    const uploaded = upload.json<{ id: string; path: string }>();
+    const attachmentId = uploaded.id;
+    expect(uploaded.path).toContain(attachmentId);
 
     const content = await app.inject({
       method: "GET",
@@ -471,7 +473,7 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
-  test("uploads an image and resolves it into a localImage input item", async () => {
+  test("uploads an image and resolves legacy attachment ids into localImage input items", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
     const app = await buildBridgeApp({ store, runner });
@@ -495,7 +497,7 @@ describe("buildBridgeApp", () => {
     });
 
     expect(upload.statusCode).toBe(201);
-    const attachmentId = upload.json<{ id: string }>().id;
+    const attachmentId = upload.json<{ id: string; path: string }>().id;
 
     const input = await app.inject({
       method: "POST",
@@ -525,6 +527,99 @@ describe("buildBridgeApp", () => {
         ],
       }),
     );
+
+    await app.close();
+  });
+
+  test("uploads an image and allows input to reference the staged file path", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      payload: {
+        displayName: "staged.png",
+        mimeType: "image/png",
+        contentBase64: Buffer.from("fake-image-path").toString("base64"),
+      },
+    });
+
+    expect(upload.statusCode).toBe(201);
+    const uploaded = upload.json<{ id: string; path: string }>();
+    expect(uploaded.path).toContain(uploaded.id);
+
+    const input = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        attachments: [
+          {
+            path: uploaded.path,
+          },
+        ],
+      },
+    });
+
+    expect(input.statusCode).toBe(202);
+    expect(runner.submitInput).toHaveBeenCalledWith(
+      session.id,
+      expect.objectContaining({
+        text: "",
+        attachments: [
+          expect.objectContaining({
+            id: uploaded.id,
+            kind: "image",
+            path: uploaded.path,
+            displayName: "staged.png",
+            mimeType: "image/png",
+          }),
+        ],
+      }),
+    );
+
+    await app.close();
+  });
+
+  test("rejects attachment paths that were not staged by bridge upload", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        attachments: [
+          {
+            path: "D:\\workspace\\codex-mobile\\not-staged.png",
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: "attachment-not-found",
+      message: "attachment-not-found:D:\\workspace\\codex-mobile\\not-staged.png",
+    });
 
     await app.close();
   });

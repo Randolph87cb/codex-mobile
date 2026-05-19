@@ -485,22 +485,118 @@ class AppViewModelTest {
                 ),
             ),
         )
+        advanceUntilIdle()
+
+        assertEquals(2, bridgeApi.uploadedImageRequests.size)
+        assertTrue(
+            viewModel.uiState.value.pendingImageAttachments.all {
+                it.uploadState == PendingImageUploadState.Uploaded && it.stagedPath != null
+            },
+        )
+
         viewModel.updateDraftMessage("帮我看看")
         viewModel.sendInput()
         advanceUntilIdle()
 
-        assertEquals(2, bridgeApi.uploadedImageRequests.size)
         assertEquals(listOf("screen.png", "diagram.webp"), bridgeApi.uploadedImageRequests.map { it.displayName })
         assertEquals(1, bridgeApi.sendInputRequests.size)
         assertEquals("帮我看看", bridgeApi.sendInputRequests.single().text)
-        assertEquals(listOf("uploaded-1", "uploaded-2"), bridgeApi.sendInputRequests.single().attachments.map { it.id })
+        assertEquals(
+            listOf("D:\\bridge\\staged\\uploaded-1.png", "D:\\bridge\\staged\\uploaded-2.png"),
+            bridgeApi.sendInputRequests.single().attachments.map { it.stagedPath },
+        )
         assertTrue(viewModel.uiState.value.pendingImageAttachments.isEmpty())
         assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("![screen.png](bridge-attachment://uploaded-1)") == true,
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
+                "![screen.png](bridge-file://D%3A%5Cbridge%5Cstaged%5Cuploaded-1.png)",
+            ) == true,
         )
         assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("![diagram.webp](bridge-attachment://uploaded-2)") == true,
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
+                "![diagram.webp](bridge-file://D%3A%5Cbridge%5Cstaged%5Cuploaded-2.png)",
+            ) == true,
         )
+    }
+
+    @Test
+    fun sendInputIsBlockedWhileImagesAreStillUploading() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_uploading", status = "idle")
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail,
+            uploadDelayMs = 5_000L,
+        )
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_uploading")
+        advanceUntilIdle()
+
+        viewModel.attachPreparedImages(
+            listOf(
+                UploadImageAttachmentRequest(
+                    displayName = "screen.png",
+                    mimeType = "image/png",
+                    contentBase64 = "aGVsbG8=",
+                ),
+            ),
+        )
+        runCurrent()
+        viewModel.updateDraftMessage("先别发")
+        viewModel.sendInput()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.pendingImageAttachments.any { it.uploadState == PendingImageUploadState.Uploading })
+        assertTrue(viewModel.uiState.value.message?.contains("图片仍在上传") == true)
+        assertTrue(bridgeApi.sendInputRequests.isEmpty())
+    }
+
+    @Test
+    fun failedImageUploadCanBeRetriedThenSent() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_retry", status = "idle")
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail,
+            failUploadsRemaining = 1,
+        )
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_retry")
+        advanceUntilIdle()
+
+        viewModel.attachPreparedImages(
+            listOf(
+                UploadImageAttachmentRequest(
+                    displayName = "screen.png",
+                    mimeType = "image/png",
+                    contentBase64 = "aGVsbG8=",
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(PendingImageUploadState.Failed, viewModel.uiState.value.pendingImageAttachments.single().uploadState)
+        viewModel.updateDraftMessage("重试后发送")
+        viewModel.sendInput()
+        runCurrent()
+        assertTrue(bridgeApi.sendInputRequests.isEmpty())
+
+        val localId = viewModel.uiState.value.pendingImageAttachments.single().localId
+        viewModel.retryPendingImageAttachment(localId)
+        advanceUntilIdle()
+
+        assertEquals(PendingImageUploadState.Uploaded, viewModel.uiState.value.pendingImageAttachments.single().uploadState)
+
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(1, bridgeApi.sendInputRequests.size)
+        assertEquals("重试后发送", bridgeApi.sendInputRequests.single().text)
     }
 
     @Test
@@ -551,6 +647,8 @@ class AppViewModelTest {
 
 private class FakeBridgeApi(
     private val createdDetail: SessionDetail,
+    private val uploadDelayMs: Long = 0L,
+    private var failUploadsRemaining: Int = 0,
 ) : BridgeApi {
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     private var currentDetail: SessionDetail = createdDetail
@@ -608,11 +706,19 @@ private class FakeBridgeApi(
     }
 
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {
+        if (uploadDelayMs > 0) {
+            kotlinx.coroutines.delay(uploadDelayMs)
+        }
         uploadedImageRequests += request
+        if (failUploadsRemaining > 0) {
+            failUploadsRemaining -= 1
+            throw IllegalStateException("图片上传失败。")
+        }
         return UploadedImageAttachment(
             id = "uploaded-${uploadedImageRequests.size}",
             displayName = request.displayName,
             mimeType = request.mimeType,
+            stagedPath = "D:\\bridge\\staged\\uploaded-${uploadedImageRequests.size}.png",
         )
     }
 

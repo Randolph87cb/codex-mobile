@@ -310,3 +310,48 @@
     - `![...png](/api/image/file?path=...)`
 - 模拟器回归继续通过，说明修复后至少没有把新增的相对 URL 支持、采样解码和预览保存路径打坏。
 
+## 后续补充修复（八）
+- 用户新增两点图片发送体验问题：
+  - 发送前的附件预览卡片太大，图片一多就只能看到前几个。
+  - 多图发送时在第二张附件上传阶段报 `java.net.SocketException: Broken pipe`，导致首条消息发不出去。
+- 当前判断：
+  - 旧链路是“点发送后才顺序上传所有原图”，同时草稿线程还会立即打开详情页、拉快照并建立实时流，首轮会把大文件上传、详情请求和 WebSocket 建连挤在一起。
+  - `Broken pipe` 出现在 Android `RealBridgeDataProvider.request()` 写请求体阶段，更像是大请求体上传时连接被对端提前关闭，而不是 Codex 线程本身卡住。
+  - 既然发送时真正需要的只是 bridge 侧可访问图片路径，就没必要在点击发送后再做大文件上传。
+- 实际修改：
+  - bridge `app.ts`、`types.ts`、`attachment-store.ts`
+    - `/api/attachment/image` 返回暂存文件 `path`。
+    - `/api/session/:id/input` 兼容旧 `attachment.id`，并新增支持直接传 `attachment.path`。
+    - 仅允许引用 bridge 已暂存过的图片路径，避免 Android 侧伪造任意主机路径。
+  - bridge `app.test.ts`
+    - 覆盖旧 `id` 兼容、按 `path` 发送和非法未暂存路径拒绝。
+  - Android `AppViewModel.kt`
+    - 选图后立刻开始预上传，`pendingImageAttachments` 改为维护 `previewSource / uploadState / stagedPath / uploadError`。
+    - 发送前如果仍有 `Uploading` 或 `Failed` 图片，直接阻止发送并提示重试或移除。
+    - 草稿线程首条消息改为“先创建会话并完成发送，再刷新列表/进入实时流”，不再与多图上传并发打架。
+    - transcript 中本地回显的图片改为写入 `bridge-file://<encoded path>`，直接对应 bridge 暂存文件。
+  - Android `RealBridgeDataProvider.kt`
+    - 上传响应解析 `path` 字段。
+    - 发送消息时附件只提交 `stagedPath`，不再逐张重传图片。
+    - 图片上传请求增加 `Connection: close`，并对 `SocketException` 做一次重试，降低 `Broken pipe` 概率。
+  - Android `SessionDetailScreen.kt`
+    - 待发送图片托盘改为单行横向 `LazyRow` 小缩略图。
+    - 每张图显示上传状态；失败项支持单独重试；发送按钮会在上传中/失败时禁用。
+  - Android `CodexMobileApp.kt`、`TestTags.kt`、`ReplayHarnessActivity.kt`、`FakeCodexDataProvider.kt`
+    - 同步新回调和 staged path 数据结构。
+  - Android 测试：
+    - `AppViewModelTest.kt` 覆盖“预上传先发生”“上传中阻止发送”“失败后重试再发送”“发送只带 stagedPath”。
+    - `SessionDetailImageRenderingTest.kt` 覆盖横向缩略图滚动、失败态重试按钮和发送按钮禁用。
+    - 既有 `SessionDetailAutoScrollTest.kt`、`SessionDetailTranscriptCollapseTest.kt` 同步适配新的详情页参数。
+
+## 本次验证补充（九）
+- `cd bridge && npm run check`：通过
+- `cd bridge && npm test`：通过
+  - `5` 个测试文件通过
+  - `38` 个测试用例通过
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+  - 真实模拟器：`codex-mobile-api35(AVD) - 15`
+  - 覆盖图片横向滚动、预览、失败重试入口、发送按钮禁用
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+

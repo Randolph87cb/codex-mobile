@@ -53,6 +53,7 @@ class SessionDetailTranscriptCollapseTest {
                     onDraftMessageChange = {},
                     onPickImage = {},
                     onRemovePendingImageAttachment = {},
+                    onRetryPendingImageAttachment = {},
                     onSend = {},
                     onApprovalDecision = {},
                     onUpdateCwd = {},
