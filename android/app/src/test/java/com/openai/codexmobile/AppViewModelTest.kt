@@ -360,14 +360,24 @@ class AppViewModelTest {
     }
 
     @Test
-    fun updatingSessionConfigPersistsSettingsAndCallsBridge() = runTest(dispatcher.scheduler) {
+    fun updatingSessionConfigKeepsGlobalSettingsAndCallsBridge() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_config", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
             sessionSummaries = listOf(detail.toSummary()),
             detailsById = mapOf(detail.id to detail),
         )
-        val settingsStore = FakeAppSettingsStore()
+        val globalSettings = AppSettings(
+            endpoint = "http://10.0.2.2:8787",
+            authToken = "",
+            cwd = "D:\\workspace\\global-default",
+            model = "gpt-5.4",
+            approvalMode = "manual",
+            reasoningEffort = "low",
+            serviceTier = "default",
+            sandboxMode = "workspace-write",
+        )
+        val settingsStore = FakeAppSettingsStore(globalSettings)
         val viewModel = AppViewModel(bridgeApi, repository, settingsStore, FakeAppLogger())
 
         viewModel.openSessionDetail("sess_config")
@@ -380,14 +390,74 @@ class AppViewModelTest {
         advanceUntilIdle()
 
         assertEquals(4, bridgeApi.sessionConfigUpdates.size)
-        assertEquals("gpt-5.5-coder", settingsStore.saved.model)
-        assertEquals("high", settingsStore.saved.reasoningEffort)
-        assertEquals("fast", settingsStore.saved.serviceTier)
-        assertEquals("danger-full-access", settingsStore.saved.sandboxMode)
+        assertEquals(globalSettings, settingsStore.saved)
+        assertEquals("D:\\workspace\\global-default", viewModel.uiState.value.cwdInput)
+        assertEquals("gpt-5.4", viewModel.uiState.value.modelInput)
+        assertEquals("low", viewModel.uiState.value.reasoningEffortInput)
+        assertEquals("default", viewModel.uiState.value.serviceTierInput)
+        assertEquals("workspace-write", viewModel.uiState.value.sandboxModeInput)
         assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedSession?.model)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
         assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
+    }
+
+    @Test
+    fun updatingDraftConfigDoesNotOverwriteGlobalSettings() = runTest(dispatcher.scheduler) {
+        val createdDetail = sampleDetail(id = "sess_draft_config", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = createdDetail)
+        val repository = FakeSessionRepository(emptyList(), emptyMap())
+        val globalSettings = AppSettings(
+            endpoint = "http://10.0.2.2:8787",
+            authToken = "",
+            cwd = "D:\\workspace\\global-default",
+            model = "gpt-5.4",
+            approvalMode = "manual",
+            reasoningEffort = "low",
+            serviceTier = "default",
+            sandboxMode = "workspace-write",
+        )
+        val settingsStore = FakeAppSettingsStore(globalSettings)
+        val viewModel = AppViewModel(bridgeApi, repository, settingsStore, FakeAppLogger())
+
+        viewModel.startDraftSession()
+        advanceUntilIdle()
+
+        viewModel.updateSelectedSessionCwd("D:\\workspace\\draft-specific")
+        viewModel.updateSelectedSessionModel("gpt-5.5-coder")
+        viewModel.updateSelectedSessionReasoningEffort("high")
+        viewModel.updateSelectedSessionServiceTier("fast")
+        viewModel.updateSelectedSessionSandboxMode("danger-full-access")
+        advanceUntilIdle()
+
+        assertEquals(globalSettings, settingsStore.saved)
+        assertEquals("D:\\workspace\\global-default", viewModel.uiState.value.cwdInput)
+        assertEquals("gpt-5.4", viewModel.uiState.value.modelInput)
+        assertEquals("low", viewModel.uiState.value.reasoningEffortInput)
+        assertEquals("default", viewModel.uiState.value.serviceTierInput)
+        assertEquals("workspace-write", viewModel.uiState.value.sandboxModeInput)
+        assertEquals("D:\\workspace\\draft-specific", viewModel.uiState.value.selectedDraftSession?.cwd)
+        assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedDraftSession?.model)
+        assertEquals("high", viewModel.uiState.value.selectedDraftSession?.reasoningEffort)
+        assertEquals("fast", viewModel.uiState.value.selectedDraftSession?.serviceTier)
+        assertEquals("danger-full-access", viewModel.uiState.value.selectedDraftSession?.sandboxMode)
+
+        viewModel.updateDraftMessage("创建草稿会话")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(
+            CreateSessionRequest(
+                cwd = "D:\\workspace\\draft-specific",
+                model = "gpt-5.5-coder",
+                approvalMode = "manual",
+                reasoningEffort = "high",
+                serviceTier = "fast",
+                sandboxMode = "danger-full-access",
+            ),
+            bridgeApi.lastCreateSessionRequest,
+        )
+        assertEquals(globalSettings, settingsStore.saved)
     }
 
     @Test

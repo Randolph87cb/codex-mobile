@@ -876,17 +876,8 @@ class AppViewModel(
                 sandboxMode = sandboxMode ?: draft.sandboxMode,
             )
             _uiState.update {
-                it.copy(
-                    selectedDraftSession = nextDraft,
-                    cwdInput = nextDraft.cwd,
-                    modelInput = nextDraft.model,
-                    approvalModeInput = nextDraft.approvalMode,
-                    reasoningEffortInput = nextDraft.reasoningEffort,
-                    serviceTierInput = nextDraft.serviceTier,
-                    sandboxModeInput = nextDraft.sandboxMode,
-                ).withSettingsItems()
+                it.copy(selectedDraftSession = nextDraft)
             }
-            persistSettings(_uiState.value)
             return
         }
 
@@ -905,17 +896,8 @@ class AppViewModel(
             ),
         )
         _uiState.update {
-            it.copy(
-                selectedSession = nextDetail,
-                cwdInput = nextDetail.cwd,
-                modelInput = nextDetail.model,
-                approvalModeInput = nextDetail.approvalMode,
-                reasoningEffortInput = nextDetail.reasoningEffort,
-                serviceTierInput = nextDetail.serviceTier,
-                sandboxModeInput = nextDetail.sandboxMode,
-            ).withSettingsItems()
+            it.copy(selectedSession = nextDetail)
         }
-        persistSettings(_uiState.value)
 
         viewModelScope.launch {
             try {
