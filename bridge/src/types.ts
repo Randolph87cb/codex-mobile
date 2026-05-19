@@ -100,6 +100,7 @@ export interface BridgeEvent {
     | "session.started"
     | "assistant.delta"
     | "assistant.done"
+    | "activity"
     | "tool.request"
     | "tool.result"
     | "run.status"

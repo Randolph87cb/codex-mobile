@@ -1003,6 +1003,29 @@ class AppViewModel(
                 refreshSessionSnapshot(sessionId)
             }
 
+            is SessionStreamEvent.Activity -> {
+                if (event.transcriptBlock.isBlank()) {
+                    return
+                }
+
+                _uiState.update {
+                    it.copy(
+                        selectedSession = it.selectedSession
+                            ?.let { detail ->
+                                appendSystemMessage(
+                                    detail = detail,
+                                    message = event.transcriptBlock,
+                                    timestamp = event.timestamp,
+                                )
+                            }
+                            ?.copy(lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated),
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            lastEventText = summarizeActivityEvent(event),
+                        ),
+                    )
+                }
+            }
+
             is SessionStreamEvent.RunStatus -> {
                 appLogger.debug("AppViewModel", "运行状态变化：sessionId=$sessionId, status=${event.status}")
                 _uiState.update {
@@ -1914,6 +1937,21 @@ private data class AssistantDeltaRenderResult(
     val detail: SessionDetail,
     val activeTurnId: String,
 )
+
+private fun summarizeActivityEvent(event: SessionStreamEvent.Activity): String {
+    val summary = event.summary?.trim()
+    if (!summary.isNullOrEmpty()) {
+        return summary
+    }
+
+    val firstLine = event.transcriptBlock
+        .lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotEmpty() }
+        ?: return "收到新的操作事件。"
+
+    return firstLine.removePrefix("系统：").ifBlank { "收到新的操作事件。" }
+}
 
 private fun statusEventText(status: String): String {
     return when (status) {

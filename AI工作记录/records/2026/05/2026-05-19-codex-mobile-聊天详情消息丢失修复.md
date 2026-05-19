@@ -56,3 +56,33 @@
   - `cd android && .\gradlew.bat --stop && .\gradlew.bat testDebugUnitTest`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 
+## 后续补充修复（二）
+- 用户继续反馈：手机端消息类型显示不完整，缺少 Codex app 中常见的操作消息，例如运行命令、编辑文件、工具调用进度等，因此难以判断线程是否仍在执行。
+- 当前判断：
+  - bridge 实时通知只转发了 `assistant.delta`、`turn.started/completed` 等少量事件，没有把 `item/started`、`item/completed`、文件修改进度、工具调用进度、推理摘要等操作项转给 Android。
+  - bridge 历史 transcript 只识别 `userMessage` 和 `agentMessage`，会直接丢弃 `commandExecution`、`fileChange`、`mcpToolCall`、`reasoning` 等线程项。
+- 实际修改：
+  - bridge `session-view.ts`
+    - 新增 `formatThreadItemAsTranscriptBlock`，把 `commandExecution`、`fileChange`、`mcpToolCall`、`dynamicToolCall`、`collabAgentToolCall`、`reasoning` 等线程项格式化为 `系统：...` transcript 块。
+    - 历史详情页现在会保留这些操作项，而不只显示用户/助手自然语言消息。
+  - bridge `app-server-runner.ts`
+    - 新增 bridge WebSocket 事件类型 `activity`。
+    - 转发 `item/started`、`item/completed`、`item/fileChange/patchUpdated`、`item/mcpToolCall/progress`、`item/reasoning/summaryTextDelta`，让 Android 能实时看到执行中的操作消息。
+  - Android `SessionStreamEvent.kt`
+    - 新增 `Activity` 事件类型。
+  - Android `RealBridgeDataProvider.kt`
+    - 解析 bridge 返回的 `activity` 事件。
+  - Android `AppViewModel.kt`
+    - 收到 `activity` 后，将 bridge 已格式化的 `transcriptBlock` 追加到当前会话 transcript。
+    - 同步更新顶部 `lastEventText`，让用户能看到“命令执行”“文件修改进度”等实时摘要。
+  - 测试：
+    - bridge `session-view.test.ts` 新增操作消息历史展示测试。
+    - bridge `app-server-runner.test.ts` 新增 `activity` 事件转发测试。
+    - Android `AppViewModelTest.kt` 新增 `activity` 事件追加 transcript 和更新状态摘要测试。
+
+## 本次验证补充（二）
+- `cd bridge && npm run check`：通过
+- `cd bridge && npm test`：通过
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+

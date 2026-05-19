@@ -373,6 +373,68 @@ describe("AppServerRunner", () => {
     );
   });
 
+  test("emits activity events for operation items", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    const runner = new AppServerRunner(store, client);
+    const events: BridgeEvent[] = [];
+    runner.subscribe("sess-1", (event) => {
+      events.push(event);
+    });
+
+    client.emitNotification({
+      method: "item/started",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: {
+          id: "item-command",
+          type: "commandExecution",
+          status: "inProgress",
+          command: "npm test",
+          cwd: "D:\\workspace\\codex-mobile\\bridge",
+        },
+      },
+    });
+
+    client.emitNotification({
+      method: "item/fileChange/patchUpdated",
+      params: {
+        threadId: "thread-1",
+        itemId: "item-file",
+        changes: [
+          {
+            path: "android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt",
+            kind: "update",
+          },
+        ],
+      },
+    });
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "activity",
+          data: expect.objectContaining({
+            itemType: "commandExecution",
+            itemId: "item-command",
+            summary: "命令执行",
+            transcriptBlock: expect.stringContaining("命令：npm test"),
+          }),
+        }),
+        expect.objectContaining({
+          type: "activity",
+          data: expect.objectContaining({
+            itemType: "fileChange",
+            itemId: "item-file",
+            summary: "文件修改进度",
+            transcriptBlock: expect.stringContaining("涉及：android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt"),
+          }),
+        }),
+      ]),
+    );
+  });
+
   test("maps permission approvals to requested profile and session scope", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();

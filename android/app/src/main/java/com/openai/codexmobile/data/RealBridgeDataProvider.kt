@@ -468,6 +468,22 @@ private fun parseSessionStreamEvent(
             timestamp = timestamp,
         )
 
+        "activity" -> {
+            val transcriptBlock = data.optString("transcriptBlock").trim()
+            if (transcriptBlock.isBlank()) {
+                null
+            } else {
+                SessionStreamEvent.Activity(
+                    sessionId = eventSessionId,
+                    itemType = data.optString("itemType").takeIf { it.isNotBlank() },
+                    itemId = data.optString("itemId").takeIf { it.isNotBlank() },
+                    transcriptBlock = transcriptBlock,
+                    summary = data.optString("summary").takeIf { it.isNotBlank() },
+                    timestamp = timestamp,
+                )
+            }
+        }
+
         "run.status" -> SessionStreamEvent.RunStatus(
             sessionId = eventSessionId,
             status = data.optString("status").ifBlank { "unknown" },
@@ -668,6 +684,7 @@ private fun SessionStreamEvent.toLogSummary(): String {
         is SessionStreamEvent.SessionStarted -> "session.started sessionId=$sessionId status=$status"
         is SessionStreamEvent.AssistantDelta -> "assistant.delta sessionId=$sessionId chars=${text.length}"
         is SessionStreamEvent.AssistantDone -> "assistant.done sessionId=$sessionId status=${turnStatus ?: "unknown"}"
+        is SessionStreamEvent.Activity -> "activity sessionId=$sessionId itemType=${itemType ?: "unknown"}"
         is SessionStreamEvent.RunStatus -> "run.status sessionId=$sessionId status=$status"
         is SessionStreamEvent.RunInterrupted -> "run.interrupted sessionId=$sessionId status=${status ?: "unknown"}"
         is SessionStreamEvent.ToolRequest -> "tool.request sessionId=$sessionId method=${method ?: "unknown"}"

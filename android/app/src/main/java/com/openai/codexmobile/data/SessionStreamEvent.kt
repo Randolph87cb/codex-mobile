@@ -43,6 +43,15 @@ sealed interface SessionStreamEvent {
         override val timestamp: String?,
     ) : SessionStreamEvent
 
+    data class Activity(
+        override val sessionId: String,
+        val itemType: String?,
+        val itemId: String?,
+        val transcriptBlock: String,
+        val summary: String?,
+        override val timestamp: String?,
+    ) : SessionStreamEvent
+
     data class RunStatus(
         override val sessionId: String,
         val status: String,

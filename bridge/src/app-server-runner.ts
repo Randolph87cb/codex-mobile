@@ -3,6 +3,7 @@ import type { BridgeEventListener, HistoryCapableBridgeRunner } from "./bridge-r
 import {
   buildSessionViewFromRecord,
   buildSessionViewFromThread,
+  formatThreadItemAsTranscriptBlock,
   mapThreadStatus,
   type AppServerThread,
 } from "./session-view.js";
@@ -379,6 +380,21 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       case "item/agentMessage/delta":
         this.handleAgentMessageDelta(notification.params);
         break;
+      case "item/started":
+        this.handleItemLifecycleNotification(notification.params);
+        break;
+      case "item/completed":
+        this.handleItemLifecycleNotification(notification.params);
+        break;
+      case "item/fileChange/patchUpdated":
+        this.handleFileChangePatchUpdated(notification.params);
+        break;
+      case "item/mcpToolCall/progress":
+        this.handleMcpToolCallProgress(notification.params);
+        break;
+      case "item/reasoning/summaryTextDelta":
+        this.handleReasoningSummaryTextDelta(notification.params);
+        break;
       case "turn/completed":
         this.handleTurnCompleted(notification.params);
         break;
@@ -545,6 +561,137 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     this.emitStatus(sessionId, status, {
       turnId: payload.turn.id,
       sourceTurnStatus: payload.turn.status,
+    });
+  }
+
+  private handleItemLifecycleNotification(params: unknown): void {
+    const payload = params as {
+      threadId: string;
+      turnId: string;
+      item: {
+        id?: string;
+        type?: string;
+      };
+    };
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
+    if (!sessionId) {
+      return;
+    }
+
+    const transcriptBlock = formatThreadItemAsTranscriptBlock(payload.item);
+    if (!transcriptBlock) {
+      return;
+    }
+
+    this.emit(sessionId, {
+      type: "activity",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        itemType: payload.item.type ?? "unknown",
+        itemId: payload.item.id,
+        transcriptBlock,
+        summary: summarizeTranscriptBlock(transcriptBlock),
+      },
+    });
+  }
+
+  private handleFileChangePatchUpdated(params: unknown): void {
+    const payload = params as {
+      threadId: string;
+      itemId: string;
+      changes?: Array<{
+        path?: string;
+        kind?: string;
+      }>;
+    };
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
+    if (!sessionId) {
+      return;
+    }
+
+    const changedPaths = (payload.changes ?? [])
+      .map((change) => change.path?.trim())
+      .filter((path): path is string => Boolean(path));
+    if (changedPaths.length === 0) {
+      return;
+    }
+
+    const transcriptBlock = [
+      "系统：文件修改进度",
+      ...changedPaths.slice(0, 6).map((path) => `涉及：${path}`),
+    ].join("\n");
+
+    this.emit(sessionId, {
+      type: "activity",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        itemType: "fileChange",
+        itemId: payload.itemId,
+        transcriptBlock,
+        summary: "文件修改进度",
+      },
+    });
+  }
+
+  private handleMcpToolCallProgress(params: unknown): void {
+    const payload = params as {
+      threadId: string;
+      itemId: string;
+      message?: string;
+    };
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
+    if (!sessionId) {
+      return;
+    }
+
+    const message = payload.message?.trim();
+    if (!message) {
+      return;
+    }
+
+    const transcriptBlock = `系统：工具调用进度\n${message}`;
+    this.emit(sessionId, {
+      type: "activity",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        itemType: "mcpToolCall",
+        itemId: payload.itemId,
+        transcriptBlock,
+        summary: message,
+      },
+    });
+  }
+
+  private handleReasoningSummaryTextDelta(params: unknown): void {
+    const payload = params as {
+      threadId: string;
+      itemId: string;
+      delta?: string;
+    };
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
+    if (!sessionId) {
+      return;
+    }
+
+    const delta = payload.delta?.trim();
+    if (!delta) {
+      return;
+    }
+
+    const transcriptBlock = `系统：推理摘要\n${delta}`;
+    this.emit(sessionId, {
+      type: "activity",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        itemType: "reasoning",
+        itemId: payload.itemId,
+        transcriptBlock,
+        summary: delta,
+      },
     });
   }
 
@@ -1078,4 +1225,21 @@ function compareTurnsDescending(
   const leftTimestamp = left.startedAt ?? left.completedAt ?? 0;
   const rightTimestamp = right.startedAt ?? right.completedAt ?? 0;
   return rightTimestamp - leftTimestamp;
+}
+
+function summarizeTranscriptBlock(block: string): string {
+  const firstMeaningfulLine = block
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && line !== "输出：");
+
+  if (!firstMeaningfulLine) {
+    return "收到新的操作事件。";
+  }
+
+  if (firstMeaningfulLine.startsWith("系统：")) {
+    return firstMeaningfulLine.slice("系统：".length).trim() || "收到新的操作事件。";
+  }
+
+  return firstMeaningfulLine;
 }

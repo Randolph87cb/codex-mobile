@@ -11,9 +11,38 @@ interface AppServerUserInput {
 }
 
 interface AppServerThreadItem {
+  id?: string;
   type?: string;
   text?: string;
   content?: AppServerUserInput[];
+  summary?: string[];
+  command?: string;
+  cwd?: string;
+  status?: string;
+  aggregatedOutput?: string | null;
+  exitCode?: number | null;
+  durationMs?: number | null;
+  changes?: Array<{
+    path?: string;
+    kind?: string;
+    diff?: string;
+  }>;
+  server?: string;
+  tool?: string;
+  arguments?: unknown;
+  result?: unknown;
+  error?: {
+    message?: string;
+  } | string | null;
+  namespace?: string | null;
+  contentItems?: unknown[] | null;
+  success?: boolean | null;
+  receiverThreadIds?: string[];
+  prompt?: string | null;
+  model?: string | null;
+  query?: string;
+  review?: string;
+  path?: string;
 }
 
 interface AppServerTurnError {
@@ -156,12 +185,7 @@ function collectTranscriptLines(thread: AppServerThread): string[] {
   for (const turn of turns) {
     for (const item of turn.items ?? []) {
       if (item.type === "userMessage") {
-        const text = normalizeText(
-          (item.content ?? [])
-            .filter((contentItem) => contentItem.type === "text")
-            .map((contentItem) => contentItem.text ?? "")
-            .join("\n"),
-        );
+        const text = extractUserMessageText(item);
         if (text) {
           lines.push(`你：${text}`);
         }
@@ -173,6 +197,12 @@ function collectTranscriptLines(thread: AppServerThread): string[] {
         if (text) {
           lines.push(`Codex：${text}`);
         }
+        continue;
+      }
+
+      const block = formatThreadItemAsTranscriptBlock(item);
+      if (block) {
+        lines.push(block);
       }
     }
 
@@ -182,6 +212,45 @@ function collectTranscriptLines(thread: AppServerThread): string[] {
   }
 
   return lines;
+}
+
+export function formatThreadItemAsTranscriptBlock(item: AppServerThreadItem): string | null {
+  switch (item.type) {
+    case "plan":
+      return buildSystemBlock("计划更新", [normalizeText(item.text)]);
+    case "reasoning":
+      return buildSystemBlock(
+        "推理摘要",
+        [
+          item.summary?.map((part) => part.trim()).filter(Boolean).join("\n"),
+          item.text,
+        ],
+      );
+    case "commandExecution":
+      return buildCommandExecutionBlock(item);
+    case "fileChange":
+      return buildFileChangeBlock(item);
+    case "mcpToolCall":
+      return buildMcpToolCallBlock(item);
+    case "dynamicToolCall":
+      return buildDynamicToolCallBlock(item);
+    case "collabAgentToolCall":
+      return buildCollabToolCallBlock(item);
+    case "webSearch":
+      return buildSystemBlock("网页搜索", [normalizeText(item.query)]);
+    case "imageView":
+      return buildSystemBlock("查看图片", [normalizeText(String(item.path ?? ""))]);
+    case "imageGeneration":
+      return buildSystemBlock("图片生成", [prettyJson(item.result), normalizeText(String(item.path ?? ""))]);
+    case "enteredReviewMode":
+      return buildSystemBlock("进入审查模式", [normalizeText(item.review)]);
+    case "exitedReviewMode":
+      return buildSystemBlock("退出审查模式", [normalizeText(item.review)]);
+    case "contextCompaction":
+      return buildSystemBlock("上下文压缩", ["Codex 对当前线程做了上下文压缩。"]);
+    default:
+      return null;
+  }
 }
 
 function compareTurns(left: AppServerTurn, right: AppServerTurn): number {
@@ -197,12 +266,7 @@ function extractFirstUserMessage(thread: AppServerThread): string | null {
         continue;
       }
 
-      const text = normalizeText(
-        (item.content ?? [])
-          .filter((contentItem) => contentItem.type === "text")
-          .map((contentItem) => contentItem.text ?? "")
-          .join("\n"),
-      );
+      const text = extractUserMessageText(item);
       if (text) {
         return text;
       }
@@ -312,4 +376,156 @@ function firstNonEmptyOrNull(...values: Array<string | null | undefined>): strin
   }
 
   return null;
+}
+
+function extractUserMessageText(item: AppServerThreadItem): string | null {
+  return normalizeText(
+    (item.content ?? [])
+      .filter((contentItem) => contentItem.type === "text")
+      .map((contentItem) => contentItem.text ?? "")
+      .join("\n"),
+  );
+}
+
+function buildCommandExecutionBlock(item: AppServerThreadItem): string {
+  const lines = [
+    `状态：${formatItemStatus(item.status)}`,
+    normalizeText(item.command) ? `命令：${normalizeText(item.command)}` : null,
+    normalizeText(item.cwd) ? `目录：${normalizeText(item.cwd)}` : null,
+    item.exitCode === null || item.exitCode === undefined ? null : `退出码：${item.exitCode}`,
+    item.durationMs === null || item.durationMs === undefined ? null : `耗时：${item.durationMs} ms`,
+  ];
+  const outputText = normalizeText(item.aggregatedOutput);
+  const output = outputText ? `输出：\n\`\`\`text\n${truncateText(outputText, 2000)}\n\`\`\`` : null;
+  return buildSystemBlock("命令执行", [...lines, output]);
+}
+
+function buildFileChangeBlock(item: AppServerThreadItem): string {
+  const changeLines = (item.changes ?? [])
+    .slice(0, 6)
+    .map((change) => {
+      const path = normalizeText(change.path, "未知路径");
+      return `${formatFileChangeKind(change.kind)}：${path}`;
+    });
+  const diffBlocks = (item.changes ?? [])
+    .slice(0, 2)
+    .map((change) => {
+      const diff = normalizeText(change.diff);
+      if (!diff) {
+        return null;
+      }
+      return `${normalizeText(change.path, "未知路径")}\n\`\`\`diff\n${truncateText(diff, 1600)}\n\`\`\``;
+    })
+    .filter((value): value is string => value !== null);
+
+  return buildSystemBlock(
+    "文件修改",
+    [
+      `状态：${formatItemStatus(item.status)}`,
+      ...changeLines,
+      ...diffBlocks,
+    ],
+  );
+}
+
+function buildMcpToolCallBlock(item: AppServerThreadItem): string {
+  return buildSystemBlock(
+    `工具调用 ${firstNonEmpty(normalizeText(item.server), "mcp")}/${firstNonEmpty(normalizeText(item.tool), "unknown")}`,
+    [
+      `状态：${formatItemStatus(item.status)}`,
+      normalizeText(prettyJson(item.arguments)),
+      normalizeText(prettyJson(item.result)),
+      normalizeText(extractErrorText(item.error)),
+    ],
+  );
+}
+
+function buildDynamicToolCallBlock(item: AppServerThreadItem): string {
+  const toolName = item.namespace
+    ? `${item.namespace}/${firstNonEmpty(normalizeText(item.tool), "unknown")}`
+    : firstNonEmpty(normalizeText(item.tool), "unknown");
+  return buildSystemBlock(
+    `动态工具 ${toolName}`,
+    [
+      `状态：${formatItemStatus(item.status)}`,
+      normalizeText(prettyJson(item.arguments)),
+      item.success === null || item.success === undefined ? null : `成功：${item.success}`,
+    ],
+  );
+}
+
+function buildCollabToolCallBlock(item: AppServerThreadItem): string {
+  return buildSystemBlock(
+    `协作调用 ${firstNonEmpty(normalizeText(item.tool), "unknown")}`,
+    [
+      `状态：${formatItemStatus(item.status)}`,
+      item.receiverThreadIds?.length ? `目标线程：${item.receiverThreadIds.join(", ")}` : null,
+      normalizeText(item.prompt) ? `提示：${truncateText(normalizeText(item.prompt) ?? "", 400)}` : null,
+      normalizeText(item.model) ? `模型：${normalizeText(item.model)}` : null,
+    ],
+  );
+}
+
+function buildSystemBlock(title: string, parts: Array<string | null | undefined>): string {
+  const lines = parts
+    .map((part) => normalizeText(part))
+    .filter((part): part is string => part !== null);
+  return [`系统：${title}`, ...lines].join("\n");
+}
+
+function truncateText(value: string, maxLength: number): string {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}\n...`;
+}
+
+function prettyJson(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return normalizeText(value);
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function extractErrorText(value: AppServerThreadItem["error"]): string | null {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return normalizeText(value.message);
+}
+
+function formatItemStatus(status: string | null | undefined): string {
+  switch (status) {
+    case "inProgress":
+      return "进行中";
+    case "completed":
+      return "已完成";
+    case "failed":
+      return "失败";
+    case "declined":
+      return "已拒绝";
+    default:
+      return firstNonEmpty(normalizeText(status), "未知");
+  }
+}
+
+function formatFileChangeKind(kind: string | null | undefined): string {
+  switch (kind) {
+    case "add":
+      return "新增";
+    case "delete":
+      return "删除";
+    case "update":
+      return "修改";
+    default:
+      return firstNonEmpty(normalizeText(kind), "变更");
+  }
 }

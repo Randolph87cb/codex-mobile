@@ -86,6 +86,53 @@ describe("session view mapping", () => {
     expect(view.transcriptPreview).toContain("Codex：第 7 条助手回复");
   });
 
+  test("includes operation items in transcript preview", () => {
+    const view = buildSessionViewFromThread({
+      id: "thread-ops",
+      cwd: "D:\\workspace\\codex-mobile",
+      modelProvider: "openai",
+      preview: "操作消息",
+      createdAt: 1_779_117_160,
+      updatedAt: 1_779_117_360,
+      status: {
+        type: "active",
+      },
+      turns: [
+        {
+          id: "turn-ops",
+          status: "inProgress",
+          startedAt: 1_779_117_260,
+          items: [
+            {
+              type: "commandExecution",
+              status: "completed",
+              command: "npm test",
+              cwd: "D:\\workspace\\codex-mobile\\bridge",
+              exitCode: 0,
+              aggregatedOutput: "all tests passed",
+            },
+            {
+              type: "fileChange",
+              status: "completed",
+              changes: [
+                {
+                  path: "bridge/src/app-server-runner.ts",
+                  kind: "update",
+                  diff: "@@ -1 +1 @@\n-old\n+new",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(view.transcriptPreview).toContain("系统：命令执行");
+    expect(view.transcriptPreview).toContain("命令：npm test");
+    expect(view.transcriptPreview).toContain("系统：文件修改");
+    expect(view.transcriptPreview).toContain("修改：bridge/src/app-server-runner.ts");
+  });
+
   test("prefers newer thread status over stale local running status", () => {
     const view = buildSessionViewFromThread(
       {

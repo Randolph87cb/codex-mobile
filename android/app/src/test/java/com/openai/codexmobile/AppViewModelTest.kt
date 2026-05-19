@@ -131,6 +131,37 @@ class AppViewModelTest {
     }
 
     @Test
+    fun activityEventAppendsOperationTranscriptAndUpdatesRealtimeSummary() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_activity", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_activity")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.Activity(
+                sessionId = "sess_activity",
+                itemType = "commandExecution",
+                itemId = "item-1",
+                transcriptBlock = "系统：命令执行\n命令：npm test",
+                summary = "命令执行",
+                timestamp = "2026-05-19T10:05:00Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("系统：命令执行\n命令：npm test") == true,
+        )
+        assertEquals("命令执行", viewModel.uiState.value.sessionRealtimeState.lastEventText)
+    }
+
+    @Test
     fun inputDuringApprovalIsQueuedAndSentAfterIdle() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_queue", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
