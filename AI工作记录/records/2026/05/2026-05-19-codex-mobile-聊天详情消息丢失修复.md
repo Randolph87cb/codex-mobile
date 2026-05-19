@@ -40,3 +40,19 @@
 - `cd android && .\gradlew.bat testDebugUnitTest`：通过
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 
+## 后续补充修复
+- 用户继续反馈：某些场景下会话实际已经空闲，但手机端仍显示 `running`，导致发送被错误拦截。
+- Android `AppViewModel.kt`
+  - 在实时流 `StreamClosed` 后，如果当前仍是 `running/awaiting_approval` 且没有活动审批，会立刻走一次 HTTP 快照纠正状态。
+  - 在用户点发送前，如果本地仍是忙状态但实时流未连接，会先向 bridge 做一次状态同步；若实际已空闲，则直接发送，不再误判为排队或阻塞。
+  - `refreshSessionSnapshot` 现在会同步更新 `sessionRealtimeState.statusText`，避免只改 `selectedSession.status` 而顶部状态条不刷新。
+- Android `AppViewModelTest.kt`
+  - 新增 `streamClosedRefreshesBusySessionSnapshotToIdle`
+  - 新增 `sendInputRefreshesStaleRunningStatusBeforeSubmitting`
+
+## 本次验证补充
+- Android 验证需串行执行；并行跑 `testDebugUnitTest` 与 `build-android-debug.ps1` 会争用同一 `app/build` 目录，引发 Kotlin 增量编译缓存锁冲突。
+- 已串行执行：
+  - `cd android && .\gradlew.bat --stop && .\gradlew.bat testDebugUnitTest`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+

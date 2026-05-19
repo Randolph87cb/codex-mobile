@@ -208,6 +208,38 @@ class AppViewModelTest {
     }
 
     @Test
+    fun streamClosedRefreshesBusySessionSnapshotToIdle() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_stream_fix", status = "running")
+        val refreshed = detail.copy(status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to refreshed,
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail("sess_stream_fix")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.StreamClosed(
+                sessionId = "sess_stream_fix",
+                reason = "socket closed",
+                timestamp = "2026-05-19T19:20:00.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("idle", viewModel.uiState.value.selectedSession?.status)
+        assertEquals("空闲", viewModel.uiState.value.sessionRealtimeState.statusText)
+    }
+
+    @Test
     fun streamClosedInBackgroundWaitsUntilForegroundToReconnect() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_resume", status = "running")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -271,6 +303,32 @@ class AppViewModelTest {
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
         assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
+    }
+
+    @Test
+    fun sendInputRefreshesStaleRunningStatusBeforeSubmitting() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_stale_running", status = "running")
+        val refreshed = detail.copy(status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to refreshed,
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_stale_running")
+        advanceUntilIdle()
+
+        viewModel.updateDraftMessage("继续执行")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(listOf("继续执行"), bridgeApi.sentInputs)
+        assertTrue(viewModel.uiState.value.queuedInputs.isEmpty())
+        assertEquals("running", viewModel.uiState.value.selectedSession?.status)
     }
 
     @Test

@@ -524,40 +524,47 @@ class AppViewModel(
             return
         }
 
-        if (detail != null && shouldQueueInput(detail, uiState.value.sessionRealtimeState)) {
-            if (pendingImageAttachment != null) {
-                appLogger.warn("AppViewModel", "当前轮未结束，暂不支持带图片的排队发送：sessionId=${detail.id}")
-                _uiState.update {
-                    it.copy(message = "当前轮尚未结束，暂不支持把图片加入排队。")
-                }
-                return
-            }
-            appLogger.info(
-                "AppViewModel",
-                "当前轮未结束，消息进入排队：sessionId=${detail.id}, textLength=${text.length}",
-            )
-            enqueueQueuedInput(detail.id, text)
-            _uiState.update {
-                it.copy(
-                    draftMessage = "",
-                    message = "当前轮尚未结束，消息已加入排队。",
-                    queuedInputs = queuedInputsFor(detail.id),
-                )
-            }
-            return
-        }
-
         val activeDetail = detail ?: return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, message = null) }
             try {
+                val resolvedDetail = resolveSessionDetailBeforeSending(
+                    detail = activeDetail,
+                    realtimeState = uiState.value.sessionRealtimeState,
+                )
+                if (shouldQueueInput(resolvedDetail, uiState.value.sessionRealtimeState)) {
+                    if (pendingImageAttachment != null) {
+                        appLogger.warn("AppViewModel", "当前轮未结束，暂不支持带图片的排队发送：sessionId=${resolvedDetail.id}")
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                message = "当前轮尚未结束，暂不支持把图片加入排队。",
+                            )
+                        }
+                        return@launch
+                    }
+                    appLogger.info(
+                        "AppViewModel",
+                        "当前轮未结束，消息进入排队：sessionId=${resolvedDetail.id}, textLength=${text.length}",
+                    )
+                    enqueueQueuedInput(resolvedDetail.id, text)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            draftMessage = "",
+                            message = "当前轮尚未结束，消息已加入排队。",
+                            queuedInputs = queuedInputsFor(resolvedDetail.id),
+                        )
+                    }
+                    return@launch
+                }
                 appLogger.info(
                     "AppViewModel",
-                    "发送消息：sessionId=${activeDetail.id}, textLength=${text.length}, hasImage=${pendingImageAttachment != null}",
+                    "发送消息：sessionId=${resolvedDetail.id}, textLength=${text.length}, hasImage=${pendingImageAttachment != null}",
                 )
                 submitInputNow(
-                    detail = activeDetail,
+                    detail = resolvedDetail,
                     text = text,
                     pendingImageAttachment = pendingImageAttachment,
                     fromQueue = false,
@@ -911,6 +918,9 @@ class AppViewModel(
                         ),
                     )
                 }
+                if (shouldRefreshBusyState(uiState.value.selectedSession, uiState.value.sessionRealtimeState)) {
+                    refreshSessionSnapshot(sessionId)
+                }
             }
 
             is SessionStreamEvent.SessionStarted -> {
@@ -1157,7 +1167,7 @@ class AppViewModel(
         }
     }
 
-    private suspend fun refreshSessionSnapshot(sessionId: String) {
+    private suspend fun refreshSessionSnapshot(sessionId: String): SessionDetail? {
         val detail = try {
             sessionRepository.getSessionDetail(sessionId)
         } catch (error: Exception) {
@@ -1165,11 +1175,27 @@ class AppViewModel(
             null
         }
 
+        var mergedDetail: SessionDetail? = null
         if (detail != null && uiState.value.selectedSession?.id == sessionId) {
             _uiState.update {
+                val merged = mergeSessionDetail(it.selectedSession, detail)
+                mergedDetail = merged
                 it.copy(
-                    selectedSession = mergeSessionDetail(it.selectedSession, detail),
+                    selectedSession = merged,
                     queuedInputs = queuedInputsFor(sessionId),
+                    sessionRealtimeState = it.sessionRealtimeState.copy(
+                        statusText = localizedSessionStatus(merged.status),
+                        fallbackNotice = if (merged.status == "awaiting_approval" || merged.status == "error") {
+                            it.sessionRealtimeState.fallbackNotice
+                        } else {
+                            null
+                        },
+                        pendingApproval = if (merged.status == "awaiting_approval") {
+                            it.sessionRealtimeState.pendingApproval
+                        } else {
+                            null
+                        },
+                    ),
                 )
             }
             if (detail.status == "idle") {
@@ -1178,6 +1204,7 @@ class AppViewModel(
         }
 
         refreshSessions()
+        return mergedDetail ?: detail
     }
 
     private suspend fun refreshSessions() {
@@ -1444,6 +1471,39 @@ class AppViewModel(
         return realtimeState.pendingApproval != null ||
             detail.status == "awaiting_approval" ||
             detail.status == "running"
+    }
+
+    private suspend fun resolveSessionDetailBeforeSending(
+        detail: SessionDetail,
+        realtimeState: SessionRealtimeUiState,
+    ): SessionDetail {
+        if (!shouldRefreshBusyState(detail, realtimeState)) {
+            return detail
+        }
+
+        appLogger.info(
+            "AppViewModel",
+            "发送前先同步会话状态：sessionId=${detail.id}, localStatus=${detail.status}",
+        )
+        return refreshSessionSnapshot(detail.id)
+            ?: uiState.value.selectedSession?.takeIf { it.id == detail.id }
+            ?: detail
+    }
+
+    private fun shouldRefreshBusyState(
+        detail: SessionDetail?,
+        realtimeState: SessionRealtimeUiState,
+    ): Boolean {
+        if (detail == null) {
+            return false
+        }
+        if (realtimeState.pendingApproval != null) {
+            return false
+        }
+        if (realtimeState.isConnected) {
+            return false
+        }
+        return detail.status == "running" || detail.status == "awaiting_approval"
     }
 
     private fun enqueueQueuedInput(sessionId: String, text: String) {
