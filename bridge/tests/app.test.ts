@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
 import type { HistoryCapableBridgeRunner } from "../src/bridge-runner.js";
 import { buildBridgeApp } from "../src/app.js";
 import { SessionStore } from "../src/session-store.js";
@@ -106,6 +109,8 @@ class TestRunner implements HistoryCapableBridgeRunner {
 }
 
 describe("buildBridgeApp", () => {
+  const tempDirs: string[] = [];
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -324,6 +329,76 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("serves uploaded image content from attachment route", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const payload = Buffer.from("png-image-content");
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      payload: {
+        displayName: "sample.png",
+        mimeType: "image/png",
+        contentBase64: payload.toString("base64"),
+      },
+    });
+
+    expect(upload.statusCode).toBe(201);
+    const attachmentId = upload.json<{ id: string }>().id;
+
+    const content = await app.inject({
+      method: "GET",
+      url: `/api/attachment/image/${attachmentId}/content`,
+    });
+
+    expect(content.statusCode).toBe(200);
+    expect(content.headers["content-type"]).toContain("image/png");
+    expect(content.headers["cache-control"]).toBe("no-store");
+    expect(content.body).toBe(payload.toString());
+
+    await app.close();
+  });
+
+  test("rejects invalid image uploads", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+
+    const unsupportedMimeType = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      payload: {
+        displayName: "sample.svg",
+        mimeType: "image/svg+xml",
+        contentBase64: Buffer.from("<svg/>").toString("base64"),
+      },
+    });
+    expect(unsupportedMimeType.statusCode).toBe(400);
+    expect(unsupportedMimeType.json()).toMatchObject({
+      error: "invalid-image-upload",
+      message: "unsupported-image-mime-type",
+    });
+
+    const invalidBase64 = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      payload: {
+        displayName: "sample.jpg",
+        mimeType: "image/jpeg",
+        contentBase64: "not-base64!!",
+      },
+    });
+    expect(invalidBase64.statusCode).toBe(400);
+    expect(invalidBase64.json()).toMatchObject({
+      error: "invalid-image-upload",
+      message: "invalid-image-base64",
+    });
+
+    await app.close();
+  });
+
   test("updates persisted session config through patch route", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
@@ -450,6 +525,47 @@ describe("buildBridgeApp", () => {
         ],
       }),
     );
+
+    await app.close();
+  });
+
+  test("serves whitelisted image files and rejects paths outside the whitelist", async () => {
+    const allowedRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-image-file-"));
+    tempDirs.push(allowedRoot);
+    const filePath = path.join(allowedRoot, "history-image.png");
+    await writeFile(filePath, "history-image-content");
+
+    const blockedRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-image-file-blocked-"));
+    tempDirs.push(blockedRoot);
+    const blockedFilePath = path.join(blockedRoot, "outside.jpg");
+    await writeFile(blockedFilePath, "outside-image-content");
+
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({
+      store,
+      runner,
+      security: createSecurityConfig({
+        allowedCwds: [allowedRoot.toLowerCase()],
+      }),
+    });
+
+    const allowedResponse = await app.inject({
+      method: "GET",
+      url: `/api/image/file?path=${encodeURIComponent(filePath)}`,
+    });
+    expect(allowedResponse.statusCode).toBe(200);
+    expect(allowedResponse.headers["content-type"]).toContain("image/png");
+    expect(allowedResponse.body).toBe("history-image-content");
+
+    const forbiddenResponse = await app.inject({
+      method: "GET",
+      url: `/api/image/file?path=${encodeURIComponent(blockedFilePath)}`,
+    });
+    expect(forbiddenResponse.statusCode).toBe(403);
+    expect(forbiddenResponse.json()).toMatchObject({
+      error: "image-path-not-allowed",
+    });
 
     await app.close();
   });
@@ -581,5 +697,16 @@ describe("buildBridgeApp", () => {
     });
 
     await app.close();
+  });
+
+  afterEach(async () => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (!dir) {
+        continue;
+      }
+
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

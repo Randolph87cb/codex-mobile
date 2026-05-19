@@ -1,6 +1,7 @@
 package com.openai.codexmobile.ui.screen
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,6 +40,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,14 +55,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingImageAttachmentUiState
 import com.openai.codexmobile.PendingApprovalUiState
@@ -66,6 +75,7 @@ import com.openai.codexmobile.SessionRealtimeUiState
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.ui.TestTags
+import kotlinx.coroutines.launch
 
 private enum class SessionConfigEditor {
     Cwd,
@@ -75,6 +85,11 @@ private enum class SessionConfigEditor {
     SandboxMode,
 }
 
+private data class ImagePreviewState(
+    val title: String,
+    val source: String,
+)
+
 @Composable
 fun SessionDetailScreen(
     paddingValues: PaddingValues,
@@ -83,11 +98,13 @@ fun SessionDetailScreen(
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     draftMessage: String,
-    pendingImageAttachment: PendingImageAttachmentUiState?,
+    pendingImageAttachments: List<PendingImageAttachmentUiState>,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
-    onClearPendingImageAttachment: () -> Unit,
+    onRemovePendingImageAttachment: (String) -> Unit,
     onSend: () -> Unit,
     onApprovalDecision: (ApprovalDecision) -> Unit,
     onUpdateCwd: (String) -> Unit,
@@ -96,6 +113,7 @@ fun SessionDetailScreen(
     onUpdateServiceTier: (String) -> Unit,
     onUpdateSandboxMode: (String) -> Unit,
     onRefreshSession: () -> Unit,
+    onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
 ) {
     val detail = remember(sessionDetail, draftSession) {
@@ -105,6 +123,7 @@ fun SessionDetailScreen(
     var statusExpanded by rememberSaveable { mutableStateOf(false) }
     var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
     var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
+    var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
 
     LaunchedEffect(
         detail?.transcriptPreview,
@@ -129,6 +148,16 @@ fun SessionDetailScreen(
         onUpdateServiceTier = onUpdateServiceTier,
         onUpdateSandboxMode = onUpdateSandboxMode,
     )
+
+    imagePreviewState?.let { preview ->
+        ImagePreviewDialog(
+            preview = preview,
+            bridgeEndpoint = bridgeEndpoint,
+            bridgeAuthToken = bridgeAuthToken,
+            onDismiss = { imagePreviewState = null },
+            onShowMessage = onShowMessage,
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -180,13 +209,29 @@ fun SessionDetailScreen(
                 )
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onOpenImagePreview = { title, source ->
+                        imagePreviewState = ImagePreviewState(
+                            title = title,
+                            source = source,
+                        )
+                    },
                 )
             }
         }
-        pendingImageAttachment?.let { attachment ->
-            PendingImageAttachmentCard(
-                attachment = attachment,
-                onClear = onClearPendingImageAttachment,
+        if (pendingImageAttachments.isNotEmpty()) {
+            PendingImageAttachmentTray(
+                attachments = pendingImageAttachments,
+                bridgeEndpoint = bridgeEndpoint,
+                bridgeAuthToken = bridgeAuthToken,
+                onOpenImagePreview = { attachment ->
+                    imagePreviewState = ImagePreviewState(
+                        title = attachment.displayName,
+                        source = attachment.toInlineImageSource(),
+                    )
+                },
+                onRemoveAttachment = onRemovePendingImageAttachment,
             )
         }
         Row(
@@ -224,7 +269,7 @@ fun SessionDetailScreen(
             }
             Button(
                 onClick = onSend,
-                enabled = !isLoading && detail != null && (draftMessage.isNotBlank() || pendingImageAttachment != null),
+                enabled = !isLoading && detail != null && (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()),
                 modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
             ) {
                 if (isLoading) {
@@ -237,29 +282,87 @@ fun SessionDetailScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PendingImageAttachmentCard(
-    attachment: PendingImageAttachmentUiState,
-    onClear: () -> Unit,
+private fun PendingImageAttachmentTray(
+    attachments: List<PendingImageAttachmentUiState>,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onOpenImagePreview: (PendingImageAttachmentUiState) -> Unit,
+    onRemoveAttachment: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .testTag(TestTags.SessionDetailPendingImageTray),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(imageVector = Icons.Filled.Image, contentDescription = null)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "已附加图片", style = MaterialTheme.typography.labelLarge)
-                Text(text = attachment.displayName, style = MaterialTheme.typography.bodyMedium)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(imageVector = Icons.Filled.Image, contentDescription = null)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "已附加图片（${attachments.size}）", style = MaterialTheme.typography.labelLarge)
+                    Text(text = "原图上传，不做压缩。", style = MaterialTheme.typography.bodySmall)
+                }
             }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                attachments.forEach { attachment ->
+                    PendingImageThumbnailCard(
+                        attachment = attachment,
+                        bridgeEndpoint = bridgeEndpoint,
+                        bridgeAuthToken = bridgeAuthToken,
+                        onOpen = { onOpenImagePreview(attachment) },
+                        onRemove = { onRemoveAttachment(attachment.localId) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PendingImageThumbnailCard(
+    attachment: PendingImageAttachmentUiState,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.width(132.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TranscriptImageThumbnail(
+                source = attachment.toInlineImageSource(),
+                title = attachment.displayName,
+                bridgeEndpoint = bridgeEndpoint,
+                bridgeAuthToken = bridgeAuthToken,
+                modifier = Modifier.testTag(TestTags.SessionDetailPendingImageThumbnailPrefix + attachment.localId),
+                onOpen = onOpen,
+            )
+            Text(
+                text = attachment.displayName,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             TextButton(
-                onClick = onClear,
-                modifier = Modifier.testTag(TestTags.SessionDetailClearImageButton),
+                onClick = onRemove,
+                modifier = Modifier.testTag(TestTags.SessionDetailClearImageButton + "_" + attachment.localId),
             ) {
                 Text("移除")
             }
@@ -655,6 +758,9 @@ private fun QueuedInputCard(
 @Composable
 private fun TranscriptBubbleList(
     transcript: String,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onOpenImagePreview: (String, String) -> Unit,
 ) {
     val items = buildTranscriptDisplayItems(transcript)
     if (items.isEmpty()) {
@@ -671,11 +777,17 @@ private fun TranscriptBubbleList(
                 is TranscriptDisplayItem.BubbleItem -> TranscriptBubbleCard(
                     bubble = item.bubble,
                     toggleTag = TestTags.SessionDetailTranscriptBubbleTogglePrefix + index,
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onOpenImagePreview = onOpenImagePreview,
                 )
 
                 is TranscriptDisplayItem.ExecutionGroup -> ExecutionProcessCard(
                     index = index,
                     group = item,
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onOpenImagePreview = onOpenImagePreview,
                 )
             }
         }
@@ -686,6 +798,9 @@ private fun TranscriptBubbleList(
 private fun TranscriptBubbleCard(
     bubble: TranscriptBubble,
     toggleTag: String,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onOpenImagePreview: (String, String) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
@@ -733,7 +848,13 @@ private fun TranscriptBubbleCard(
                 }
 
                 if (!isCollapsible || expanded) {
-                    TranscriptPartsColumn(bubble.parts)
+                    TranscriptPartsColumn(
+                        parts = bubble.parts,
+                        bridgeEndpoint = bridgeEndpoint,
+                        bridgeAuthToken = bridgeAuthToken,
+                        testTagPrefix = toggleTag,
+                        onOpenImagePreview = onOpenImagePreview,
+                    )
                 }
             }
         }
@@ -744,6 +865,9 @@ private fun TranscriptBubbleCard(
 private fun ExecutionProcessCard(
     index: Int,
     group: TranscriptDisplayItem.ExecutionGroup,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onOpenImagePreview: (String, String) -> Unit,
 ) {
     var expanded by rememberSaveable(index, group.summaryLine) { mutableStateOf(false) }
 
@@ -772,6 +896,9 @@ private fun ExecutionProcessCard(
                             ExecutionActivityCard(
                                 toggleTag = TestTags.SessionDetailExecutionEntryTogglePrefix + "${index}_${activityIndex}",
                                 bubble = bubble,
+                                bridgeEndpoint = bridgeEndpoint,
+                                bridgeAuthToken = bridgeAuthToken,
+                                onOpenImagePreview = onOpenImagePreview,
                             )
                         }
                     }
@@ -785,6 +912,9 @@ private fun ExecutionProcessCard(
 private fun ExecutionActivityCard(
     toggleTag: String,
     bubble: TranscriptBubble,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onOpenImagePreview: (String, String) -> Unit,
 ) {
     var expanded by rememberSaveable(toggleTag, bubble.summaryLine) { mutableStateOf(false) }
 
@@ -805,7 +935,13 @@ private fun ExecutionActivityCard(
             )
 
             if (expanded) {
-                TranscriptPartsColumn(bubble.parts)
+                TranscriptPartsColumn(
+                    parts = bubble.parts,
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    testTagPrefix = toggleTag,
+                    onOpenImagePreview = onOpenImagePreview,
+                )
             }
         }
     }
@@ -852,13 +988,32 @@ private fun TranscriptToggleHeader(
 }
 
 @Composable
-private fun TranscriptPartsColumn(parts: List<TranscriptPart>) {
-    parts.forEach { part ->
+private fun TranscriptPartsColumn(
+    parts: List<TranscriptPart>,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    testTagPrefix: String,
+    onOpenImagePreview: (String, String) -> Unit,
+) {
+    parts.forEachIndexed { index, part ->
         when (part) {
             is TranscriptPart.Text -> {
                 Text(
                     text = part.text,
                     style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            is TranscriptPart.Image -> {
+                TranscriptImageThumbnail(
+                    source = part.source,
+                    title = part.altText,
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    modifier = Modifier.testTag(TestTags.SessionDetailTranscriptImagePrefix + "${testTagPrefix}_$index"),
+                    onOpen = {
+                        onOpenImagePreview(part.altText, part.source)
+                    },
                 )
             }
 
@@ -894,6 +1049,184 @@ private fun CodeBlockCard(part: TranscriptPart.CodeBlock) {
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
             )
+        }
+    }
+}
+
+@Composable
+private fun TranscriptImageThumbnail(
+    source: String,
+    title: String,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    modifier: Modifier = Modifier,
+    onOpen: () -> Unit,
+) {
+    val imageState = rememberTranscriptImageState(
+        source = source,
+        bridgeEndpoint = bridgeEndpoint,
+        bridgeAuthToken = bridgeAuthToken,
+    )
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when (imageState) {
+                TranscriptImageLoadState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 96.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(strokeWidth = 2.dp)
+                    }
+                }
+
+                is TranscriptImageLoadState.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 96.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(imageVector = Icons.Filled.Image, contentDescription = null)
+                            Text(
+                                text = imageState.message,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+
+                is TranscriptImageLoadState.Success -> {
+                    Image(
+                        bitmap = imageState.image.bitmap,
+                        contentDescription = title,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 96.dp, max = 220.dp),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImagePreviewDialog(
+    preview: ImagePreviewState,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onDismiss: () -> Unit,
+    onShowMessage: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val imageState = rememberTranscriptImageState(
+        source = preview.source,
+        bridgeEndpoint = bridgeEndpoint,
+        bridgeAuthToken = bridgeAuthToken,
+    )
+    var isSaving by remember(preview.source) { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SessionDetailImagePreviewDialog),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = preview.title,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                when (imageState) {
+                    TranscriptImageLoadState.Loading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 220.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    is TranscriptImageLoadState.Error -> {
+                        Text(
+                            text = imageState.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    is TranscriptImageLoadState.Success -> {
+                        Image(
+                            bitmap = imageState.image.bitmap,
+                            contentDescription = preview.title,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 520.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                ) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("关闭")
+                    }
+                    Button(
+                        onClick = {
+                            val loadedImage = (imageState as? TranscriptImageLoadState.Success)?.image ?: return@Button
+                            coroutineScope.launch {
+                                isSaving = true
+                                val message = runCatching {
+                                    saveTranscriptImage(
+                                        context = context,
+                                        image = loadedImage,
+                                        displayName = preview.title,
+                                    )
+                                }.getOrElse { error ->
+                                    error.message ?: "保存图片失败。"
+                                }
+                                onShowMessage(message)
+                                isSaving = false
+                            }
+                        },
+                        enabled = imageState is TranscriptImageLoadState.Success && !isSaving,
+                        modifier = Modifier.testTag(TestTags.SessionDetailImagePreviewSaveButton),
+                    ) {
+                        Text(if (isSaving) "保存中" else "保存")
+                    }
+                }
+            }
         }
     }
 }
@@ -999,6 +1332,10 @@ private fun DraftSessionUiState.toDraftDetail(): SessionDetail {
         sandboxMode = sandboxMode,
         status = "draft",
     )
+}
+
+private fun PendingImageAttachmentUiState.toInlineImageSource(): String {
+    return "data:$mimeType;base64,$contentBase64"
 }
 
 private fun localizedReasoning(value: String): String {

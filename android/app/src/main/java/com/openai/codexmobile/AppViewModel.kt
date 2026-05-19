@@ -16,6 +16,7 @@ import com.openai.codexmobile.data.SessionInputAttachmentRef
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
+import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.ArrayDeque
+import java.util.UUID
 
 private const val DraftSessionId = "__draft__"
 private const val SessionStreamReconnectBaseDelayMs = 1_500L
@@ -55,7 +57,7 @@ data class AppUiState(
     val message: String? = null,
     val settingsItems: List<Pair<String, String>>,
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
-    val pendingImageAttachment: PendingImageAttachmentUiState? = null,
+    val pendingImageAttachments: List<PendingImageAttachmentUiState> = emptyList(),
     val queuedInputs: List<String> = emptyList(),
     val diagnosticsLog: String = "暂无日志。",
 ) {
@@ -91,6 +93,7 @@ data class PendingApprovalUiState(
 )
 
 data class PendingImageAttachmentUiState(
+    val localId: String,
     val displayName: String,
     val mimeType: String,
     val contentBase64: String,
@@ -191,32 +194,40 @@ class AppViewModel(
         _uiState.update { it.copy(draftMessage = value) }
     }
 
-    fun attachPreparedImage(
-        displayName: String,
-        mimeType: String,
-        contentBase64: String,
+    fun attachPreparedImages(
+        attachments: List<UploadImageAttachmentRequest>,
     ) {
-        if (contentBase64.isBlank()) {
+        val validAttachments = attachments.filter { it.contentBase64.isNotBlank() }
+        if (validAttachments.isEmpty()) {
             _uiState.update { it.copy(message = "图片内容为空，无法附加。") }
             return
         }
 
         _uiState.update {
+            val appended = validAttachments.map { attachment ->
+                PendingImageAttachmentUiState(
+                    localId = UUID.randomUUID().toString(),
+                    displayName = attachment.displayName.ifBlank { "image" },
+                    mimeType = attachment.mimeType.ifBlank { "image/jpeg" },
+                    contentBase64 = attachment.contentBase64,
+                )
+            }
             it.copy(
-                pendingImageAttachment = PendingImageAttachmentUiState(
-                    displayName = displayName.ifBlank { "image.jpg" },
-                    mimeType = mimeType.ifBlank { "image/jpeg" },
-                    contentBase64 = contentBase64,
-                ),
-                message = "已附加图片：${displayName.ifBlank { "image.jpg" }}",
+                pendingImageAttachments = it.pendingImageAttachments + appended,
+                message = if (appended.size == 1) {
+                    "已附加图片：${appended.first().displayName}"
+                } else {
+                    "已附加 ${appended.size} 张图片。"
+                },
             )
         }
     }
 
-    fun clearPendingImageAttachment() {
+    fun removePendingImageAttachment(localId: String) {
         _uiState.update {
+            val remaining = it.pendingImageAttachments.filterNot { attachment -> attachment.localId == localId }
             it.copy(
-                pendingImageAttachment = null,
+                pendingImageAttachments = remaining,
                 message = "已移除图片附件。",
             )
         }
@@ -283,7 +294,7 @@ class AppViewModel(
                     sessions = emptyList(),
                     selectedSession = null,
                     selectedDraftSession = null,
-                    pendingImageAttachment = null,
+                    pendingImageAttachments = emptyList(),
                     message = "已断开连接。",
                     queuedInputs = emptyList(),
                 ).withSettingsItems()
@@ -360,7 +371,7 @@ class AppViewModel(
             it.copy(
                 selectedDraftSession = null,
                 draftMessage = "",
-                pendingImageAttachment = null,
+                pendingImageAttachments = emptyList(),
                 queuedInputs = emptyList(),
                 sessionRealtimeState = SessionRealtimeUiState(),
             )
@@ -472,8 +483,8 @@ class AppViewModel(
         val detail = uiState.value.selectedSession
         val draftSession = uiState.value.selectedDraftSession
         val text = uiState.value.draftMessage.trim()
-        val pendingImageAttachment = uiState.value.pendingImageAttachment
-        if (text.isEmpty() && pendingImageAttachment == null) {
+        val pendingImageAttachments = uiState.value.pendingImageAttachments
+        if (text.isEmpty() && pendingImageAttachments.isEmpty()) {
             return
         }
 
@@ -507,7 +518,7 @@ class AppViewModel(
                     submitInputNow(
                         detail = created,
                         text = text,
-                        pendingImageAttachment = pendingImageAttachment,
+                        pendingImageAttachments = pendingImageAttachments,
                         fromQueue = false,
                     )
                 } catch (error: Exception) {
@@ -534,7 +545,7 @@ class AppViewModel(
                     realtimeState = uiState.value.sessionRealtimeState,
                 )
                 if (shouldQueueInput(resolvedDetail, uiState.value.sessionRealtimeState)) {
-                    if (pendingImageAttachment != null) {
+                    if (pendingImageAttachments.isNotEmpty()) {
                         appLogger.warn("AppViewModel", "当前轮未结束，暂不支持带图片的排队发送：sessionId=${resolvedDetail.id}")
                         _uiState.update {
                             it.copy(
@@ -559,16 +570,16 @@ class AppViewModel(
                     }
                     return@launch
                 }
-                appLogger.info(
-                    "AppViewModel",
-                    "发送消息：sessionId=${resolvedDetail.id}, textLength=${text.length}, hasImage=${pendingImageAttachment != null}",
-                )
-                submitInputNow(
-                    detail = resolvedDetail,
-                    text = text,
-                    pendingImageAttachment = pendingImageAttachment,
-                    fromQueue = false,
-                )
+                    appLogger.info(
+                        "AppViewModel",
+                    "发送消息：sessionId=${resolvedDetail.id}, textLength=${text.length}, imageCount=${pendingImageAttachments.size}",
+                    )
+                    submitInputNow(
+                        detail = resolvedDetail,
+                        text = text,
+                        pendingImageAttachments = pendingImageAttachments,
+                        fromQueue = false,
+                    )
             } catch (error: Exception) {
                 appLogger.error("AppViewModel", "发送消息失败：sessionId=${activeDetail.id}", error)
                 _uiState.update {
@@ -1419,25 +1430,23 @@ class AppViewModel(
     private suspend fun submitInputNow(
         detail: SessionDetail,
         text: String,
-        pendingImageAttachment: PendingImageAttachmentUiState?,
+        pendingImageAttachments: List<PendingImageAttachmentUiState>,
         fromQueue: Boolean,
     ) {
         appLogger.info(
             "AppViewModel",
-            "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, hasImage=${pendingImageAttachment != null}, fromQueue=$fromQueue",
+            "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, imageCount=${pendingImageAttachments.size}, fromQueue=$fromQueue",
         )
-        val attachmentRefs = if (pendingImageAttachment != null) {
-            val uploaded = bridgeApi.uploadImageAttachment(
+        val uploadedImages = pendingImageAttachments.map { pendingImageAttachment ->
+            bridgeApi.uploadImageAttachment(
                 UploadImageAttachmentRequest(
                     displayName = pendingImageAttachment.displayName,
                     mimeType = pendingImageAttachment.mimeType,
                     contentBase64 = pendingImageAttachment.contentBase64,
                 ),
             )
-            listOf(SessionInputAttachmentRef(id = uploaded.id))
-        } else {
-            emptyList()
         }
+        val attachmentRefs = uploadedImages.map { uploaded -> SessionInputAttachmentRef(id = uploaded.id) }
         bridgeApi.sendInput(
             detail.id,
             SendInputRequest(
@@ -1449,17 +1458,17 @@ class AppViewModel(
         val updatedDetail = appendUserMessage(
             detail = detail,
             message = text,
-            imageDisplayName = pendingImageAttachment?.displayName,
+            uploadedImages = uploadedImages,
         )
         _uiState.update {
             it.copy(
                 isLoading = false,
                 selectedSession = updatedDetail,
                 draftMessage = "",
-                pendingImageAttachment = null,
+                pendingImageAttachments = emptyList(),
                 message = if (fromQueue) {
                     "已发送排队消息。"
-                } else if (pendingImageAttachment != null) {
+                } else if (pendingImageAttachments.isNotEmpty()) {
                     "图片已发送，等待 Codex 回复。"
                 } else {
                     "消息已发送，等待实时输出。"
@@ -1469,7 +1478,7 @@ class AppViewModel(
                     statusText = localizedSessionStatus("running"),
                     lastEventText = if (fromQueue) {
                         "已发送一条排队消息，等待 Codex 回复。"
-                    } else if (pendingImageAttachment != null) {
+                    } else if (pendingImageAttachments.isNotEmpty()) {
                         "已发送图片附件，等待 Codex 回复。"
                     } else {
                         "已发送消息，等待 Codex 回复。"
@@ -1567,7 +1576,7 @@ class AppViewModel(
             submitInputNow(
                 detail = detail,
                 text = nextMessage,
-                pendingImageAttachment = null,
+                pendingImageAttachments = emptyList(),
                 fromQueue = true,
             )
         } catch (error: Exception) {
@@ -1831,7 +1840,7 @@ private fun transcriptCompletenessScore(transcript: String): Int {
 private fun appendUserMessage(
     detail: SessionDetail,
     message: String,
-    imageDisplayName: String?,
+    uploadedImages: List<UploadedImageAttachment>,
 ): SessionDetail {
     val current = detail.transcriptPreview.trimEnd()
     val nextTranscript = buildString {
@@ -1843,12 +1852,15 @@ private fun appendUserMessage(
         if (message.isNotBlank()) {
             append(message)
         }
-        if (!imageDisplayName.isNullOrBlank()) {
-            if (message.isNotBlank()) {
+        uploadedImages.forEachIndexed { index, image ->
+            if (message.isNotBlank() || index > 0) {
                 append("\n")
             }
-            append("[图片] ")
-            append(imageDisplayName)
+            append("![")
+            append(image.displayName)
+            append("](bridge-attachment://")
+            append(image.id)
+            append(")")
         }
     }
 

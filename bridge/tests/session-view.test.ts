@@ -44,6 +44,55 @@ describe("session view mapping", () => {
     expect(view.threadId).toBe("thread-1");
   });
 
+  test("renders historical image items as bridge image markdown", () => {
+    const localImagePath = "D:\\workspace\\codex-mobile\\screenshots\\preview image.png";
+    const view = buildSessionViewFromThread({
+      id: "thread-image",
+      cwd: "D:\\workspace\\codex-mobile",
+      modelProvider: "openai",
+      preview: "看图",
+      createdAt: 1_779_117_160,
+      updatedAt: 1_779_117_260,
+      status: {
+        type: "idle",
+      },
+      turns: [
+        {
+          id: "turn-image",
+          status: "completed",
+          startedAt: 1_779_117_160,
+          completedAt: 1_779_117_260,
+          items: [
+            {
+              type: "userMessage",
+              content: [
+                {
+                  type: "text",
+                  text: "帮我看下这两张图",
+                },
+                {
+                  type: "localImage",
+                  path: localImagePath,
+                },
+                {
+                  type: "image",
+                  text: "远程图片",
+                  imageUrl: "https://example.com/remote.png",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(view.transcriptPreview).toContain("你：帮我看下这两张图");
+    expect(view.transcriptPreview).toContain(
+      `![preview image.png](/api/image/file?path=${encodeURIComponent(localImagePath)})`,
+    );
+    expect(view.transcriptPreview).toContain("![远程图片](https://example.com/remote.png)");
+  });
+
   test("keeps earlier transcript blocks instead of trimming to the latest tail", () => {
     const turns = Array.from({ length: 7 }, (_, index) => ({
       id: `turn-${index + 1}`,

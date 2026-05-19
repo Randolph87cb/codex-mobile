@@ -62,6 +62,33 @@ class TranscriptBubbleTest {
     }
 
     @Test
+    fun parseTranscriptBubblesRecognizesImageMarkdown() {
+        val transcript = """
+            你：请看这两张图
+            ![first.png](bridge-attachment://uploaded-1)
+            ![second.png](data:image/png;base64,AAAA)
+        """.trimIndent()
+
+        val bubble = parseTranscriptBubbles(transcript).single()
+
+        assertEquals(TranscriptSpeaker.User, bubble.speaker)
+        assertEquals(
+            listOf(
+                TranscriptPart.Text("请看这两张图"),
+                TranscriptPart.Image(
+                    altText = "first.png",
+                    source = "bridge-attachment://uploaded-1",
+                ),
+                TranscriptPart.Image(
+                    altText = "second.png",
+                    source = "data:image/png;base64,AAAA",
+                ),
+            ),
+            bubble.parts,
+        )
+    }
+
+    @Test
     fun parseTranscriptBubblesSplitsSystemOperationTitleAndDefaultsItToCollapsed() {
         val transcript = """
             系统：命令执行

@@ -460,7 +460,7 @@ class AppViewModelTest {
     }
 
     @Test
-    fun imageAttachmentUploadsBeforeSendingInput() = runTest(dispatcher.scheduler) {
+    fun imageAttachmentsUploadBeforeSendingInput() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_image", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
@@ -471,23 +471,35 @@ class AppViewModelTest {
 
         viewModel.openSessionDetail("sess_image")
         advanceUntilIdle()
-        viewModel.attachPreparedImage(
-            displayName = "screen.png",
-            mimeType = "image/jpeg",
-            contentBase64 = "aGVsbG8=",
+        viewModel.attachPreparedImages(
+            listOf(
+                UploadImageAttachmentRequest(
+                    displayName = "screen.png",
+                    mimeType = "image/png",
+                    contentBase64 = "aGVsbG8=",
+                ),
+                UploadImageAttachmentRequest(
+                    displayName = "diagram.webp",
+                    mimeType = "image/webp",
+                    contentBase64 = "d29ybGQ=",
+                ),
+            ),
         )
         viewModel.updateDraftMessage("帮我看看")
         viewModel.sendInput()
         advanceUntilIdle()
 
-        assertEquals(1, bridgeApi.uploadedImageRequests.size)
-        assertEquals("screen.png", bridgeApi.uploadedImageRequests.single().displayName)
+        assertEquals(2, bridgeApi.uploadedImageRequests.size)
+        assertEquals(listOf("screen.png", "diagram.webp"), bridgeApi.uploadedImageRequests.map { it.displayName })
         assertEquals(1, bridgeApi.sendInputRequests.size)
         assertEquals("帮我看看", bridgeApi.sendInputRequests.single().text)
-        assertEquals("uploaded-1", bridgeApi.sendInputRequests.single().attachments.single().id)
-        assertNull(viewModel.uiState.value.pendingImageAttachment)
+        assertEquals(listOf("uploaded-1", "uploaded-2"), bridgeApi.sendInputRequests.single().attachments.map { it.id })
+        assertTrue(viewModel.uiState.value.pendingImageAttachments.isEmpty())
         assertTrue(
-            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("[图片] screen.png") == true,
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("![screen.png](bridge-attachment://uploaded-1)") == true,
+        )
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("![diagram.webp](bridge-attachment://uploaded-2)") == true,
         )
     }
 

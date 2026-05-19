@@ -204,3 +204,70 @@
   - 自动滚动行为测试通过
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 
+## 后续补充修复（六）
+- 用户新增图片链路需求：
+  - 输入区支持一次选择多张图片。
+  - 上传和展示都保留原图，不做压缩。
+  - 已选图片要在输入框上方显示缩略图，可点开查看大图。
+  - transcript 中的图片也要能显示，并提供保存选项。
+- 当前判断：
+  - Android 端原先只有单图状态 `pendingImageAttachment`，且 `ImageAttachmentPreparer.kt` 会缩放并转成 JPEG。
+  - transcript 只支持文本和代码块，无法把 bridge 返回的图片 Markdown 渲染成缩略图或大图。
+  - bridge 已支持附件上传，但历史 transcript 的本地图片还需要输出成 Android 可直接访问的地址。
+- 实际修改：
+  - Android `ImageAttachmentPreparer.kt`
+    - 改为保留原始图片字节和原始 MIME，只做图片有效性校验，不再缩放、不再转 JPEG。
+  - Android `AppViewModel.kt`
+    - 图片附件状态从单图改为多图列表。
+    - 发送时按顺序上传多张原图，并把所有附件 ID 一并发给 bridge。
+    - 本地 transcript 追加用户消息时，改为写入 `![name](bridge-attachment://id)` 图片标记，供 UI 渲染。
+  - Android `CodexMobileApp.kt`
+    - 图片选择器从单选改为多选。
+    - 批量处理选中的图片，成功项直接附加，失败项通过 Snackbar 提示。
+  - Android `TranscriptBubble.kt`
+    - transcript 解析新增 `Image` part，支持识别 Markdown 图片标记。
+  - Android `TranscriptImageSupport.kt`
+    - 新增图片加载与保存辅助能力。
+    - 支持 `data:`、`bridge-attachment://`、bridge `/api/image/file` 与普通 `http/https` 图片来源。
+  - Android `SessionDetailScreen.kt`
+    - 输入区上方改为多图缩略图托盘，可逐张移除。
+    - transcript 中的图片会显示缩略图，点击后弹出大图预览。
+    - 预览弹窗增加保存按钮，并通过 Snackbar 返回保存结果。
+  - Android 测试：
+    - `AppViewModelTest.kt` 覆盖多图上传与 transcript 图片标记。
+    - `TranscriptBubbleTest.kt` 覆盖图片 Markdown 解析。
+    - `SessionDetailImageRenderingTest.kt` 新增模拟器仪表测试，覆盖多图缩略图、预览和保存。
+    - 现有 `SessionDetailAutoScrollTest.kt`、`SessionDetailTranscriptCollapseTest.kt` 同步适配新的 `SessionDetailScreen` 参数。
+  - bridge `attachment-store.ts`
+    - 收紧图片 MIME 与 Base64 校验，并根据 MIME 自动补扩展名。
+  - bridge `app.ts`
+    - 增加 `/api/attachment/image/:id/content`，用于返回已上传原图。
+    - 增加 `/api/image/file?path=...`，用于返回历史线程里的本地图片文件。
+    - 修正图片响应 MIME 映射。
+  - bridge `session-view.ts`
+    - 历史 `userMessage`、`imageView`、`imageGeneration` 等项现在会输出可渲染的图片 Markdown。
+    - 历史本地图片改为使用 bridge `/api/image/file` 地址，而不是 Android 端无法直接取用的自定义协议。
+  - bridge 测试：
+    - `app.test.ts` 覆盖取回上传图片、非法 MIME / Base64 拒绝、文件白名单访问控制。
+    - `session-view.test.ts` 覆盖本地图片与远程图片 Markdown 生成。
+
+## 本次验证补充（七）
+- `cd bridge && npm run check`：通过
+- `cd bridge && npm test`：通过
+  - `5` 个测试文件通过
+  - `35` 个测试用例通过
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+  - `SessionDetailImageRenderingTest` 覆盖多图缩略图、预览和保存路径，通过
+  - 既有 transcript 折叠、自动滚动、回放链路测试继续通过
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+
+## 模拟器联调补充（二）
+- 联调环境：
+  - Android Emulator：`emulator-5554`
+  - Android 仪表环境：`codex-mobile-api35(AVD) - 15`
+- 本轮真实模拟器验证聚焦图片链路：
+  - 多图缩略图会显示在输入区上方，而不是只保留单个文件名。
+  - transcript 中的图片可点开进入大图预览。
+  - 预览弹窗的保存按钮在模拟器里实际可用，相关仪表测试已通过。
+

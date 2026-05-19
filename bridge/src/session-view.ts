@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { SessionRecord, SessionStatus, SessionView } from "./types.js";
 
 interface AppServerThreadStatus {
@@ -8,6 +9,8 @@ interface AppServerThreadStatus {
 interface AppServerUserInput {
   type?: string;
   text?: string;
+  path?: string;
+  imageUrl?: string;
 }
 
 interface AppServerThreadItem {
@@ -185,9 +188,9 @@ function collectTranscriptLines(thread: AppServerThread): string[] {
   for (const turn of turns) {
     for (const item of turn.items ?? []) {
       if (item.type === "userMessage") {
-        const text = extractUserMessageText(item);
-        if (text) {
-          lines.push(`你：${text}`);
+        const content = extractUserMessageContent(item);
+        if (content) {
+          lines.push(`你：${content}`);
         }
         continue;
       }
@@ -239,9 +242,16 @@ export function formatThreadItemAsTranscriptBlock(item: AppServerThreadItem): st
     case "webSearch":
       return buildSystemBlock("网页搜索", [normalizeText(item.query)]);
     case "imageView":
-      return buildSystemBlock("查看图片", [normalizeText(String(item.path ?? ""))]);
+      return buildSystemBlock("查看图片", [
+        normalizeText(String(item.path ?? "")),
+        buildBridgeFileImageMarkdown(normalizeText(String(item.path ?? ""))),
+      ]);
     case "imageGeneration":
-      return buildSystemBlock("图片生成", [prettyJson(item.result), normalizeText(String(item.path ?? ""))]);
+      return buildSystemBlock("图片生成", [
+        prettyJson(item.result),
+        normalizeText(String(item.path ?? "")),
+        buildBridgeFileImageMarkdown(normalizeText(String(item.path ?? ""))),
+      ]);
     case "enteredReviewMode":
       return buildSystemBlock("进入审查模式", [normalizeText(item.review)]);
     case "exitedReviewMode":
@@ -393,6 +403,50 @@ function extractUserMessageText(item: AppServerThreadItem): string | null {
       .map((contentItem) => contentItem.text ?? "")
       .join("\n"),
   );
+}
+
+function extractUserMessageContent(item: AppServerThreadItem): string | null {
+  const contentItems = item.content ?? [];
+  const text = extractUserMessageText(item);
+  const imageMarkdown = contentItems
+    .filter((contentItem) => contentItem.type === "localImage" || contentItem.type === "image")
+    .map((contentItem) => {
+      if (contentItem.type === "localImage") {
+        return buildBridgeFileImageMarkdown(contentItem.path);
+      }
+      return buildImageMarkdown(
+        normalizeText(contentItem.text, "图片"),
+        normalizeText(contentItem.imageUrl),
+      );
+    })
+    .filter((value): value is string => Boolean(value));
+
+  const parts = [
+    text,
+    ...imageMarkdown,
+  ].filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+function buildBridgeFileImageMarkdown(rawPath: string | null | undefined): string | null {
+  const normalizedPath = normalizeText(rawPath);
+  if (!normalizedPath) {
+    return null;
+  }
+
+  return buildImageMarkdown(
+    path.basename(normalizedPath),
+    `/api/image/file?path=${encodeURIComponent(normalizedPath)}`,
+  );
+}
+
+function buildImageMarkdown(alt: string | null | undefined, source: string | null | undefined): string | null {
+  const normalizedSource = normalizeText(source);
+  if (!normalizedSource) {
+    return null;
+  }
+
+  return `![${normalizeText(alt, "图片") ?? "图片"}](${normalizedSource})`;
 }
 
 function buildCommandExecutionBlock(item: AppServerThreadItem): string {

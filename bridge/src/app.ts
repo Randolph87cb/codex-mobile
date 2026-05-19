@@ -1,5 +1,8 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import websocket from "@fastify/websocket";
+import { createReadStream } from "node:fs";
+import { access } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 import { AttachmentStore } from "./attachment-store.js";
 import { isHistoryCapableRunner, type BridgeRunner, type HistoryCapableBridgeRunner } from "./bridge-runner.js";
@@ -52,6 +55,10 @@ const uploadImageSchema = z.object({
   displayName: z.string().trim().min(1),
   mimeType: z.string().trim().min(1),
   contentBase64: z.string().trim().min(1),
+});
+
+const imageFileQuerySchema = z.object({
+  path: z.string().trim().min(1),
 });
 
 const approveSchema = z.object({
@@ -131,6 +138,35 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
         message: error instanceof Error ? error.message : String(error),
       });
     }
+  });
+
+  app.get("/api/attachment/image/:id/content", async (request, reply) => {
+    const params = z.object({ id: z.string().trim().min(1) }).parse(request.params);
+    const attachment = attachmentStore.getImage(params.id);
+    if (!attachment) {
+      return reply.status(404).send({ error: "attachment-not-found" });
+    }
+
+    return sendImageFile(reply, attachment.path, attachment.mimeType);
+  });
+
+  app.get("/api/image/file", async (request, reply) => {
+    const query = imageFileQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: query.error.flatten(),
+      });
+    }
+
+    const candidatePath = path.resolve(query.data.path);
+    if (!canServeImagePath(candidatePath, security, attachmentStore)) {
+      return reply.status(403).send({
+        error: "image-path-not-allowed",
+      });
+    }
+
+    return sendImageFile(reply, candidatePath, mimeTypeFromPath(candidatePath));
   });
 
   app.post("/api/session", async (request, reply) => {
@@ -376,6 +412,73 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   return app;
+}
+
+async function sendImageFile(
+  reply: FastifyReply,
+  filePath: string,
+  mimeType: string,
+) {
+  try {
+    await access(filePath);
+  } catch {
+    return reply.status(404).send({ error: "image-not-found" });
+  }
+
+  reply.header("Content-Type", mimeType);
+  reply.header("Cache-Control", "no-store");
+  return reply.send(createReadStream(filePath));
+}
+
+function canServeImagePath(
+  candidatePath: string,
+  security: BridgeSecurityConfig,
+  attachmentStore: AttachmentStore,
+): boolean {
+  if (attachmentStore.containsPath(candidatePath)) {
+    return true;
+  }
+
+  if (security.allowedCwds.length === 0) {
+    return path.isAbsolute(candidatePath);
+  }
+
+  const normalizedCandidate = normalizePathForComparison(candidatePath);
+  return security.allowedCwds.some((allowedCwd) => isSameOrChildPath(normalizedCandidate, allowedCwd));
+}
+
+function mimeTypeFromPath(filePath: string): string {
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".png":
+      return "image/png";
+    case ".jpeg":
+    case ".jpg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    case ".gif":
+      return "image/gif";
+    case ".bmp":
+      return "image/bmp";
+    default:
+      return "image/jpeg";
+  }
+}
+
+function normalizePathForComparison(value: string): string {
+  const resolved = path.normalize(path.resolve(value));
+  const root = path.parse(resolved).root;
+  const trimmed = resolved === root ? resolved : resolved.replace(/[\\/]+$/, "");
+  return process.platform === "win32" ? trimmed.toLowerCase() : trimmed;
+}
+
+function isSameOrChildPath(candidate: string, allowedRoot: string): boolean {
+  if (candidate === allowedRoot) {
+    return true;
+  }
+
+  const relative = path.relative(allowedRoot, candidate);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 async function resolveSessionRecord(

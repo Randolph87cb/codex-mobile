@@ -46,11 +46,13 @@ class SessionDetailTranscriptCollapseTest {
                     sessionRealtimeState = SessionRealtimeUiState(),
                     queuedInputs = emptyList(),
                     draftMessage = "",
-                    pendingImageAttachment = null,
+                    pendingImageAttachments = emptyList(),
+                    bridgeEndpoint = "",
+                    bridgeAuthToken = "",
                     isLoading = false,
                     onDraftMessageChange = {},
                     onPickImage = {},
-                    onClearPendingImageAttachment = {},
+                    onRemovePendingImageAttachment = {},
                     onSend = {},
                     onApprovalDecision = {},
                     onUpdateCwd = {},
@@ -59,6 +61,7 @@ class SessionDetailTranscriptCollapseTest {
                     onUpdateServiceTier = {},
                     onUpdateSandboxMode = {},
                     onRefreshSession = {},
+                    onShowMessage = {},
                 )
             }
         }

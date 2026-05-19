@@ -63,23 +63,23 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) {
+    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isEmpty()) {
             return@rememberLauncherForActivityResult
         }
         coroutineScope.launch {
-            runCatching {
-                withContext(Dispatchers.Default) {
-                    prepareImageAttachmentForBridge(context, uri)
+            val prepared = withContext(Dispatchers.IO) {
+                uris.mapNotNull { uri ->
+                    runCatching {
+                        prepareImageAttachmentForBridge(context, uri)
+                    }.getOrNull()
                 }
-            }.onSuccess { prepared ->
-                appViewModel.attachPreparedImage(
-                    displayName = prepared.displayName,
-                    mimeType = prepared.mimeType,
-                    contentBase64 = prepared.contentBase64,
-                )
-            }.onFailure { error ->
-                snackbarHostState.showSnackbar(error.message ?: "处理图片失败。")
+            }
+            if (prepared.isNotEmpty()) {
+                appViewModel.attachPreparedImages(prepared)
+            }
+            if (prepared.size != uris.size) {
+                snackbarHostState.showSnackbar("部分图片处理失败，请确认文件是可用图片。")
             }
         }
     }
@@ -190,11 +190,13 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     sessionRealtimeState = uiState.sessionRealtimeState,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
-                    pendingImageAttachment = uiState.pendingImageAttachment,
+                    pendingImageAttachments = uiState.pendingImageAttachments,
+                    bridgeEndpoint = uiState.endpointInput,
+                    bridgeAuthToken = uiState.authTokenInput,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onPickImage = { imagePickerLauncher.launch("image/*") },
-                    onClearPendingImageAttachment = appViewModel::clearPendingImageAttachment,
+                    onRemovePendingImageAttachment = appViewModel::removePendingImageAttachment,
                     onSend = appViewModel::sendInput,
                     onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
@@ -203,6 +205,11 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
                     onRefreshSession = appViewModel::refreshSelectedSession,
+                    onShowMessage = { message ->
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(message)
+                        }
+                    },
                 )
             }
             composable(Routes.SessionDetail) { entry ->
@@ -222,11 +229,13 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     sessionRealtimeState = uiState.sessionRealtimeState,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
-                    pendingImageAttachment = uiState.pendingImageAttachment,
+                    pendingImageAttachments = uiState.pendingImageAttachments,
+                    bridgeEndpoint = uiState.endpointInput,
+                    bridgeAuthToken = uiState.authTokenInput,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onPickImage = { imagePickerLauncher.launch("image/*") },
-                    onClearPendingImageAttachment = appViewModel::clearPendingImageAttachment,
+                    onRemovePendingImageAttachment = appViewModel::removePendingImageAttachment,
                     onSend = appViewModel::sendInput,
                     onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
@@ -235,6 +244,11 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
                     onRefreshSession = appViewModel::refreshSelectedSession,
+                    onShowMessage = { message ->
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(message)
+                        }
+                    },
                 )
             }
             composable(Routes.Settings) {

@@ -16,6 +16,11 @@ internal enum class TranscriptBubbleKind {
 internal sealed interface TranscriptPart {
     data class Text(val text: String) : TranscriptPart
 
+    data class Image(
+        val altText: String,
+        val source: String,
+    ) : TranscriptPart
+
     data class CodeBlock(
         val code: String,
         val language: String? = null,
@@ -48,6 +53,7 @@ internal val TranscriptBubble.summaryLine: String
         ?: parts.firstNotNullOfOrNull { part ->
             when (part) {
                 is TranscriptPart.Text -> part.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+                is TranscriptPart.Image -> part.altText.ifBlank { "图片" }
                 is TranscriptPart.CodeBlock -> part.language?.takeIf { it.isNotBlank() } ?: "代码块"
             }
         }
@@ -257,7 +263,7 @@ private fun parseTranscriptParts(body: String): List<TranscriptPart> {
         return emptyList()
     }
 
-    val regex = Regex("(?s)```([A-Za-z0-9_+\\-.#]*)\\r?\\n(.*?)\\r?\\n```")
+    val regex = Regex("(?s)```([A-Za-z0-9_+\\-.#]*)\\r?\\n(.*?)\\r?\\n```|!\\[(.*?)]\\((.*?)\\)")
     val parts = mutableListOf<TranscriptPart>()
     var cursor = 0
 
@@ -267,10 +273,22 @@ private fun parseTranscriptParts(body: String): List<TranscriptPart> {
             parts += TranscriptPart.Text(before)
         }
 
-        val language = match.groupValues[1].trim().ifBlank { null }
-        val code = match.groupValues[2].trimEnd()
+        val code = match.groupValues[2]
         if (code.isNotBlank()) {
-            parts += TranscriptPart.CodeBlock(code = code, language = language)
+            val language = match.groupValues[1].trim().ifBlank { null }
+            val normalizedCode = code.trimEnd()
+            if (normalizedCode.isNotBlank()) {
+                parts += TranscriptPart.CodeBlock(code = normalizedCode, language = language)
+            }
+        } else {
+            val altText = match.groupValues[3].trim().ifBlank { "图片" }
+            val source = match.groupValues[4].trim()
+            if (source.isNotBlank()) {
+                parts += TranscriptPart.Image(
+                    altText = altText,
+                    source = source,
+                )
+            }
         }
         cursor = match.range.last + 1
     }
