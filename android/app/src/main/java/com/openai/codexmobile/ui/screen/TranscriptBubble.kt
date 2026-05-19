@@ -30,6 +30,16 @@ internal data class TranscriptBubble(
     val parts: List<TranscriptPart>,
 )
 
+internal sealed interface TranscriptDisplayItem {
+    data class BubbleItem(
+        val bubble: TranscriptBubble,
+    ) : TranscriptDisplayItem
+
+    data class ExecutionGroup(
+        val activities: List<TranscriptBubble>,
+    ) : TranscriptDisplayItem
+}
+
 internal val TranscriptBubble.prefersExpandedByDefault: Boolean
     get() = speaker == TranscriptSpeaker.User || (speaker == TranscriptSpeaker.Assistant && kind == TranscriptBubbleKind.Message)
 
@@ -42,6 +52,22 @@ internal val TranscriptBubble.summaryLine: String
             }
         }
         ?: label
+
+internal val TranscriptBubble.belongsToExecutionProcess: Boolean
+    get() = speaker == TranscriptSpeaker.System && title != null && !prefersExpandedByDefault
+
+internal val TranscriptDisplayItem.ExecutionGroup.summaryLine: String
+    get() {
+        if (activities.isEmpty()) {
+            return "无步骤"
+        }
+        val titles = activities.map { it.summaryLine }
+        return when {
+            titles.size == 1 -> titles.first()
+            titles.size == 2 -> titles.joinToString(" · ")
+            else -> "${titles.take(2).joinToString(" · ")} 等 ${titles.size} 项"
+        }
+    }
 
 internal fun parseTranscriptBubbles(transcript: String): List<TranscriptBubble> {
     if (transcript.isBlank()) {
@@ -72,6 +98,36 @@ internal fun parseTranscriptBubbles(transcript: String): List<TranscriptBubble> 
         }
 
     return bubbles
+}
+
+internal fun buildTranscriptDisplayItems(transcript: String): List<TranscriptDisplayItem> {
+    val bubbles = parseTranscriptBubbles(transcript)
+    if (bubbles.isEmpty()) {
+        return emptyList()
+    }
+
+    val items = mutableListOf<TranscriptDisplayItem>()
+    val pendingActivities = mutableListOf<TranscriptBubble>()
+
+    fun flushActivities() {
+        if (pendingActivities.isEmpty()) {
+            return
+        }
+        items += TranscriptDisplayItem.ExecutionGroup(pendingActivities.toList())
+        pendingActivities.clear()
+    }
+
+    bubbles.forEach { bubble ->
+        if (bubble.belongsToExecutionProcess) {
+            pendingActivities += bubble
+        } else {
+            flushActivities()
+            items += TranscriptDisplayItem.BubbleItem(bubble)
+        }
+    }
+    flushActivities()
+
+    return items
 }
 
 private fun parseTranscriptBlock(block: String): TranscriptBubble? {

@@ -168,3 +168,39 @@
 - `cd android && .\gradlew.bat testDebugUnitTest`：通过
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 
+## 后续补充修复（五）
+- 用户继续反馈：
+  - 对话之间的编辑文件、命令执行等操作消息不应各自平铺，而要合并成一条“执行过程”，内部步骤再单独展开。
+  - 当用户上滑查看历史消息时，不应因为新事件到达就自动跳回底部；只有停留在最新消息附近时才自动跟随滚动。
+- 当前判断：
+  - Android `SessionDetailScreen.kt` 当前直接平铺 `TranscriptBubble`，没有把连续操作消息归并成过程级展示。
+  - 详情页滚动状态现在在 transcript 或实时状态变化时无条件 `animateScrollTo(maxValue)`，因此只要有新事件就会抢回底部。
+- 实际修改：
+  - Android `TranscriptBubble.kt`
+    - 新增 `TranscriptDisplayItem` 和 `buildTranscriptDisplayItems`。
+    - 将连续的系统操作消息归并为 `ExecutionGroup`，对外显示为一条“执行过程”。
+    - 保留每一步的独立标题摘要，用于组内单独展开。
+  - Android `SessionDetailScreen.kt`
+    - transcript 列表从“单层 bubble”改为“普通对话 bubble + 执行过程组”两层结构。
+    - “执行过程”默认折叠；展开后组内每一步依然单独折叠，适配命令执行、文件编辑、审批结果等连续过程消息。
+    - 为 transcript 滚动容器增加稳定 test tag。
+    - 自动滚动逻辑改为基于“更新前是否仍停留在底部附近”决定；用户上滑查看历史后，新消息到达不会强制跳到底部。
+  - Android `TestTags.kt`
+    - 新增执行过程组、组内步骤和 transcript scroll 的测试标签。
+  - Android `TranscriptBubbleTest.kt`
+    - 新增连续操作消息会被合并成一条执行过程的单测。
+  - Android `SessionDetailTranscriptCollapseTest.kt`
+    - 更新为验证“执行过程”外层折叠和组内单步展开。
+  - Android `SessionDetailAutoScrollTest.kt`
+    - 新增仪表测试，分别验证“上滑后不自动抢回底部”和“停在底部时继续跟随最新消息”。
+  - Android `SessionDetailReplayTest.kt`
+    - 调整回放断言，使其与新的“执行过程”结构保持一致。
+
+## 本次验证补充（六）
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+  - 回放链路测试通过
+  - 执行过程折叠/展开测试通过
+  - 自动滚动行为测试通过
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+

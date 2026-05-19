@@ -35,8 +35,11 @@ class SessionDetailTranscriptCollapseTest {
 
                             Codex：这里是一段普通文字回复。
 
-                            审批结果：历史工具结果
-                            这条记录用于校验工具结果渲染。
+                            系统：命令执行
+                            命令：npm test
+
+                            系统：文件编辑
+                            文件：MainActivity.kt
                         """.trimIndent(),
                     ),
                     draftSession = null,
@@ -60,9 +63,14 @@ class SessionDetailTranscriptCollapseTest {
             }
         }
 
-        composeRule.onAllNodesWithText("历史工具结果").assertCountEquals(1)
-        composeRule.onAllNodesWithText("这条记录用于校验工具结果渲染。").assertCountEquals(0)
-        composeRule.onNodeWithTag(TestTags.SessionDetailTranscriptBubbleTogglePrefix + "2").performClick()
-        composeRule.onAllNodesWithText("这条记录用于校验工具结果渲染。").assertCountEquals(1)
+        composeRule.onAllNodesWithText("执行过程").assertCountEquals(1)
+        composeRule.onAllNodesWithText("命令：npm test").assertCountEquals(0)
+
+        composeRule.onNodeWithTag(TestTags.SessionDetailExecutionGroupTogglePrefix + "2").performClick()
+        composeRule.onAllNodesWithText("命令执行").assertCountEquals(1)
+        composeRule.onAllNodesWithText("命令：npm test").assertCountEquals(0)
+
+        composeRule.onNodeWithTag(TestTags.SessionDetailExecutionEntryTogglePrefix + "2_0").performClick()
+        composeRule.onAllNodesWithText("命令：npm test").assertCountEquals(1)
     }
 }

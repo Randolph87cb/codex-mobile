@@ -47,14 +47,13 @@ class SessionDetailReplayTest {
         composeRule.onAllNodesWithTag(TestTags.SessionDetailTranscript).assertCountEquals(1)
         composeRule.onAllNodesWithText("kotlin").assertCountEquals(1)
         composeRule.onAllNodesWithText("println(\"hello from test\")").assertCountEquals(1)
-        composeRule.onAllNodesWithText("历史工具结果").assertCountEquals(1)
+        composeRule.onAllNodesWithText("执行过程").assertCountEquals(1)
+        composeRule.onAllNodesWithText("历史工具结果").assertCountEquals(0)
         composeRule.onAllNodesWithText("这条记录用于校验工具结果渲染。").assertCountEquals(0)
 
         waitForTag(TestTags.SessionDetailApprovalCard)
-        composeRule.onAllNodesWithText("执行测试命令").assertCountEquals(1)
+        waitForText("执行测试命令", substring = true)
         composeRule.onNodeWithTag(TestTags.SessionDetailApproveButton).performClick()
-
-        composeRule.onAllNodesWithText("批准（item/commandExecution/requestApproval）").assertCountEquals(1)
         waitUntilTagMissing(TestTags.SessionDetailApprovalCard)
     }
 

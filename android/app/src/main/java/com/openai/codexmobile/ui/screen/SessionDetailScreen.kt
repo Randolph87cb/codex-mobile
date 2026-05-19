@@ -1,6 +1,8 @@
 package com.openai.codexmobile.ui.screen
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -47,6 +48,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -94,20 +96,27 @@ fun SessionDetailScreen(
     onUpdateServiceTier: (String) -> Unit,
     onUpdateSandboxMode: (String) -> Unit,
     onRefreshSession: () -> Unit,
+    transcriptScrollState: ScrollState? = null,
 ) {
     val detail = remember(sessionDetail, draftSession) {
         sessionDetail ?: draftSession?.toDraftDetail()
     }
-    val transcriptScrollState = rememberScrollState()
+    val currentTranscriptScrollState = transcriptScrollState ?: rememberScrollState()
     var statusExpanded by rememberSaveable { mutableStateOf(false) }
     var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
+    var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(
         detail?.transcriptPreview,
         sessionRealtimeState.lastEventText,
         sessionRealtimeState.pendingApproval?.requestId?.toString(),
     ) {
-        transcriptScrollState.animateScrollTo(transcriptScrollState.maxValue)
+        val shouldAutoScroll = previousTranscriptScrollMax == 0 ||
+            previousTranscriptScrollMax - currentTranscriptScrollState.value <= 32
+        if (shouldAutoScroll) {
+            currentTranscriptScrollState.animateScrollTo(currentTranscriptScrollState.maxValue)
+        }
+        previousTranscriptScrollMax = currentTranscriptScrollState.maxValue
     }
 
     ConfigEditorDialogs(
@@ -157,7 +166,8 @@ fun SessionDetailScreen(
             Column(
                 modifier = Modifier
                     .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .verticalScroll(transcriptScrollState),
+                    .testTag(TestTags.SessionDetailTranscriptScroll)
+                    .verticalScroll(currentTranscriptScrollState),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -646,8 +656,8 @@ private fun QueuedInputCard(
 private fun TranscriptBubbleList(
     transcript: String,
 ) {
-    val bubbles = parseTranscriptBubbles(transcript)
-    if (bubbles.isEmpty()) {
+    val items = buildTranscriptDisplayItems(transcript)
+    if (items.isEmpty()) {
         Text(
             text = "这里会显示会话内容、实时回复和结束状态。",
             style = MaterialTheme.typography.bodyMedium,
@@ -656,93 +666,204 @@ private fun TranscriptBubbleList(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        bubbles.forEachIndexed { index, bubble ->
-            Box(modifier = Modifier.fillMaxWidth()) {
-                val isUser = bubble.speaker == TranscriptSpeaker.User
-                val isCollapsible = !bubble.prefersExpandedByDefault
-                var expanded by rememberSaveable(index, bubble.summaryLine, bubble.prefersExpandedByDefault) {
-                    mutableStateOf(bubble.prefersExpandedByDefault)
-                }
-                val backgroundColor = when (bubble.speaker) {
-                    TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
-                    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
-                    TranscriptSpeaker.System -> when (bubble.kind) {
-                        TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
-                        TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.surfaceVariant
-                        TranscriptBubbleKind.Status,
-                        TranscriptBubbleKind.Message,
-                        -> MaterialTheme.colorScheme.surfaceVariant
+        items.forEachIndexed { index, item ->
+            when (item) {
+                is TranscriptDisplayItem.BubbleItem -> TranscriptBubbleCard(
+                    bubble = item.bubble,
+                    toggleTag = TestTags.SessionDetailTranscriptBubbleTogglePrefix + index,
+                )
+
+                is TranscriptDisplayItem.ExecutionGroup -> ExecutionProcessCard(
+                    index = index,
+                    group = item,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TranscriptBubbleCard(
+    bubble: TranscriptBubble,
+    toggleTag: String,
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        val isUser = bubble.speaker == TranscriptSpeaker.User
+        val isCollapsible = !bubble.prefersExpandedByDefault
+        var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
+            mutableStateOf(bubble.prefersExpandedByDefault)
+        }
+        val backgroundColor = when (bubble.speaker) {
+            TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
+            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
+            TranscriptSpeaker.System -> when (bubble.kind) {
+                TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
+                TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.surfaceVariant
+                TranscriptBubbleKind.Status,
+                TranscriptBubbleKind.Message,
+                -> MaterialTheme.colorScheme.surfaceVariant
+            }
+        }
+        Card(
+            modifier = Modifier
+                .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
+                .fillMaxWidth(0.92f),
+            colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (isCollapsible) {
+                    TranscriptToggleHeader(
+                        label = bubble.label,
+                        title = bubble.summaryLine,
+                        expanded = expanded,
+                        toggleTag = toggleTag,
+                        onToggle = { expanded = !expanded },
+                    )
+                } else {
+                    Text(text = bubble.label, style = MaterialTheme.typography.labelLarge)
+                    bubble.title?.let { title ->
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
                     }
                 }
-                Card(
-                    modifier = Modifier
-                        .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                        .fillMaxWidth(0.92f),
-                    colors = CardDefaults.cardColors(containerColor = backgroundColor),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        if (isCollapsible) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag(TestTags.SessionDetailTranscriptBubbleTogglePrefix + index)
-                                    .clickable { expanded = !expanded },
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Text(
-                                        text = bubble.label,
-                                        style = MaterialTheme.typography.labelLarge,
-                                    )
-                                    Text(
-                                        text = bubble.summaryLine,
-                                        style = MaterialTheme.typography.titleSmall,
-                                    )
-                                }
-                                Icon(
-                                    imageVector = if (expanded) {
-                                        Icons.Default.KeyboardArrowUp
-                                    } else {
-                                        Icons.Default.KeyboardArrowDown
-                                    },
-                                    contentDescription = if (expanded) "收起消息" else "展开消息",
-                                )
-                            }
-                        } else {
-                            Text(text = bubble.label, style = MaterialTheme.typography.labelLarge)
-                            bubble.title?.let { title ->
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                )
-                            }
-                        }
 
-                        if (!isCollapsible || expanded) {
-                            bubble.parts.forEach { part ->
-                                when (part) {
-                                    is TranscriptPart.Text -> {
-                                        Text(
-                                            text = part.text,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                        )
-                                    }
+                if (!isCollapsible || expanded) {
+                    TranscriptPartsColumn(bubble.parts)
+                }
+            }
+        }
+    }
+}
 
-                                    is TranscriptPart.CodeBlock -> {
-                                        CodeBlockCard(part)
-                                    }
-                                }
-                            }
+@Composable
+private fun ExecutionProcessCard(
+    index: Int,
+    group: TranscriptDisplayItem.ExecutionGroup,
+) {
+    var expanded by rememberSaveable(index, group.summaryLine) { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxWidth(0.92f),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TranscriptToggleHeader(
+                    label = "执行过程",
+                    title = group.summaryLine,
+                    expanded = expanded,
+                    toggleTag = TestTags.SessionDetailExecutionGroupTogglePrefix + index,
+                    onToggle = { expanded = !expanded },
+                )
+
+                if (expanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        group.activities.forEachIndexed { activityIndex, bubble ->
+                            ExecutionActivityCard(
+                                toggleTag = TestTags.SessionDetailExecutionEntryTogglePrefix + "${index}_${activityIndex}",
+                                bubble = bubble,
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExecutionActivityCard(
+    toggleTag: String,
+    bubble: TranscriptBubble,
+) {
+    var expanded by rememberSaveable(toggleTag, bubble.summaryLine) { mutableStateOf(false) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TranscriptToggleHeader(
+                label = bubble.label,
+                title = bubble.summaryLine,
+                expanded = expanded,
+                toggleTag = toggleTag,
+                onToggle = { expanded = !expanded },
+            )
+
+            if (expanded) {
+                TranscriptPartsColumn(bubble.parts)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TranscriptToggleHeader(
+    label: String,
+    title: String,
+    expanded: Boolean,
+    toggleTag: String,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(toggleTag)
+            .clickable(onClick = onToggle),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
+        Icon(
+            imageVector = if (expanded) {
+                Icons.Default.KeyboardArrowUp
+            } else {
+                Icons.Default.KeyboardArrowDown
+            },
+            contentDescription = if (expanded) "收起消息" else "展开消息",
+        )
+    }
+}
+
+@Composable
+private fun TranscriptPartsColumn(parts: List<TranscriptPart>) {
+    parts.forEach { part ->
+        when (part) {
+            is TranscriptPart.Text -> {
+                Text(
+                    text = part.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            is TranscriptPart.CodeBlock -> {
+                CodeBlockCard(part)
             }
         }
     }

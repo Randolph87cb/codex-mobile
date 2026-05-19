@@ -88,4 +88,30 @@ class TranscriptBubbleTest {
         assertTrue(!bubble.prefersExpandedByDefault)
         assertEquals("命令执行", bubble.summaryLine)
     }
+
+    @Test
+    fun buildTranscriptDisplayItemsGroupsConsecutiveExecutionActivities() {
+        val transcript = """
+            你：先跑一下
+
+            系统：命令执行
+            命令：npm test
+
+            系统：文件编辑
+            文件：app.kt
+
+            Codex：执行完成。
+        """.trimIndent()
+
+        val items = buildTranscriptDisplayItems(transcript)
+
+        assertEquals(3, items.size)
+        assertTrue(items[0] is TranscriptDisplayItem.BubbleItem)
+        assertTrue(items[1] is TranscriptDisplayItem.ExecutionGroup)
+        assertTrue(items[2] is TranscriptDisplayItem.BubbleItem)
+
+        val group = items[1] as TranscriptDisplayItem.ExecutionGroup
+        assertEquals(listOf("命令执行", "文件编辑"), group.activities.map { it.summaryLine })
+        assertEquals("命令执行 · 文件编辑", group.summaryLine)
+    }
 }
