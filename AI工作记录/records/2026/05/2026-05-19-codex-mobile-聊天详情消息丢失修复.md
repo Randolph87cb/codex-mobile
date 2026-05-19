@@ -149,3 +149,22 @@
 - 额外说明：
   - 中途尝试用旧历史会话做手动抓图时，抓到过一次旧进程残留页面；强制停进程后重新进入，确认需要以新进程和仪表测试结果为准。
 
+## 后续补充修复（四）
+- 用户继续反馈：会话列表里的标题和路径信息过多，要求标题最多显示两行，并且默认把最近回复的会话排在前面。
+- 当前判断：
+  - Android `SessionListScreen.kt` 当前按工作目录名字母排序目录分组，因此即使某个目录下有最新会话，也可能被排到较后位置。
+  - 会话卡片标题和副标题都没有做行数限制，长提示词和长路径会把列表项高度撑得很大。
+- 实际修改：
+  - Android `SessionListScreen.kt`
+    - `groupSessionsByDirectory` 改为先保持组内会话按 `lastUpdated` 倒序，再按“每个目录组里最新会话的 `lastUpdated`”整体倒序排列目录组。
+    - 会话标题限制为最多两行，超出使用省略号。
+    - 会话副标题限制为单行，且当目录组头已经展示同一 `cwd` 时，列表项副标题不再重复附带目录路径。
+    - 时间行限制为单行，避免极端情况下继续把卡片撑高。
+  - Android `SessionListGroupingTest.kt`
+    - 新增目录组按最新会话时间倒序的单测。
+    - 新增列表副标题去掉重复目录路径的单测。
+
+## 本次验证补充（五）
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+

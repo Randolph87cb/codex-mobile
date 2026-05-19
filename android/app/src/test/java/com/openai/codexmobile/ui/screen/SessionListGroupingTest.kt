@@ -41,4 +41,44 @@ class SessionListGroupingTest {
         assertEquals(listOf("c", "a"), groups[0].sessions.map { it.id })
         assertEquals("D:\\workspace\\beta", groups[1].cwd)
     }
+
+    @Test
+    fun sortsDirectoryGroupsByNewestSessionFirst() {
+        val sessions = listOf(
+            SessionSummary(
+                id = "a",
+                title = "A",
+                subtitle = "gpt-5.5 • 空闲 • D:\\workspace\\alpha",
+                lastUpdated = "2026-05-19T10:00:00Z",
+                cwd = "D:\\workspace\\alpha",
+            ),
+            SessionSummary(
+                id = "b",
+                title = "B",
+                subtitle = "gpt-5.5 • 空闲 • D:\\workspace\\beta",
+                lastUpdated = "2026-05-19T11:00:00Z",
+                cwd = "D:\\workspace\\beta",
+            ),
+        )
+
+        val groups = groupSessionsByDirectory(sessions)
+
+        assertEquals(listOf("D:\\workspace\\beta", "D:\\workspace\\alpha"), groups.map { it.cwd })
+    }
+
+    @Test
+    fun buildCompactSessionSubtitleOmitsRepeatedDirectory() {
+        val session = SessionSummary(
+            id = "a",
+            title = "A",
+            subtitle = "gpt-5.5 • 空闲 • D:\\workspace\\codex-mobile",
+            lastUpdated = "2026-05-19T11:00:00Z",
+            cwd = "D:\\workspace\\codex-mobile",
+        )
+
+        assertEquals(
+            "gpt-5.5 • 空闲",
+            buildCompactSessionSubtitle(session, "D:\\workspace\\codex-mobile"),
+        )
+    }
 }

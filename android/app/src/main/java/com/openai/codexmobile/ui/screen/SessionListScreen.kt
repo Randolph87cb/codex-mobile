@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionSummary
@@ -38,14 +39,16 @@ data class SessionDirectoryGroup(
 fun groupSessionsByDirectory(sessions: List<SessionSummary>): List<SessionDirectoryGroup> {
     return sessions
         .groupBy { it.cwd.ifBlank { "未提供工作目录" } }
-        .toList()
-        .sortedBy { (cwd, _) -> cwd.lowercase() }
         .map { (cwd, items) ->
             SessionDirectoryGroup(
                 cwd = cwd,
                 sessions = items.sortedByDescending { it.lastUpdated },
             )
         }
+        .sortedWith(
+            compareByDescending<SessionDirectoryGroup> { it.sessions.firstOrNull()?.lastUpdated.orEmpty() }
+                .thenBy { it.cwd.lowercase() },
+        )
 }
 
 @Composable
@@ -257,9 +260,24 @@ private fun SessionDirectoryCard(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Text(text = session.title, style = MaterialTheme.typography.titleSmall)
-                            Text(text = session.subtitle, style = MaterialTheme.typography.bodyMedium)
-                            Text(text = session.lastUpdated, style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                text = session.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = buildCompactSessionSubtitle(session, group.cwd),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = session.lastUpdated,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
@@ -274,4 +292,20 @@ private fun buildFolderLabel(cwd: String): String {
         return "未提供工作目录"
     }
     return trimmed.split('\\', '/').lastOrNull().orEmpty().ifBlank { trimmed }
+}
+
+internal fun buildCompactSessionSubtitle(
+    session: SessionSummary,
+    groupCwd: String,
+): String {
+    val suffix = " • ${session.cwd}"
+    return if (
+        session.cwd.isNotBlank() &&
+        session.cwd == groupCwd &&
+        session.subtitle.endsWith(suffix)
+    ) {
+        session.subtitle.removeSuffix(suffix)
+    } else {
+        session.subtitle
+    }
 }
