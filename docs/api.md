@@ -300,8 +300,10 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 
 - `itemType`
 - `itemId`
-- `transcriptBlock`
+- `title`
+- `body`
 - `summary`
+- `transcriptBlock`
 
 当前 bridge 会把下列过程类输出转成 `activity`：
 
@@ -309,6 +311,13 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 - 文件修改进度
 - MCP / 工具调用进度
 - 推理摘要
+
+补充说明：
+
+- `title`、`body`、`summary` 是当前推荐给 UI 直接消费的结构化字段。
+- `transcriptBlock` 仍然保留，主要用于兼容旧的文本拼接链路。
+- `reasoning` 不再按每个 `summaryTextDelta` 直接变成一张新卡片；bridge 会按 `itemId` 聚合同一条推理活动，并持续更新其 `body/summary`。
+- Android 当前会优先按 `itemId` 合并这些 `activity`，再把它们并入“执行过程”展示，而不是单纯依赖 transcript 文本反推结构。
 
 ## 当前 Android 客户端实际依赖
 

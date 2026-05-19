@@ -518,6 +518,27 @@
   - `cd bridge && npm test`：通过
   - `cd android && .\gradlew.bat testDebugUnitTest`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
-  - `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
-  - 为满足模拟器验证，本次额外创建并启动了测试专用 AVD：`codex-mobile-api35`（headless）
+- `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+- 为满足模拟器验证，本次额外创建并启动了测试专用 AVD：`codex-mobile-api35`（headless）
+
+## 后续补充处理（十七）
+- 用户要求再次检查并收口项目文档，重点确认最近几轮实现是否已经写进文档。
+- 当前判断：
+  - `docs/api.md` 对实时 `activity` 的描述仍停留在旧字段集合，没有写出 `title/body` 和按 `itemId` 聚合 `reasoning` 的新行为。
+  - `docs/architecture.md` 还缺“结构化实时执行活动”这层设计说明，不利于后续理解 Android 为什么不再只依赖 transcript 文本。
+  - `README.md` 的本地模拟器章节把“项目内 AVD 已创建”说得过满；脚本实际只约定使用 `.tmp/android-avd/` 和 `codex-mobile-api35`，并不会自动创建 AVD。
+- 实际修改：
+  - `docs/api.md`
+    - 补充 `activity` 事件的 `title`、`body`、`summary` 字段说明。
+    - 明确 `transcriptBlock` 仅为兼容保留，当前 UI 推荐消费结构化字段。
+    - 补充 `reasoning` 按 `itemId` 聚合，而不是每个 delta 单独生成系统卡片。
+  - `docs/architecture.md`
+    - 补充 Android 侧维护结构化实时执行活动、bridge 侧整形结构化 `activity` 的职责说明。
+    - 在主链路和“当前已实现能力”里加入“历史 transcript + 实时执行活动合并展示”的描述。
+  - `README.md`
+    - 将“执行过程展示”更新为“结构化执行过程展示”。
+    - 把模拟器章节改为当前约定：脚本默认使用 `.tmp/android-avd/` 与 `codex-mobile-api35`，但不会自动创建 AVD。
+    - 增加说明，提醒使用前先确保同名 AVD 已存在。
+- 说明：
+  - 本次只更新文档与工作记录，没有修改运行逻辑，未执行测试。
 

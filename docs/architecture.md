@@ -34,6 +34,7 @@ codex.exe app-server
 - 管理 bridge 地址、token、工作目录、模型和权限配置
 - 展示会话列表与详情页
 - 渲染实时流、历史 transcript、执行过程和图片
+- 维护结构化实时执行活动，不再只靠 transcript 文本猜系统消息边界
 - 在发送前预上传图片，再按 bridge 暂存路径提交输入
 
 ### Windows Bridge
@@ -41,6 +42,7 @@ codex.exe app-server
 - 负责启动并维护 `codex.exe app-server`
 - 提供移动端稳定接口，而不是把原始 app-server 协议暴露出去
 - 管理会话、配置、审批、历史线程详情和实时事件
+- 把 `reasoning`、命令执行、文件修改、工具调用等过程事件整形成结构化 `activity`
 - 暴露图片上传、图片文件访问和 transcript 整形能力
 - 提供 token 鉴权、`cwd` 白名单和本地图片访问边界
 
@@ -60,6 +62,7 @@ codex.exe app-server
 4. 发送文本输入
 5. bridge 转发到 `codex.exe app-server`
 6. Android 接收 `assistant.delta`、`activity`、`tool.request` 等事件
+7. Android 将历史 transcript 与结构化实时活动合并显示，其中非对话类过程默认进入“执行过程”
 
 ### 图片输入
 
@@ -124,6 +127,7 @@ codex.exe app-server
 - 图片缩略图、大图预览和保存
 - 历史 transcript 渲染
 - 实时流状态同步
+- 结构化实时执行活动聚合
 - 操作过程合并显示
 - 审批请求展示与响应
 - bridge 后台守护和登录自启动脚本

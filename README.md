@@ -23,7 +23,7 @@
 - `bridge` 同时支持 `mock` 与 `app-server` 两种 runner；
 - Android 客户端已接通会话列表、会话详情、实时流、文本发送和状态恢复；
 - 已支持图片预上传、图片展示、预览和保存；
-- 已支持历史线程详情、执行过程展示和审批响应；
+- 已支持历史线程详情、结构化执行过程展示和审批响应；
 - `bridge` 已支持后台常驻启动与登录自启动脚本；
 - 已生成本地 `app-server` schema 到 `docs/generated/`，用于后续协议对齐；
 - 已镜像上游 `codex-rs/app-server/README.md` 到 `docs/upstream/codex-app-server/README.md`，方便本地查看协议说明。
@@ -174,11 +174,12 @@ D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk
 
 如果不想每次都手工把 APK 装到真机，可以直接使用仓库内的本地模拟器环境。
 
-### 已准备好的能力
+### 当前约定
 
 - 项目内 Android SDK 已补齐 `emulator`
-- 已创建项目内 AVD：`codex-mobile-api35`
-- 模拟器数据目录放在仓库本地资产：`.tmp/android-avd/`
+- 启动脚本默认使用 AVD 名称：`codex-mobile-api35`
+- 模拟器数据目录通过 `ANDROID_AVD_HOME` 指向仓库本地资产：`.tmp/android-avd/`
+- 如果当前机器下还没有 `codex-mobile-api35`，需要先在上述目录中创建或导入同名 AVD
 
 ### 常用脚本
 
@@ -199,6 +200,11 @@ powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\insta
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\run-local-android-test.ps1
 ```
+
+说明：
+
+- `start-android-emulator.ps1` 只负责启动，不会自动创建 AVD。
+- 如果要复用当前约定，请确保 `codex-mobile-api35` 已经存在，并且 AVD home 指向 `.tmp/android-avd/`。
 
 ### 模拟器连接 bridge
 
