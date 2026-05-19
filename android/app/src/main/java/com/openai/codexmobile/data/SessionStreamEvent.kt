@@ -23,6 +23,7 @@ sealed interface SessionStreamEvent {
         val approvalMode: String?,
         val reasoningEffort: String?,
         val serviceTier: String?,
+        val sandboxMode: String?,
         val threadId: String?,
         override val timestamp: String?,
     ) : SessionStreamEvent

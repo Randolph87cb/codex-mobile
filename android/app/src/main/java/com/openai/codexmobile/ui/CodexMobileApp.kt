@@ -24,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -56,6 +59,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -104,6 +108,24 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     inclusive = true
                 }
             }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, appViewModel) {
+        val lifecycle = lifecycleOwner.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> appViewModel.onAppForegrounded()
+                Lifecycle.Event.ON_STOP -> appViewModel.onAppBackgrounded()
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            appViewModel.onAppForegrounded()
+        }
+        onDispose {
+            lifecycle.removeObserver(observer)
         }
     }
 
@@ -179,6 +201,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateModel = appViewModel::updateSelectedSessionModel,
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
+                    onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
                     onRefreshSession = appViewModel::refreshSelectedSession,
                 )
             }
@@ -210,6 +233,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateModel = appViewModel::updateSelectedSessionModel,
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
+                    onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
                     onRefreshSession = appViewModel::refreshSelectedSession,
                 )
             }
@@ -227,6 +251,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     approvalModeInput = uiState.approvalModeInput,
                     reasoningEffortInput = uiState.reasoningEffortInput,
                     serviceTierInput = uiState.serviceTierInput,
+                    sandboxModeInput = uiState.sandboxModeInput,
                     diagnosticsLog = uiState.diagnosticsLog,
                     onEndpointChange = appViewModel::updateEndpointInput,
                     onAuthTokenChange = appViewModel::updateAuthTokenInput,
@@ -235,6 +260,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onApprovalModeChange = appViewModel::updateApprovalModeInput,
                     onReasoningEffortChange = appViewModel::updateReasoningEffortInput,
                     onServiceTierChange = appViewModel::updateServiceTierInput,
+                    onSandboxModeChange = appViewModel::updateSandboxModeInput,
                     onRefreshLogs = appViewModel::refreshDiagnosticsLog,
                     onClearLogs = appViewModel::clearDiagnosticsLog,
                     onCopyLogs = { logs ->

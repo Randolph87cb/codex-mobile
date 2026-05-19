@@ -15,6 +15,7 @@ const createSessionSchema = z.object({
   approvalMode: z.enum(["manual", "auto"]).default("manual"),
   reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).default("medium"),
   serviceTier: z.enum(["default", "fast"]).default("default"),
+  sandboxMode: z.enum(["read-only", "workspace-write", "danger-full-access"]).default("workspace-write"),
 });
 
 const updateSessionConfigSchema = z.object({
@@ -23,6 +24,7 @@ const updateSessionConfigSchema = z.object({
   approvalMode: z.enum(["manual", "auto"]).optional(),
   reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
   serviceTier: z.enum(["default", "fast"]).optional(),
+  sandboxMode: z.enum(["read-only", "workspace-write", "danger-full-access"]).optional(),
 });
 
 const inputSchema = z.object({
@@ -198,6 +200,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       approvalMode: body.data.approvalMode,
       reasoningEffort: body.data.reasoningEffort,
       serviceTier: body.data.serviceTier,
+      sandboxMode: body.data.sandboxMode,
     });
     return updated ?? session;
   });
@@ -356,6 +359,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
           approvalMode: view?.approvalMode ?? session.approvalMode,
           reasoningEffort: view?.reasoningEffort ?? session.reasoningEffort,
           serviceTier: view?.serviceTier ?? session.serviceTier,
+          sandboxMode: view?.sandboxMode ?? session.sandboxMode,
           status: view?.status ?? session.status,
           threadId: view?.threadId ?? session.threadId,
         },

@@ -52,9 +52,10 @@ function createSessionStore(): SessionStore {
     id: "sess-1",
     cwd: "D:\\workspace\\codex-mobile",
     model: "gpt-5.5",
-      approvalMode: "manual",
-      reasoningEffort: "medium",
-      serviceTier: "default",
+    approvalMode: "manual",
+    reasoningEffort: "medium",
+    serviceTier: "default",
+    sandboxMode: "workspace-write",
     status: "running",
     threadId: "thread-1",
     activeTurnId: "turn-1",
@@ -66,7 +67,7 @@ function createSessionStore(): SessionStore {
 }
 
 describe("AppServerRunner", () => {
-  test("uses session approval mode for thread/start and turn/start", async () => {
+  test("uses session approval mode and sandbox mode for thread/start and turn/start", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();
     client.request.mockImplementation(async (method: string) => {
@@ -102,6 +103,7 @@ describe("AppServerRunner", () => {
       approvalMode: "manual",
       reasoningEffort: "high",
       serviceTier: "default",
+      sandboxMode: "read-only",
       status: "idle",
       threadId: null,
       activeTurnId: null,
@@ -122,6 +124,7 @@ describe("AppServerRunner", () => {
       "thread/start",
       expect.objectContaining({
         approvalPolicy: "on-request",
+        sandbox: "read-only",
       }),
     );
     expect(client.request.mock.calls[0]?.[1]).not.toHaveProperty("serviceTier");
@@ -139,10 +142,15 @@ describe("AppServerRunner", () => {
       expect.objectContaining({
         approvalPolicy: "on-request",
         effort: "high",
+        sandboxPolicy: {
+          type: "readOnly",
+          networkAccess: false,
+        },
       }),
     );
     expect(client.request.mock.calls[2]?.[1]).not.toHaveProperty("serviceTier");
     expect(store.get("sess-2")?.serviceTier).toBe("default");
+    expect(store.get("sess-2")?.sandboxMode).toBe("read-only");
   });
 
   test("submits image attachments as localImage input blocks", async () => {
@@ -476,6 +484,7 @@ describe("AppServerRunner", () => {
           cwd: "D:\\workspace\\codex-mobile",
           model: "gpt-5.5",
           approvalPolicy: "on-request",
+          sandbox: "workspace-write",
         };
       }
 
@@ -545,6 +554,7 @@ describe("AppServerRunner", () => {
           approvalPolicy: "on-request",
           serviceTier: "fast",
           reasoningEffort: "medium",
+          sandbox: "danger-full-access",
         };
       }
 
@@ -572,6 +582,7 @@ describe("AppServerRunner", () => {
       id: "sess-1",
       status: "idle",
       activeTurnId: null,
+      sandboxMode: "danger-full-access",
     });
   });
 

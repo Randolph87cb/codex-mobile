@@ -13,6 +13,7 @@ export class SessionStore {
       approvalMode: input.approvalMode,
       reasoningEffort: input.reasoningEffort,
       serviceTier: input.serviceTier,
+      sandboxMode: input.sandboxMode,
       status: "idle",
       threadId: null,
       activeTurnId: null,

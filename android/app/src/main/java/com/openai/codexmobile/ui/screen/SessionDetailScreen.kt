@@ -70,6 +70,7 @@ private enum class SessionConfigEditor {
     Model,
     ReasoningEffort,
     ServiceTier,
+    SandboxMode,
 }
 
 @Composable
@@ -91,6 +92,7 @@ fun SessionDetailScreen(
     onUpdateModel: (String) -> Unit,
     onUpdateReasoningEffort: (String) -> Unit,
     onUpdateServiceTier: (String) -> Unit,
+    onUpdateSandboxMode: (String) -> Unit,
     onRefreshSession: () -> Unit,
 ) {
     val detail = remember(sessionDetail, draftSession) {
@@ -116,6 +118,7 @@ fun SessionDetailScreen(
         onUpdateModel = onUpdateModel,
         onUpdateReasoningEffort = onUpdateReasoningEffort,
         onUpdateServiceTier = onUpdateServiceTier,
+        onUpdateSandboxMode = onUpdateSandboxMode,
     )
 
     Column(
@@ -431,6 +434,16 @@ private fun SessionConfigRow(
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
+        OutlinedButton(
+            onClick = { onOpenEditor(SessionConfigEditor.SandboxMode) },
+            modifier = Modifier.testTag(TestTags.SessionDetailConfigSandboxButton),
+        ) {
+            Icon(imageVector = Icons.Filled.Tune, contentDescription = null)
+            Text(
+                text = "权限 ${localizedSandbox(detail.sandboxMode)}",
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
     }
 }
 
@@ -443,6 +456,7 @@ private fun ConfigEditorDialogs(
     onUpdateModel: (String) -> Unit,
     onUpdateReasoningEffort: (String) -> Unit,
     onUpdateServiceTier: (String) -> Unit,
+    onUpdateSandboxMode: (String) -> Unit,
 ) {
     val currentDetail = detail ?: return
 
@@ -494,6 +508,20 @@ private fun ConfigEditorDialogs(
             onDismiss = onDismiss,
             onChoose = {
                 onUpdateServiceTier(it)
+                onDismiss()
+            },
+        )
+
+        SessionConfigEditor.SandboxMode -> ChoiceConfigDialog(
+            title = "选择文件权限",
+            options = listOf(
+                "read-only" to "只读",
+                "workspace-write" to "工作区可写",
+                "danger-full-access" to "完全访问",
+            ),
+            onDismiss = onDismiss,
+            onChoose = {
+                onUpdateSandboxMode(it)
                 onDismiss()
             },
         )
@@ -799,6 +827,7 @@ private fun DraftSessionUiState.toDraftDetail(): SessionDetail {
             appendLine("模型：$model")
             appendLine("推理强度：${localizedReasoning(reasoningEffort)}")
             appendLine("速度：${localizedService(serviceTier)}")
+            appendLine("文件权限：${localizedSandbox(sandboxMode)}")
             append("发送首条消息后，bridge 才会真正创建这个会话。")
         },
         cwd = cwd,
@@ -806,6 +835,7 @@ private fun DraftSessionUiState.toDraftDetail(): SessionDetail {
         approvalMode = approvalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
         status = "draft",
     )
 }
@@ -832,6 +862,14 @@ private fun localizedApprovalMode(mode: String): String {
     return when (mode) {
         "auto" -> "自动"
         else -> "手动"
+    }
+}
+
+private fun localizedSandbox(mode: String): String {
+    return when (mode) {
+        "read-only" -> "只读"
+        "danger-full-access" -> "完全访问"
+        else -> "工作区可写"
     }
 }
 

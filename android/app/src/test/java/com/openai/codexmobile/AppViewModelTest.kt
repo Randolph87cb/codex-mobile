@@ -21,9 +21,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -77,6 +79,7 @@ class AppViewModelTest {
                 approvalMode = "manual",
                 reasoningEffort = "medium",
                 serviceTier = "default",
+                sandboxMode = "workspace-write",
             ),
             bridgeApi.lastCreateSessionRequest,
         )
@@ -110,6 +113,7 @@ class AppViewModelTest {
                 approvalMode = "auto",
                 reasoningEffort = "high",
                 serviceTier = "fast",
+                sandboxMode = "danger-full-access",
                 threadId = "thread-1",
                 timestamp = "2026-05-19T10:00:01Z",
             ),
@@ -122,6 +126,7 @@ class AppViewModelTest {
         assertEquals("auto", selected?.approvalMode)
         assertEquals("high", selected?.reasoningEffort)
         assertEquals("fast", selected?.serviceTier)
+        assertEquals("danger-full-access", selected?.sandboxMode)
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
     }
 
@@ -170,6 +175,74 @@ class AppViewModelTest {
     }
 
     @Test
+    fun streamClosedInForegroundReconnectsAutomatically() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_reconnect", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail("sess_reconnect")
+        advanceUntilIdle()
+
+        assertEquals(1, bridgeApi.observeSessionEventsCallCount)
+
+        bridgeApi.emit(
+            SessionStreamEvent.StreamClosed(
+                sessionId = "sess_reconnect",
+                reason = "socket closed",
+                timestamp = "2026-05-19T19:00:00.000Z",
+            ),
+        )
+        runCurrent()
+        assertEquals("实时流已断开，准备重连", viewModel.uiState.value.sessionRealtimeState.connectionText)
+
+        advanceTimeBy(1_500L)
+        runCurrent()
+
+        assertEquals(2, bridgeApi.observeSessionEventsCallCount)
+    }
+
+    @Test
+    fun streamClosedInBackgroundWaitsUntilForegroundToReconnect() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_resume", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail("sess_resume")
+        advanceUntilIdle()
+        assertEquals(1, bridgeApi.observeSessionEventsCallCount)
+
+        viewModel.onAppBackgrounded()
+        bridgeApi.emit(
+            SessionStreamEvent.StreamClosed(
+                sessionId = "sess_resume",
+                reason = "background socket closed",
+                timestamp = "2026-05-19T19:10:00.000Z",
+            ),
+        )
+        advanceTimeBy(5_000L)
+        advanceUntilIdle()
+
+        assertEquals(1, bridgeApi.observeSessionEventsCallCount)
+
+        viewModel.onAppForegrounded()
+        advanceUntilIdle()
+
+        assertEquals(2, bridgeApi.observeSessionEventsCallCount)
+    }
+
+    @Test
     fun updatingSessionConfigPersistsSettingsAndCallsBridge() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_config", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -186,15 +259,18 @@ class AppViewModelTest {
         viewModel.updateSelectedSessionModel("gpt-5.5-coder")
         viewModel.updateSelectedSessionReasoningEffort("high")
         viewModel.updateSelectedSessionServiceTier("fast")
+        viewModel.updateSelectedSessionSandboxMode("danger-full-access")
         advanceUntilIdle()
 
-        assertEquals(3, bridgeApi.sessionConfigUpdates.size)
+        assertEquals(4, bridgeApi.sessionConfigUpdates.size)
         assertEquals("gpt-5.5-coder", settingsStore.saved.model)
         assertEquals("high", settingsStore.saved.reasoningEffort)
         assertEquals("fast", settingsStore.saved.serviceTier)
+        assertEquals("danger-full-access", settingsStore.saved.sandboxMode)
         assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedSession?.model)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
+        assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
     }
 
     @Test
@@ -229,6 +305,7 @@ class AppViewModelTest {
             model = "gpt-5.4",
             reasoningEffort = "high",
             serviceTier = "fast",
+            sandboxMode = "danger-full-access",
             status = "idle",
         )
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -241,6 +318,7 @@ class AppViewModelTest {
                     approvalMode = "未知审批模式",
                     reasoningEffort = "unknown",
                     serviceTier = "unknown",
+                    sandboxMode = "unknown",
                 ),
             ),
         )
@@ -262,6 +340,7 @@ class AppViewModelTest {
         assertEquals("manual", viewModel.uiState.value.selectedSession?.approvalMode)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
+        assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
     }
 
     @Test
@@ -347,6 +426,8 @@ private class FakeBridgeApi(
 ) : BridgeApi {
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     private var currentDetail: SessionDetail = createdDetail
+    var observeSessionEventsCallCount: Int = 0
+        private set
     val sentInputs = mutableListOf<String>()
     val sendInputRequests = mutableListOf<SendInputRequest>()
     val uploadedImageRequests = mutableListOf<UploadImageAttachmentRequest>()
@@ -377,6 +458,7 @@ private class FakeBridgeApi(
             approvalMode = request.approvalMode,
             reasoningEffort = request.reasoningEffort,
             serviceTier = request.serviceTier,
+            sandboxMode = request.sandboxMode,
         )
         return currentDetail
     }
@@ -392,6 +474,7 @@ private class FakeBridgeApi(
             approvalMode = update.approvalMode ?: currentDetail.approvalMode,
             reasoningEffort = update.reasoningEffort ?: currentDetail.reasoningEffort,
             serviceTier = update.serviceTier ?: currentDetail.serviceTier,
+            sandboxMode = update.sandboxMode ?: currentDetail.sandboxMode,
         )
         return currentDetail
     }
@@ -424,7 +507,10 @@ private class FakeBridgeApi(
         )
     }
 
-    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = events
+    override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> {
+        observeSessionEventsCallCount += 1
+        return events
+    }
 
     suspend fun emit(event: SessionStreamEvent) {
         events.emit(event)
@@ -461,6 +547,7 @@ private class FakeAppSettingsStore(
         approvalMode = "manual",
         reasoningEffort = "medium",
         serviceTier = "default",
+        sandboxMode = "workspace-write",
     ),
 ) : AppSettingsStore {
     var saved: AppSettings = initial
@@ -518,6 +605,7 @@ private fun sampleDetail(
     approvalMode: String = "manual",
     reasoningEffort: String = "medium",
     serviceTier: String = "default",
+    sandboxMode: String = "workspace-write",
     status: String,
 ): SessionDetail {
     return SessionDetail(
@@ -531,6 +619,7 @@ private fun sampleDetail(
         approvalMode = approvalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
         status = status,
     )
 }
@@ -546,6 +635,7 @@ private fun SessionDetail.toSummary(): SessionSummary {
         approvalMode = approvalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
         status = status,
     )
 }

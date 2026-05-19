@@ -22,6 +22,7 @@ import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +33,9 @@ import java.time.Instant
 import java.util.ArrayDeque
 
 private const val DraftSessionId = "__draft__"
+private const val SessionStreamReconnectBaseDelayMs = 1_500L
+private const val SessionStreamReconnectMaxDelayMs = 15_000L
+private const val SessionStreamReconnectMaxAttempts = 5
 
 data class AppUiState(
     val endpointInput: String,
@@ -41,6 +45,7 @@ data class AppUiState(
     val approvalModeInput: String,
     val reasoningEffortInput: String,
     val serviceTierInput: String,
+    val sandboxModeInput: String,
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSession: SessionDetail? = null,
@@ -65,6 +70,7 @@ data class DraftSessionUiState(
     val approvalMode: String,
     val reasoningEffort: String,
     val serviceTier: String,
+    val sandboxMode: String,
 )
 
 data class SessionRealtimeUiState(
@@ -104,6 +110,10 @@ class AppViewModel(
     private var sessionStreamJob: Job? = null
     private var activeStreamSessionId: String? = null
     private var activeAssistantTurnId: String? = null
+    private var sessionStreamReconnectJob: Job? = null
+    private var pendingReconnectSessionId: String? = null
+    private var sessionStreamReconnectAttempt: Int = 0
+    private var isAppInForeground: Boolean = true
     private val queuedInputsBySession = mutableMapOf<String, ArrayDeque<String>>()
     private val flushingQueuedSessions = mutableSetOf<String>()
 
@@ -151,6 +161,14 @@ class AppViewModel(
         updateSettingsState {
             it.copy(
                 serviceTierInput = normalizeServiceTier(value),
+            )
+        }
+    }
+
+    fun updateSandboxModeInput(value: String) {
+        updateSettingsState {
+            it.copy(
+                sandboxModeInput = normalizeSandboxMode(value),
             )
         }
     }
@@ -274,6 +292,34 @@ class AppViewModel(
         }
     }
 
+    fun onAppForegrounded() {
+        isAppInForeground = true
+        val selectedSessionId = uiState.value.selectedSession?.id ?: return
+        if (!uiState.value.sessionRealtimeState.isActive) {
+            return
+        }
+        if (
+            activeStreamSessionId == selectedSessionId &&
+            sessionStreamJob?.isActive == true &&
+            uiState.value.sessionRealtimeState.isConnected
+        ) {
+            return
+        }
+
+        appLogger.info("AppViewModel", "应用回到前台，准备检查实时流：sessionId=$selectedSessionId")
+        sessionStreamReconnectAttempt = 0
+        scheduleSessionStreamReconnect(
+            sessionId = selectedSessionId,
+            immediate = true,
+            reason = "应用回到前台，重新建立实时流。",
+        )
+    }
+
+    fun onAppBackgrounded() {
+        isAppInForeground = false
+        cancelPendingSessionStreamReconnect()
+    }
+
     fun startDraftSession(cwd: String? = null) {
         stopSessionStream()
         val draft = buildDraftSession(
@@ -282,6 +328,7 @@ class AppViewModel(
             approvalMode = uiState.value.approvalModeInput,
             reasoningEffort = uiState.value.reasoningEffortInput,
             serviceTier = uiState.value.serviceTierInput,
+            sandboxMode = uiState.value.sandboxModeInput,
         )
         appLogger.info(
             "AppViewModel",
@@ -572,6 +619,7 @@ class AppViewModel(
             approvalMode = null,
             reasoningEffort = null,
             serviceTier = null,
+            sandboxMode = null,
             cwd = null,
         )
     }
@@ -582,6 +630,7 @@ class AppViewModel(
             approvalMode = null,
             reasoningEffort = normalizeReasoningEffort(value),
             serviceTier = null,
+            sandboxMode = null,
             cwd = null,
         )
     }
@@ -592,6 +641,18 @@ class AppViewModel(
             approvalMode = null,
             reasoningEffort = null,
             serviceTier = normalizeServiceTier(value),
+            sandboxMode = null,
+            cwd = null,
+        )
+    }
+
+    fun updateSelectedSessionSandboxMode(value: String) {
+        applySessionConfigUpdate(
+            model = null,
+            approvalMode = null,
+            reasoningEffort = null,
+            serviceTier = null,
+            sandboxMode = normalizeSandboxMode(value),
             cwd = null,
         )
     }
@@ -607,6 +668,7 @@ class AppViewModel(
             approvalMode = null,
             reasoningEffort = null,
             serviceTier = null,
+            sandboxMode = null,
             cwd = normalized,
         )
     }
@@ -632,6 +694,7 @@ class AppViewModel(
         approvalMode: String?,
         reasoningEffort: String?,
         serviceTier: String?,
+        sandboxMode: String?,
         cwd: String?,
     ) {
         val draft = uiState.value.selectedDraftSession
@@ -642,6 +705,7 @@ class AppViewModel(
                 approvalMode = approvalMode ?: draft.approvalMode,
                 reasoningEffort = reasoningEffort ?: draft.reasoningEffort,
                 serviceTier = serviceTier ?: draft.serviceTier,
+                sandboxMode = sandboxMode ?: draft.sandboxMode,
             )
             _uiState.update {
                 it.copy(
@@ -651,6 +715,7 @@ class AppViewModel(
                     approvalModeInput = nextDraft.approvalMode,
                     reasoningEffortInput = nextDraft.reasoningEffort,
                     serviceTierInput = nextDraft.serviceTier,
+                    sandboxModeInput = nextDraft.sandboxMode,
                 ).withSettingsItems()
             }
             persistSettings(_uiState.value)
@@ -664,6 +729,7 @@ class AppViewModel(
             approvalMode = approvalMode ?: detail.approvalMode,
             reasoningEffort = reasoningEffort ?: detail.reasoningEffort,
             serviceTier = serviceTier ?: detail.serviceTier,
+            sandboxMode = sandboxMode ?: detail.sandboxMode,
             subtitle = buildSessionSubtitle(
                 model = model ?: detail.model,
                 approvalMode = approvalMode ?: detail.approvalMode,
@@ -678,6 +744,7 @@ class AppViewModel(
                 approvalModeInput = nextDetail.approvalMode,
                 reasoningEffortInput = nextDetail.reasoningEffort,
                 serviceTierInput = nextDetail.serviceTier,
+                sandboxModeInput = nextDetail.sandboxMode,
             ).withSettingsItems()
         }
         persistSettings(_uiState.value)
@@ -696,6 +763,7 @@ class AppViewModel(
                         approvalMode = approvalMode,
                         reasoningEffort = reasoningEffort,
                         serviceTier = serviceTier,
+                        sandboxMode = sandboxMode,
                     ),
                 )
                 _uiState.update {
@@ -723,7 +791,11 @@ class AppViewModel(
 
     private fun startSessionStream(sessionId: String) {
         appLogger.info("AppViewModel", "开始监听实时流：sessionId=$sessionId")
-        stopSessionStream(resetRealtimeState = false)
+        cancelPendingSessionStreamReconnect()
+        stopSessionStream(
+            resetRealtimeState = false,
+            resetReconnectState = false,
+        )
         activeStreamSessionId = sessionId
         sessionStreamJob = viewModelScope.launch {
             try {
@@ -735,16 +807,31 @@ class AppViewModel(
             } catch (error: Exception) {
                 if (activeStreamSessionId == sessionId) {
                     appLogger.error("AppViewModel", "实时流监听失败：sessionId=$sessionId", error)
+                    val reconnectScheduled = scheduleSessionStreamReconnect(
+                        sessionId = sessionId,
+                        reason = error.message ?: "实时流连接失败。",
+                    )
                     _uiState.update {
                         it.copy(
                             sessionRealtimeState = it.sessionRealtimeState.copy(
                                 isActive = true,
                                 isConnected = false,
-                                connectionText = "实时流连接失败",
-                                lastEventText = "无法继续接收实时事件。",
-                                fallbackNotice = error.message ?: "当前回退到 HTTP 快照。",
+                                connectionText = if (reconnectScheduled) {
+                                    "实时流连接失败，准备重连"
+                                } else {
+                                    "实时流连接失败"
+                                },
+                                lastEventText = if (reconnectScheduled) {
+                                    "连接已中断，正在尝试重新建立实时流。"
+                                } else {
+                                    "无法继续接收实时事件。"
+                                },
+                                fallbackNotice = buildStreamReconnectNotice(
+                                    reconnectScheduled = reconnectScheduled,
+                                    reason = error.message ?: "当前回退到 HTTP 快照。",
+                                ),
                             ),
-                            message = error.message ?: "实时流连接失败。",
+                            message = if (reconnectScheduled) null else error.message ?: "实时流连接失败。",
                         )
                     }
                     refreshSessionSnapshot(sessionId)
@@ -754,12 +841,16 @@ class AppViewModel(
         }
     }
 
-    private fun stopSessionStream(resetRealtimeState: Boolean = true) {
+    private fun stopSessionStream(
+        resetRealtimeState: Boolean = true,
+        resetReconnectState: Boolean = true,
+    ) {
         activeStreamSessionId?.let { appLogger.info("AppViewModel", "停止实时流监听：sessionId=$it") }
         sessionStreamJob?.cancel()
         sessionStreamJob = null
         activeStreamSessionId = null
         activeAssistantTurnId = null
+        cancelPendingSessionStreamReconnect(resetAttempt = resetReconnectState)
         if (resetRealtimeState) {
             _uiState.update {
                 it.copy(sessionRealtimeState = SessionRealtimeUiState())
@@ -778,6 +869,7 @@ class AppViewModel(
         when (event) {
             is SessionStreamEvent.StreamOpened -> {
                 appLogger.info("AppViewModel", "实时流已连接：sessionId=$sessionId")
+                resetSessionStreamReconnectState()
                 _uiState.update {
                     it.copy(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -796,14 +888,25 @@ class AppViewModel(
                     "AppViewModel",
                     "实时流关闭：sessionId=$sessionId, reason=${event.reason ?: "none"}",
                 )
+                val reconnectScheduled = scheduleSessionStreamReconnect(
+                    sessionId = sessionId,
+                    reason = event.reason ?: "实时流连接已关闭。",
+                )
                 _uiState.update {
                     it.copy(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             isActive = true,
                             isConnected = false,
-                            connectionText = "实时流已断开",
+                            connectionText = if (reconnectScheduled) {
+                                "实时流已断开，准备重连"
+                            } else {
+                                "实时流已断开"
+                            },
                             lastEventText = event.reason ?: "实时流连接已关闭。",
-                            fallbackNotice = "当前停留在最后一次收到的内容快照。",
+                            fallbackNotice = buildStreamReconnectNotice(
+                                reconnectScheduled = reconnectScheduled,
+                                reason = "当前停留在最后一次收到的内容快照。",
+                            ),
                             pendingApproval = null,
                         ),
                     )
@@ -815,6 +918,7 @@ class AppViewModel(
                     "AppViewModel",
                     "会话实时流就绪：sessionId=$sessionId, status=${event.status}, threadId=${event.threadId ?: "none"}",
                 )
+                resetSessionStreamReconnectState()
                 _uiState.update {
                     it.copy(
                         selectedSession = buildOrUpdateSessionFromStart(
@@ -1086,6 +1190,94 @@ class AppViewModel(
         }
     }
 
+    private fun scheduleSessionStreamReconnect(
+        sessionId: String,
+        reason: String,
+        immediate: Boolean = false,
+    ): Boolean {
+        if (!canReconnectSessionStream(sessionId)) {
+            return false
+        }
+        if (pendingReconnectSessionId == sessionId && sessionStreamReconnectJob?.isActive == true) {
+            return true
+        }
+
+        val nextAttempt = if (immediate) {
+            1
+        } else {
+            sessionStreamReconnectAttempt + 1
+        }
+        if (nextAttempt > SessionStreamReconnectMaxAttempts) {
+            appLogger.warn(
+                "AppViewModel",
+                "实时流重连次数已达上限：sessionId=$sessionId, reason=$reason",
+            )
+            return false
+        }
+
+        val delayMs = if (immediate) {
+            0L
+        } else {
+            minOf(
+                SessionStreamReconnectBaseDelayMs * (1L shl (nextAttempt - 1)),
+                SessionStreamReconnectMaxDelayMs,
+            )
+        }
+
+        sessionStreamReconnectAttempt = nextAttempt
+        pendingReconnectSessionId = sessionId
+        sessionStreamReconnectJob = viewModelScope.launch {
+            if (delayMs > 0) {
+                delay(delayMs)
+            }
+            if (!canReconnectSessionStream(sessionId)) {
+                pendingReconnectSessionId = null
+                sessionStreamReconnectJob = null
+                return@launch
+            }
+
+            appLogger.info(
+                "AppViewModel",
+                "开始重连实时流：sessionId=$sessionId, attempt=$nextAttempt, reason=$reason",
+            )
+            pendingReconnectSessionId = null
+            sessionStreamReconnectJob = null
+            startSessionStream(sessionId)
+        }
+        return true
+    }
+
+    private fun canReconnectSessionStream(sessionId: String): Boolean {
+        return isAppInForeground &&
+            uiState.value.sessionRealtimeState.isActive &&
+            uiState.value.selectedSession?.id == sessionId &&
+            uiState.value.connectionState is BridgeConnectionState.Connected
+    }
+
+    private fun cancelPendingSessionStreamReconnect(resetAttempt: Boolean = false) {
+        sessionStreamReconnectJob?.cancel()
+        sessionStreamReconnectJob = null
+        pendingReconnectSessionId = null
+        if (resetAttempt) {
+            sessionStreamReconnectAttempt = 0
+        }
+    }
+
+    private fun resetSessionStreamReconnectState() {
+        cancelPendingSessionStreamReconnect(resetAttempt = true)
+    }
+
+    private fun buildStreamReconnectNotice(
+        reconnectScheduled: Boolean,
+        reason: String,
+    ): String {
+        return if (reconnectScheduled) {
+            "将在前台自动重连实时流（第 $sessionStreamReconnectAttempt 次尝试）。$reason"
+        } else {
+            reason
+        }
+    }
+
     private fun updateSettingsState(transform: (AppUiState) -> AppUiState) {
         _uiState.update { current ->
             val next = transform(current).withSettingsItems()
@@ -1104,6 +1296,7 @@ class AppViewModel(
                 approvalMode = state.approvalModeInput,
                 reasoningEffort = state.reasoningEffortInput,
                 serviceTier = state.serviceTierInput,
+                sandboxMode = state.sandboxModeInput,
             ),
         )
     }
@@ -1115,6 +1308,7 @@ class AppViewModel(
             approvalMode = detail.approvalMode,
             reasoningEffort = detail.reasoningEffort,
             serviceTier = detail.serviceTier,
+            sandboxMode = detail.sandboxMode,
         )
     }
 
@@ -1125,6 +1319,7 @@ class AppViewModel(
             approvalMode = draft.approvalMode,
             reasoningEffort = draft.reasoningEffort,
             serviceTier = draft.serviceTier,
+            sandboxMode = draft.sandboxMode,
         )
     }
 
@@ -1319,6 +1514,7 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
         approvalModeInput = settings.approvalMode,
         reasoningEffortInput = settings.reasoningEffort,
         serviceTierInput = settings.serviceTier,
+        sandboxModeInput = settings.sandboxMode,
         settingsItems = defaultSettingsItems(
             endpointInput = settings.endpoint,
             authTokenInput = settings.authToken,
@@ -1327,6 +1523,7 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
             approvalModeInput = settings.approvalMode,
             reasoningEffortInput = settings.reasoningEffort,
             serviceTierInput = settings.serviceTier,
+            sandboxModeInput = settings.sandboxMode,
         ),
     )
 }
@@ -1342,6 +1539,7 @@ private fun AppUiState.withSettingsItems(): AppUiState {
             approvalModeInput = approvalModeInput,
             reasoningEffortInput = reasoningEffortInput,
             serviceTierInput = serviceTierInput,
+            sandboxModeInput = sandboxModeInput,
         ),
     )
 }
@@ -1354,6 +1552,7 @@ private fun AppSettings.sanitize(): AppSettings {
         approvalMode = approvalMode.takeIf { it == "manual" || it == "auto" } ?: "manual",
         reasoningEffort = normalizeReasoningEffort(reasoningEffort),
         serviceTier = normalizeServiceTier(serviceTier),
+        sandboxMode = normalizeSandboxMode(sandboxMode),
     )
 }
 
@@ -1365,6 +1564,7 @@ private fun buildOrUpdateSessionFromStart(
     val approvalMode = event.approvalMode ?: current?.approvalMode ?: "manual"
     val reasoningEffort = event.reasoningEffort ?: current?.reasoningEffort ?: "medium"
     val serviceTier = event.serviceTier ?: current?.serviceTier ?: "default"
+    val sandboxMode = event.sandboxMode ?: current?.sandboxMode ?: "workspace-write"
     val cwd = event.cwd ?: current?.cwd ?: ""
 
     if (current != null && current.id == event.sessionId) {
@@ -1374,6 +1574,7 @@ private fun buildOrUpdateSessionFromStart(
             approvalMode = approvalMode,
             reasoningEffort = reasoningEffort,
             serviceTier = serviceTier,
+            sandboxMode = sandboxMode,
             status = event.status,
             subtitle = buildSessionSubtitle(
                 model = model,
@@ -1405,6 +1606,7 @@ private fun buildOrUpdateSessionFromStart(
         approvalMode = approvalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
         status = event.status,
     )
 }
@@ -1415,6 +1617,7 @@ private fun buildDraftSession(
     approvalMode: String,
     reasoningEffort: String,
     serviceTier: String,
+    sandboxMode: String,
 ): DraftSessionUiState {
     return DraftSessionUiState(
         cwd = cwd,
@@ -1422,6 +1625,7 @@ private fun buildDraftSession(
         approvalMode = approvalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
     )
 }
 
@@ -1449,6 +1653,9 @@ private fun mergeSessionDetail(
     val serviceTier = incoming.serviceTier.takeUnless { it.isBlank() || it == "unknown" }
         ?: current?.serviceTier
         ?: "default"
+    val sandboxMode = incoming.sandboxMode.takeUnless { it.isBlank() || it == "unknown" }
+        ?: current?.sandboxMode
+        ?: "workspace-write"
     val cwd = incoming.cwd.takeUnless { it.isBlank() || it == "未提供工作目录" }
         ?: current?.cwd
         ?: ""
@@ -1462,6 +1669,7 @@ private fun mergeSessionDetail(
         approvalMode = approvalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
         status = status,
         subtitle = buildSessionSubtitle(
             model = model,
@@ -1604,6 +1812,7 @@ private fun defaultSettingsItems(
     approvalModeInput: String = "manual",
     reasoningEffortInput: String = "medium",
     serviceTierInput: String = "default",
+    sandboxModeInput: String = "workspace-write",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     return listOf(
@@ -1614,6 +1823,7 @@ private fun defaultSettingsItems(
         "默认模型" to modelInput.ifBlank { "未配置" },
         "推理强度" to localizedReasoningEffort(reasoningEffortInput),
         "速度档位" to localizedServiceTier(serviceTierInput),
+        "文件权限" to localizedSandboxMode(sandboxModeInput),
         "审批模式" to localizedApprovalMode(approvalModeInput),
         "运行器" to (connectedState?.runnerMode ?: "未连接"),
         "遥测" to "已关闭",
@@ -1646,6 +1856,14 @@ private fun localizedServiceTier(value: String): String {
     }
 }
 
+private fun localizedSandboxMode(value: String): String {
+    return when (value) {
+        "read-only" -> "只读"
+        "danger-full-access" -> "完全访问"
+        else -> "工作区可写"
+    }
+}
+
 private fun localizedSessionStatus(status: String): String {
     return when (status) {
         "draft" -> "草稿"
@@ -1667,6 +1885,11 @@ private fun normalizeReasoningEffort(value: String): String {
 
 private fun normalizeServiceTier(value: String): String {
     return value.takeIf { it == "default" || it == "fast" } ?: "default"
+}
+
+private fun normalizeSandboxMode(value: String): String {
+    return value.takeIf { it == "read-only" || it == "workspace-write" || it == "danger-full-access" }
+        ?: "workspace-write"
 }
 
 private fun nowIsoString(): String = Instant.now().toString()

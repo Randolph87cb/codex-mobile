@@ -4,6 +4,7 @@ export type ApprovalDecision = "approve" | "approve_for_session" | "reject" | "r
 export type ApprovalMode = "manual" | "auto";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type ServiceTier = "default" | "fast";
+export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 
 export interface CreateSessionInput {
   cwd: string;
@@ -11,6 +12,7 @@ export interface CreateSessionInput {
   approvalMode: ApprovalMode;
   reasoningEffort: ReasoningEffort;
   serviceTier: ServiceTier;
+  sandboxMode: SandboxMode;
 }
 
 export interface SessionRecord {
@@ -20,6 +22,7 @@ export interface SessionRecord {
   approvalMode: ApprovalMode;
   reasoningEffort: ReasoningEffort;
   serviceTier: ServiceTier;
+  sandboxMode: SandboxMode;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;
@@ -40,6 +43,7 @@ export interface SessionView {
   approvalMode: ApprovalMode;
   reasoningEffort: ReasoningEffort;
   serviceTier: ServiceTier;
+  sandboxMode: SandboxMode;
   status: SessionStatus;
   threadId: string | null;
   activeTurnId: string | null;

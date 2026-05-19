@@ -34,6 +34,7 @@ fun SettingsScreen(
     approvalModeInput: String,
     reasoningEffortInput: String,
     serviceTierInput: String,
+    sandboxModeInput: String,
     diagnosticsLog: String,
     onEndpointChange: (String) -> Unit,
     onAuthTokenChange: (String) -> Unit,
@@ -42,6 +43,7 @@ fun SettingsScreen(
     onApprovalModeChange: (String) -> Unit,
     onReasoningEffortChange: (String) -> Unit,
     onServiceTierChange: (String) -> Unit,
+    onSandboxModeChange: (String) -> Unit,
     onRefreshLogs: () -> Unit,
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
@@ -133,6 +135,16 @@ fun SettingsScreen(
                         SettingOption("快速", "fast", TestTags.SettingsServiceFastButton),
                     ),
                     onValueChange = onServiceTierChange,
+                )
+                SettingButtonRow(
+                    title = "文件权限",
+                    currentValue = sandboxModeInput,
+                    options = listOf(
+                        SettingOption("只读", "read-only", TestTags.SettingsSandboxReadOnlyButton),
+                        SettingOption("工作区可写", "workspace-write", TestTags.SettingsSandboxWorkspaceWriteButton),
+                        SettingOption("完全访问", "danger-full-access", TestTags.SettingsSandboxDangerButton),
+                    ),
+                    onValueChange = onSandboxModeChange,
                 )
                 SettingButtonRow(
                     title = "审批模式",

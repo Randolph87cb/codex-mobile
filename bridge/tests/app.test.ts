@@ -44,6 +44,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
         approvalMode: "manual",
         reasoningEffort: "medium",
         serviceTier: "default",
+        sandboxMode: "workspace-write",
         status: "idle",
         threadId: "thread-history",
         activeTurnId: null,
@@ -71,6 +72,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
       status: "idle",
       threadId: "thread-history",
       activeTurnId: null,
@@ -92,6 +94,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
       status: "idle",
       threadId: "thread-history",
       activeTurnId: null,
@@ -148,6 +151,7 @@ describe("buildBridgeApp", () => {
       model: "gpt-5.5",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
       threadId: "thread-test",
     });
 
@@ -330,6 +334,7 @@ describe("buildBridgeApp", () => {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
     });
 
     const response = await app.inject({
@@ -341,6 +346,7 @@ describe("buildBridgeApp", () => {
         approvalMode: "auto",
         reasoningEffort: "high",
         serviceTier: "fast",
+        sandboxMode: "danger-full-access",
       },
     });
 
@@ -352,6 +358,7 @@ describe("buildBridgeApp", () => {
       approvalMode: "auto",
       reasoningEffort: "high",
       serviceTier: "fast",
+      sandboxMode: "danger-full-access",
     });
 
     await app.close();
@@ -367,6 +374,7 @@ describe("buildBridgeApp", () => {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "fast",
+      sandboxMode: "danger-full-access",
     });
 
     const response = await app.inject({
@@ -374,6 +382,7 @@ describe("buildBridgeApp", () => {
       url: `/api/session/${session.id}/config`,
       payload: {
         serviceTier: "default",
+        sandboxMode: "workspace-write",
       },
     });
 
@@ -381,6 +390,7 @@ describe("buildBridgeApp", () => {
     expect(response.json()).toMatchObject({
       id: session.id,
       serviceTier: "default",
+      sandboxMode: "workspace-write",
     });
 
     await app.close();
@@ -396,6 +406,7 @@ describe("buildBridgeApp", () => {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
     });
 
     const upload = await app.inject({
@@ -454,6 +465,7 @@ describe("buildBridgeApp", () => {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
     });
 
     const response = await app.inject({
@@ -527,6 +539,7 @@ describe("buildBridgeApp", () => {
       sessionId: "thread-history",
       data: {
         threadId: "thread-history",
+        sandboxMode: "workspace-write",
       },
     });
 
@@ -543,6 +556,7 @@ describe("buildBridgeApp", () => {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
     });
 
     const approve = await app.inject({

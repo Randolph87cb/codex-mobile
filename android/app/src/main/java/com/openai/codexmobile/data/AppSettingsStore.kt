@@ -11,6 +11,7 @@ data class AppSettings(
     val approvalMode: String,
     val reasoningEffort: String,
     val serviceTier: String,
+    val sandboxMode: String,
 )
 
 data class AppSettingsDefaults(
@@ -20,6 +21,7 @@ data class AppSettingsDefaults(
     val approvalMode: String = "manual",
     val reasoningEffort: String = "medium",
     val serviceTier: String = "default",
+    val sandboxMode: String = "workspace-write",
 )
 
 interface AppSettingsStore {
@@ -49,6 +51,9 @@ class SharedPreferencesAppSettingsStore(
             serviceTier = preferences.getString(KEY_SERVICE_TIER, defaults.serviceTier)
                 ?.takeIf { it == "default" || it == "fast" }
                 ?: defaults.serviceTier,
+            sandboxMode = preferences.getString(KEY_SANDBOX_MODE, defaults.sandboxMode)
+                ?.takeIf { it == "read-only" || it == "workspace-write" || it == "danger-full-access" }
+                ?: defaults.sandboxMode,
         )
     }
 
@@ -61,6 +66,7 @@ class SharedPreferencesAppSettingsStore(
             .putString(KEY_APPROVAL_MODE, settings.approvalMode)
             .putString(KEY_REASONING_EFFORT, settings.reasoningEffort)
             .putString(KEY_SERVICE_TIER, settings.serviceTier)
+            .putString(KEY_SANDBOX_MODE, settings.sandboxMode)
             .apply()
     }
 
@@ -73,6 +79,7 @@ class SharedPreferencesAppSettingsStore(
         const val KEY_APPROVAL_MODE = "approval_mode"
         const val KEY_REASONING_EFFORT = "reasoning_effort"
         const val KEY_SERVICE_TIER = "service_tier"
+        const val KEY_SANDBOX_MODE = "sandbox_mode"
     }
 }
 

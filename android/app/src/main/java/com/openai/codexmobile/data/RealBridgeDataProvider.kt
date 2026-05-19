@@ -23,6 +23,7 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.TimeUnit
 
 class RealBridgeDataProvider(
     private val appLogger: AppLogger,
@@ -30,7 +31,9 @@ class RealBridgeDataProvider(
     private var baseUrl: String? = null
     private var authToken: String? = null
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
-    private val webSocketClient = OkHttpClient()
+    private val webSocketClient = OkHttpClient.Builder()
+        .pingInterval(20, TimeUnit.SECONDS)
+        .build()
 
     override fun updateAuthToken(token: String) {
         authToken = token.trim().takeIf { it.isNotEmpty() }
@@ -83,13 +86,14 @@ class RealBridgeDataProvider(
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail = withContext(Dispatchers.IO) {
         appLogger.info(
             "BridgeApi",
-            "创建会话：cwd=${request.cwd}, model=${request.model}, approval=${request.approvalMode}",
+            "创建会话：cwd=${request.cwd}, model=${request.model}, approval=${request.approvalMode}, sandbox=${request.sandboxMode}",
         )
         val payload = JSONObject()
             .put("cwd", request.cwd)
             .put("model", request.model)
             .put("approvalMode", request.approvalMode)
             .put("reasoningEffort", request.reasoningEffort)
+            .put("sandboxMode", request.sandboxMode)
         if (request.serviceTier != "default") {
             payload.put("serviceTier", request.serviceTier)
         }
@@ -119,6 +123,7 @@ class RealBridgeDataProvider(
         update.approvalMode?.let { payload.put("approvalMode", it) }
         update.reasoningEffort?.let { payload.put("reasoningEffort", it) }
         update.serviceTier?.let { payload.put("serviceTier", it) }
+        update.sandboxMode?.let { payload.put("sandboxMode", it) }
 
         val response = request(
             method = "PATCH",
@@ -443,6 +448,7 @@ private fun parseSessionStreamEvent(
             approvalMode = data.optString("approvalMode").takeIf { it.isNotBlank() },
             reasoningEffort = data.optString("reasoningEffort").takeIf { it.isNotBlank() },
             serviceTier = data.optString("serviceTier").takeIf { it.isNotBlank() },
+            sandboxMode = data.optString("sandboxMode").takeIf { it.isNotBlank() },
             threadId = data.optString("threadId").takeIf { it.isNotBlank() },
             timestamp = timestamp,
         )
@@ -596,6 +602,7 @@ private fun JSONObject.toSessionSummary(): SessionSummary {
         approvalMode = optString("approvalMode").ifBlank { "manual" },
         reasoningEffort = optString("reasoningEffort").ifBlank { "medium" },
         serviceTier = optString("serviceTier").ifBlank { "default" },
+        sandboxMode = optString("sandboxMode").ifBlank { "workspace-write" },
         status = status,
     )
 }
@@ -611,6 +618,7 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
     val approvalMode = optString("approvalMode").ifBlank { "未知审批模式" }
     val reasoningEffort = optString("reasoningEffort").ifBlank { "medium" }
     val serviceTier = optString("serviceTier").ifBlank { "default" }
+    val sandboxMode = optString("sandboxMode").ifBlank { "workspace-write" }
     val status = optString("status").ifBlank { "unknown" }
     val cwd = optString("cwd").ifBlank { "未提供工作目录" }
     val threadId = optString("threadId").ifBlank { "尚未分配" }
@@ -637,6 +645,7 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
         approvalMode = approvalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
+        sandboxMode = sandboxMode,
         status = status,
     )
 }

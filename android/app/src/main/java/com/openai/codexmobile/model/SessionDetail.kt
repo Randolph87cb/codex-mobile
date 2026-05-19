@@ -11,5 +11,6 @@ data class SessionDetail(
     val approvalMode: String = "manual",
     val reasoningEffort: String = "medium",
     val serviceTier: String = "default",
+    val sandboxMode: String = "workspace-write",
     val status: String = "unknown",
 )

@@ -12,6 +12,7 @@ import type {
   JsonRpcRequestId,
   ReasoningEffort,
   ResolvedSessionInput,
+  SandboxMode,
   SessionApprovalInput,
   SessionApprovalResult,
   SessionRecord,
@@ -50,6 +51,14 @@ interface ThreadResumeResult {
   approvalPolicy?: "on-request" | "never";
   serviceTier?: "fast" | null;
   reasoningEffort?: ReasoningEffort | null;
+  sandbox?:
+    | "read-only"
+    | "workspace-write"
+    | "danger-full-access"
+    | {
+        type?: "readOnly" | "workspaceWrite" | "dangerFullAccess" | "externalSandbox";
+      }
+    | null;
 }
 
 class ApprovalError extends Error {
@@ -104,6 +113,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       cwd: session.cwd,
       model: session.model,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      sandbox: session.sandboxMode,
       ...buildServiceTierParams(session.serviceTier),
     });
 
@@ -115,6 +125,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       approvalMode: mapApprovalMode(result.approvalPolicy) ?? session.approvalMode,
       reasoningEffort: mapReasoningEffort(result.reasoningEffort) ?? session.reasoningEffort,
       serviceTier: mapServiceTier(result.serviceTier) ?? session.serviceTier,
+      sandboxMode: mapSandboxMode(result.sandbox) ?? session.sandboxMode,
       status: mapThreadStatus(result.thread.status),
       lastError: null,
     });
@@ -335,6 +346,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "default",
+      sandboxMode: "workspace-write",
       status: mapThreadStatus(thread.status),
       threadId: thread.id,
       activeTurnId: null,
@@ -597,6 +609,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       cwd: session.cwd,
       model: session.model,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      sandboxPolicy: buildSandboxPolicy(session.sandboxMode, session.cwd),
       effort: session.reasoningEffort,
       ...buildServiceTierParams(session.serviceTier),
       input: buildTurnInput(input),
@@ -626,6 +639,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       cwd: session.cwd,
       model: session.model,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      sandbox: session.sandboxMode,
       excludeTurns: true,
       ...buildServiceTierParams(session.serviceTier),
     });
@@ -639,6 +653,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? session.approvalMode,
         reasoningEffort: mapReasoningEffort(resumed.reasoningEffort) ?? session.reasoningEffort,
         serviceTier: mapServiceTier(resumed.serviceTier) ?? session.serviceTier,
+        sandboxMode: mapSandboxMode(resumed.sandbox) ?? session.sandboxMode,
         status: mapThreadStatus(resumed.thread.status),
         lastError: null,
       }) ?? session
@@ -664,6 +679,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? "manual",
       reasoningEffort: mapReasoningEffort(resumed.reasoningEffort) ?? "medium",
       serviceTier: mapServiceTier(resumed.serviceTier) ?? "default",
+      sandboxMode: mapSandboxMode(resumed.sandbox) ?? "workspace-write",
       status: mapThreadStatus(resumed.thread.status),
       threadId: resumed.thread.id,
       activeTurnId: null,
@@ -944,6 +960,63 @@ function buildServiceTierParams(serviceTier: ServiceTier): { serviceTier?: "fast
   }
 
   return {};
+}
+
+function mapSandboxMode(
+  sandbox:
+    | ThreadResumeResult["sandbox"]
+    | undefined,
+): SessionRecord["sandboxMode"] | null {
+  if (sandbox === "read-only" || sandbox === "workspace-write" || sandbox === "danger-full-access") {
+    return sandbox;
+  }
+
+  if (!sandbox || typeof sandbox !== "object") {
+    return null;
+  }
+
+  switch (sandbox.type) {
+    case "readOnly":
+      return "read-only";
+    case "workspaceWrite":
+      return "workspace-write";
+    case "dangerFullAccess":
+      return "danger-full-access";
+    default:
+      return null;
+  }
+}
+
+function buildSandboxPolicy(
+  sandboxMode: SandboxMode,
+  cwd: string,
+):
+  | { type: "dangerFullAccess" }
+  | { type: "readOnly"; networkAccess: false }
+  | {
+      type: "workspaceWrite";
+      writableRoots: string[];
+      networkAccess: false;
+      excludeTmpdirEnvVar: false;
+      excludeSlashTmp: false;
+    } {
+  switch (sandboxMode) {
+    case "danger-full-access":
+      return { type: "dangerFullAccess" };
+    case "read-only":
+      return {
+        type: "readOnly",
+        networkAccess: false,
+      };
+    default:
+      return {
+        type: "workspaceWrite",
+        writableRoots: [cwd],
+        networkAccess: false,
+        excludeTmpdirEnvVar: false,
+        excludeSlashTmp: false,
+      };
+  }
 }
 
 function buildTurnInput(input: ResolvedSessionInput): Array<Record<string, unknown>> {

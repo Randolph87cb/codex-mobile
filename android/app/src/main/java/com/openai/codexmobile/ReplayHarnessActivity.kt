@@ -37,6 +37,7 @@ class ReplayHarnessActivity : ComponentActivity() {
                 approvalMode = "manual",
                 reasoningEffort = "medium",
                 serviceTier = "default",
+                sandboxMode = "workspace-write",
             ),
         )
         val dataProvider = DeterministicReplayDataProvider()
@@ -83,6 +84,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         approvalMode = "manual",
         reasoningEffort = "medium",
         serviceTier = "default",
+        sandboxMode = "workspace-write",
         status = "idle",
     )
     private val detail = SessionDetail(
@@ -106,6 +108,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         approvalMode = session.approvalMode,
         reasoningEffort = session.reasoningEffort,
         serviceTier = session.serviceTier,
+        sandboxMode = session.sandboxMode,
         status = session.status,
     )
     private val longApprovalSummary = buildString {
@@ -145,6 +148,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
             approvalMode = update.approvalMode ?: detail.approvalMode,
             reasoningEffort = update.reasoningEffort ?: detail.reasoningEffort,
             serviceTier = update.serviceTier ?: detail.serviceTier,
+            sandboxMode = update.sandboxMode ?: detail.sandboxMode,
         )
     }
 

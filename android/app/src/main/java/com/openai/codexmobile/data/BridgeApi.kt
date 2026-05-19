@@ -10,6 +10,7 @@ data class CreateSessionRequest(
     val approvalMode: String = "manual",
     val reasoningEffort: String = "medium",
     val serviceTier: String = "default",
+    val sandboxMode: String = "workspace-write",
 )
 
 data class SessionConfigUpdate(
@@ -18,6 +19,7 @@ data class SessionConfigUpdate(
     val approvalMode: String? = null,
     val reasoningEffort: String? = null,
     val serviceTier: String? = null,
+    val sandboxMode: String? = null,
 )
 
 data class SessionInputAttachmentRef(

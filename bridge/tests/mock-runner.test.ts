@@ -12,6 +12,7 @@ describe("MockRunner", () => {
       approvalMode: "manual",
       reasoningEffort: "medium",
       serviceTier: "fast",
+      sandboxMode: "workspace-write",
     });
     const runner = new MockRunner(store);
     const events: BridgeEvent[] = [];

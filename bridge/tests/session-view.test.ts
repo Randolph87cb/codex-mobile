@@ -65,6 +65,7 @@ describe("session view mapping", () => {
         approvalMode: "manual",
         reasoningEffort: "medium",
         serviceTier: "fast",
+        sandboxMode: "danger-full-access",
         status: "running",
         threadId: "thread-2",
         activeTurnId: "turn-old",
@@ -76,5 +77,6 @@ describe("session view mapping", () => {
 
     expect(view.status).toBe("idle");
     expect(view.subtitle).toContain("空闲");
+    expect(view.sandboxMode).toBe("danger-full-access");
   });
 });

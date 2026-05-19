@@ -54,6 +54,7 @@ export function buildSessionViewFromRecord(session: SessionRecord): SessionView 
     approvalMode: session.approvalMode,
     reasoningEffort: session.reasoningEffort,
     serviceTier: session.serviceTier,
+    sandboxMode: session.sandboxMode,
     status: session.status,
     threadId: session.threadId,
     activeTurnId: session.activeTurnId,
@@ -75,6 +76,7 @@ export function buildSessionViewFromThread(
   const model = session?.model ?? normalizeText(thread.modelProvider, "openai") ?? "openai";
   const reasoningEffort = session?.reasoningEffort ?? "medium";
   const serviceTier = session?.serviceTier ?? "default";
+  const sandboxMode = session?.sandboxMode ?? "workspace-write";
   const title = firstNonEmpty(
     normalizeText(thread.name),
     extractFirstUserMessage(thread),
@@ -95,6 +97,7 @@ export function buildSessionViewFromThread(
     approvalMode: session?.approvalMode ?? "manual",
     reasoningEffort,
     serviceTier,
+    sandboxMode,
     status,
     threadId: session?.threadId ?? thread.id,
     activeTurnId: session?.activeTurnId ?? null,

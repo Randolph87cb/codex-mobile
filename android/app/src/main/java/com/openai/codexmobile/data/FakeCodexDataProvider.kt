@@ -59,6 +59,7 @@ class FakeCodexDataProvider : CodexDataProvider {
             approvalMode = request.approvalMode,
             reasoningEffort = request.reasoningEffort,
             serviceTier = request.serviceTier,
+            sandboxMode = request.sandboxMode,
             status = "idle",
         )
     }
@@ -75,6 +76,7 @@ class FakeCodexDataProvider : CodexDataProvider {
             approvalMode = update.approvalMode ?: detail.approvalMode,
             reasoningEffort = update.reasoningEffort ?: detail.reasoningEffort,
             serviceTier = update.serviceTier ?: detail.serviceTier,
+            sandboxMode = update.sandboxMode ?: detail.sandboxMode,
         )
     }
 
@@ -126,6 +128,7 @@ class FakeCodexDataProvider : CodexDataProvider {
             approvalMode = session.approvalMode,
             reasoningEffort = session.reasoningEffort,
             serviceTier = session.serviceTier,
+            sandboxMode = session.sandboxMode,
             status = session.status,
         )
     }
