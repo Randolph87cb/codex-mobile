@@ -93,9 +93,52 @@ npm run dev
 powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\start-bridge-lan.ps1
 ```
 
-这会用 `app-server` 模式把 bridge 监听到 `0.0.0.0:8787`。
+这会用 `app-server` 模式把 bridge 在后台重启到 `0.0.0.0:8787`，并把日志写到：
+
+```text
+D:\workspace\codex-mobile\.logs\bridge\bridge-stdout.log
+D:\workspace\codex-mobile\.logs\bridge\bridge-stderr.log
+```
+
+如果要手动停止后台 bridge：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\stop-bridge-background.ps1
+```
+
+如果要后台重启并重新构建 bridge：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\restart-bridge-background.ps1
+```
 
 如果 bridge 配置了 `CODEX_MOBILE_AUTH_TOKEN`，Android 端需要先进入“设置”页填写 token，再发起连接并进入会话详情页实时流。
+
+### bridge 自启动
+
+默认提供“登录后自启动”计划任务安装脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\install-bridge-autostart.ps1
+```
+
+如果需要更接近“开机即启动”的方式，可用 `SYSTEM` 账户注册启动任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\install-bridge-autostart.ps1 -AtStartup
+```
+
+说明：
+
+- 默认模式是“当前用户登录后自启动”，更适合本项目依赖当前用户环境的场景。
+- `-AtStartup` 会注册为 `SYSTEM` 计划任务，通常需要管理员权限。
+- 任务实际执行的是后台重启脚本 `scripts/restart-bridge-background.ps1`。
+
+移除自启动任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\uninstall-bridge-autostart.ps1
+```
 
 ## 测试
 

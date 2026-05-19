@@ -396,3 +396,38 @@
   - 真实模拟器：`codex-mobile-api35(AVD) - 15`
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 
+## 后续补充修复（十一）
+- 用户新增 bridge 运维需求：
+  - bridge 希望支持开机/登录后自启动。
+  - 现有 `scripts/start-bridge-lan.ps1` 不能再前台挂住终端，而要改成“后台重启 bridge 服务”。
+- 当前判断：
+  - 现有 `start-bridge-lan.ps1` 只是设置环境变量后直接执行 `npm run dev`，本质上是前台开发模式，不适合日常常驻，也不适合计划任务。
+  - 真正稳定的后台模式更适合走 `npm run build + node dist/index.js`，并把日志落到 `.logs/`，由单独脚本托管重启和停止。
+  - Windows PowerShell 5 对无 BOM 的中文脚本兼容性差，启动类脚本若保留中文输出，计划任务和 `powershell.exe` 容易直接解析失败。
+- 实际修改：
+  - `scripts/restart-bridge-background.ps1`
+    - 新增后台重启入口：先停旧进程，再构建 `bridge` 生产产物，最后用隐藏窗口后台启动 `node dist/index.js`。
+    - 启动后写入 `.tmp/bridge/bridge-process.json`，并把 stdout/stderr 分别落到 `.logs/bridge/bridge-stdout.log`、`.logs/bridge/bridge-stderr.log`。
+    - 增加健康检查轮询，确认 `health` 可访问后才返回成功。
+  - `scripts/stop-bridge-background.ps1`
+    - 根据 `.tmp/bridge/bridge-process.json` 停止当前后台 bridge。
+  - `scripts/start-bridge-lan.ps1`
+    - 改成兼容包装脚本，内部直接调用后台重启入口，默认仍使用 `0.0.0.0:8787 + app-server`。
+  - `scripts/install-bridge-autostart.ps1`
+    - 新增计划任务安装脚本。
+    - 默认注册“当前用户登录后自启动”。
+    - 支持 `-AtStartup` 注册为 `SYSTEM` 启动任务，更接近开机自启动。
+  - `scripts/uninstall-bridge-autostart.ps1`
+    - 新增计划任务卸载脚本。
+  - `README.md`
+    - 更新 bridge 启动章节，补充后台重启、后台停止、自启动安装与卸载说明。
+  - 额外修正：
+    - 启动类脚本输出统一收为 ASCII，避免 Windows PowerShell 5 因 UTF-8 无 BOM 中文脚本解析失败。
+
+## 本次验证补充（十一）
+- PowerShell 脚本语法解析：通过
+- 实际后台启动验证：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\restart-bridge-background.ps1 -HostAddress 127.0.0.1 -Port 18787 -Runner app-server`
+  - `Invoke-RestMethod http://127.0.0.1:18787/health` 返回 `ok=true`
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\stop-bridge-background.ps1` 成功停止后台 bridge
+
