@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Base64
 import android.webkit.MimeTypeMap
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
 
@@ -29,7 +28,7 @@ fun prepareImageAttachmentForBridge(
     return UploadImageAttachmentRequest(
         displayName = normalizeDisplayName(displayName),
         mimeType = mimeType,
-        contentBase64 = Base64.encodeToString(rawBytes, Base64.NO_WRAP),
+        contentBytes = rawBytes,
     )
 }
 

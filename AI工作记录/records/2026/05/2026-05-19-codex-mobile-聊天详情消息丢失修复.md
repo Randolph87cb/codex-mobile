@@ -355,3 +355,44 @@
   - 覆盖图片横向滚动、预览、失败重试入口、发送按钮禁用
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 
+## 后续补充修复（十）
+- 用户把 bridge 暴露到 Cloudflare 域名后，手机端多图预上传失败，日志显示：
+  - `POST /api/attachment/image -> 413 FST_ERR_CTP_BODY_TOO_LARGE`
+  - 少量重试后还会出现 `502 Bad Gateway`（Cloudflare 页面）
+- 当前判断：
+  - 真正的主故障是 bridge 仍在用 `JSON + Base64` 接收原图，Fastify 默认请求体限制偏小，经 Cloudflare 代理后更容易命中限制。
+  - 日志里的图片体积约为 `2.5MB ~ 5.4MB` 的 Base64 字符串；Base64 比原始二进制更大，再包一层 JSON，会显著放大请求体。
+  - `Socket closed` 的 WebSocket 日志与本次图片失败不是同一条链路，不是主因。
+- 实际修改：
+  - bridge `package.json`
+    - 引入 `@fastify/multipart`，让图片上传走更适合代理链路的 multipart。
+  - bridge `app.ts`
+    - Fastify 初始化增加 `bodyLimit`，默认提升到 `32MB`，并允许通过 `BRIDGE_BODY_LIMIT_MB` 覆盖。
+    - `/api/attachment/image` 新增 multipart 解析，同时保留旧 JSON Base64 兼容。
+    - multipart 上传限制与 `bodyLimit` 对齐，减少 Cloudflare 下的大图片 413。
+  - bridge `attachment-store.ts`
+    - 图片存储入口改为直接接收原始 `Buffer`；旧 Base64 路径通过兼容包装转换。
+  - bridge `app.test.ts`
+    - 新增 multipart 上传测试，确认新链路可用，旧 JSON 上传继续兼容。
+  - Android `BridgeApi.kt`
+    - `UploadImageAttachmentRequest` 从 `contentBase64` 改为 `contentBytes`。
+  - Android `ImageAttachmentPreparer.kt`
+    - 选图后直接保留原始字节，不再把原图编码成 Base64 作为上传载荷。
+  - Android `RealBridgeDataProvider.kt`
+    - 图片预上传改为 `multipart/form-data`，直接发送原始字节。
+    - 仍保留一次 `SocketException` 重试，但主要收益来自不再传 Base64 大 JSON。
+  - Android `AppViewModel.kt`
+    - 本地预览仍可用，但上传链路改为基于原始字节构造 multipart。
+  - Android `AppViewModelTest.kt`
+    - 同步更新图片请求构造，覆盖新的 `contentBytes` 路径。
+
+## 本次验证补充（十）
+- `cd bridge && npm run check`：通过
+- `cd bridge && npm test`：通过
+  - `5` 个测试文件通过
+  - `39` 个测试用例通过
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+  - 真实模拟器：`codex-mobile-api35(AVD) - 15`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+

@@ -34,7 +34,7 @@ data class SendInputRequest(
 data class UploadImageAttachmentRequest(
     val displayName: String,
     val mimeType: String,
-    val contentBase64: String,
+    val contentBytes: ByteArray,
 )
 
 data class UploadedImageAttachment(

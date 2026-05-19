@@ -123,6 +123,25 @@ describe("buildBridgeApp", () => {
     };
   }
 
+  async function buildMultipartUploadPayload(
+    fileName: string,
+    mimeType: string,
+    content: Buffer,
+  ): Promise<{ body: Buffer; headers: Record<string, string> }> {
+    const form = new FormData();
+    form.set("displayName", fileName);
+    form.set("mimeType", mimeType);
+    form.set("file", new File([content], fileName, { type: mimeType }));
+    const request = new Request("http://bridge.local/api/attachment/image", {
+      method: "POST",
+      body: form,
+    });
+    return {
+      body: Buffer.from(await request.arrayBuffer()),
+      headers: Object.fromEntries(request.headers.entries()),
+    };
+  }
+
   test("creates sessions and returns runner mode in health", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
@@ -359,6 +378,29 @@ describe("buildBridgeApp", () => {
     expect(content.headers["content-type"]).toContain("image/png");
     expect(content.headers["cache-control"]).toBe("no-store");
     expect(content.body).toBe(payload.toString());
+
+    await app.close();
+  });
+
+  test("accepts multipart image uploads for cloudflare-friendly transport", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const payload = Buffer.from("png-image-content-multipart");
+    const multipart = await buildMultipartUploadPayload("sample.png", "image/png", payload);
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      headers: multipart.headers,
+      payload: multipart.body,
+    });
+
+    expect(upload.statusCode).toBe(201);
+    expect(upload.json()).toMatchObject({
+      displayName: "sample.png",
+      mimeType: "image/png",
+    });
 
     await app.close();
   });

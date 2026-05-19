@@ -1,4 +1,5 @@
-import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import { createReadStream } from "node:fs";
 import { access } from "node:fs/promises";
@@ -84,7 +85,10 @@ interface BuildBridgeAppOptions {
 }
 
 export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    bodyLimit: resolveBridgeBodyLimitBytes(),
+  });
   const store = options.store ?? new SessionStore();
   const attachmentStore = new AttachmentStore();
   const runner = options.runner ?? createRunner(store);
@@ -93,6 +97,12 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   const securityState = buildBridgeSecurityState(security);
 
   await app.register(websocket);
+  await app.register(multipart, {
+    limits: {
+      fileSize: resolveBridgeBodyLimitBytes(),
+      files: 1,
+    },
+  });
 
   app.addHook("onClose", async () => {
     await runner.close?.();
@@ -126,16 +136,10 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   }));
 
   app.post("/api/attachment/image", async (request, reply) => {
-    const body = uploadImageSchema.safeParse(request.body);
-    if (!body.success) {
-      return reply.status(400).send({
-        error: "invalid-request",
-        issues: body.error.flatten(),
-      });
-    }
-
     try {
-      const attachment = await attachmentStore.createImage(body.data);
+      const attachment = request.isMultipart()
+        ? await parseMultipartImageUpload(request, attachmentStore)
+        : await parseJsonImageUpload(request.body, attachmentStore);
       return reply.status(201).send({
         id: attachment.id,
         path: attachment.path,
@@ -428,6 +432,73 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   return app;
+}
+
+async function parseMultipartImageUpload(
+  request: FastifyRequest,
+  attachmentStore: AttachmentStore,
+) {
+  let fileBuffer: Buffer | null = null;
+  let displayName = "";
+  let mimeType = "";
+
+  for await (const part of request.parts()) {
+    if (part.type === "file") {
+      if (fileBuffer) {
+        throw new Error("multiple-image-files-not-supported");
+      }
+      fileBuffer = await part.toBuffer();
+      if (!displayName) {
+        displayName = part.filename;
+      }
+      if (!mimeType) {
+        mimeType = part.mimetype;
+      }
+      continue;
+    }
+
+    if (part.fieldname === "displayName") {
+      displayName = String(part.value ?? "").trim();
+    } else if (part.fieldname === "mimeType") {
+      mimeType = String(part.value ?? "").trim();
+    }
+  }
+
+  if (!fileBuffer || fileBuffer.length === 0) {
+    throw new Error("invalid-image-content");
+  }
+
+  if (!displayName) {
+    displayName = "image";
+  }
+
+  if (!mimeType) {
+    mimeType = "image/png";
+  }
+
+  return attachmentStore.createImage({
+    displayName,
+    mimeType,
+    content: fileBuffer,
+  });
+}
+
+async function parseJsonImageUpload(
+  body: unknown,
+  attachmentStore: AttachmentStore,
+) {
+  const parsed = uploadImageSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new Error("invalid-request");
+  }
+
+  return attachmentStore.createImageFromBase64(parsed.data);
+}
+
+function resolveBridgeBodyLimitBytes(): number {
+  const configuredMb = Number.parseInt(process.env.BRIDGE_BODY_LIMIT_MB ?? "", 10);
+  const limitMb = Number.isFinite(configuredMb) && configuredMb > 0 ? configuredMb : 32;
+  return limitMb * 1024 * 1024;
 }
 
 async function sendImageFile(

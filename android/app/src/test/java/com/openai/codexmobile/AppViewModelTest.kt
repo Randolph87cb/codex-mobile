@@ -476,12 +476,12 @@ class AppViewModelTest {
                 UploadImageAttachmentRequest(
                     displayName = "screen.png",
                     mimeType = "image/png",
-                    contentBase64 = "aGVsbG8=",
+                    contentBytes = "hello".toByteArray(),
                 ),
                 UploadImageAttachmentRequest(
                     displayName = "diagram.webp",
                     mimeType = "image/webp",
-                    contentBase64 = "d29ybGQ=",
+                    contentBytes = "world".toByteArray(),
                 ),
             ),
         )
@@ -539,7 +539,7 @@ class AppViewModelTest {
                 UploadImageAttachmentRequest(
                     displayName = "screen.png",
                     mimeType = "image/png",
-                    contentBase64 = "aGVsbG8=",
+                    contentBytes = "hello".toByteArray(),
                 ),
             ),
         )
@@ -574,7 +574,7 @@ class AppViewModelTest {
                 UploadImageAttachmentRequest(
                     displayName = "screen.png",
                     mimeType = "image/png",
-                    contentBase64 = "aGVsbG8=",
+                    contentBytes = "hello".toByteArray(),
                 ),
             ),
         )

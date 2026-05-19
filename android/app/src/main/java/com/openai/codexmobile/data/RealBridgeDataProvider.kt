@@ -10,7 +10,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -146,34 +149,17 @@ class RealBridgeDataProvider(
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment = withContext(Dispatchers.IO) {
         appLogger.info(
             "BridgeApi",
-            "上传图片附件：displayName=${request.displayName}, mimeType=${request.mimeType}, base64Length=${request.contentBase64.length}",
+            "上传图片附件：displayName=${request.displayName}, mimeType=${request.mimeType}, byteLength=${request.contentBytes.size}",
         )
-        val payload = JSONObject()
-            .put("displayName", request.displayName)
-            .put("mimeType", request.mimeType)
-            .put("contentBase64", request.contentBase64)
         val uploadUrl = "${requireBaseUrl()}/api/attachment/image"
-        val requestBody = payload.toString()
         val response = try {
-            request(
-                method = "POST",
-                url = uploadUrl,
-                body = requestBody,
-                summary = "upload image attachment, displayName=${request.displayName}",
-                forceClose = true,
-            )
+            uploadMultipartImageAttachment(uploadUrl, request)
         } catch (error: SocketException) {
             appLogger.warn(
                 "BridgeApi",
                 "图片上传遇到 SocketException，准备重试一次：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
             )
-            request(
-                method = "POST",
-                url = uploadUrl,
-                body = requestBody,
-                summary = "retry upload image attachment, displayName=${request.displayName}",
-                forceClose = true,
-            )
+            uploadMultipartImageAttachment(uploadUrl, request)
         }
         if (response.statusCode !in 200..299) {
             appLogger.warn(
@@ -258,6 +244,40 @@ class RealBridgeDataProvider(
             status = json.optString("status").ifBlank { "unknown" },
             method = json.optString("method").takeIf { it.isNotBlank() },
         )
+    }
+
+    private fun uploadMultipartImageAttachment(
+        url: String,
+        request: UploadImageAttachmentRequest,
+    ): HttpResponse {
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("displayName", request.displayName)
+            .addFormDataPart("mimeType", request.mimeType)
+            .addFormDataPart(
+                "file",
+                request.displayName,
+                request.contentBytes.toRequestBody(request.mimeType.toMediaTypeOrNull()),
+            )
+            .build()
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .post(body)
+            .header("Accept", "application/json")
+            .header("Connection", "close")
+        authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        appLogger.debug("BridgeApi", "HTTP 请求：POST $url (upload image attachment, displayName=${request.displayName})")
+        webSocketClient.newCall(requestBuilder.build()).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            appLogger.debug(
+                "BridgeApi",
+                "HTTP 响应：POST $url -> ${response.code}${if (payload.isBlank()) "" else ", body=${payload.compactForLog()}"}",
+            )
+            return HttpResponse(
+                statusCode = response.code,
+                body = payload,
+            )
+        }
     }
 
     override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = callbackFlow {

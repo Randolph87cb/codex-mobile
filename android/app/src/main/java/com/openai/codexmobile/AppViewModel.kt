@@ -36,6 +36,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.ArrayDeque
+import java.util.Base64
 import java.util.UUID
 
 private const val DraftSessionId = "__draft__"
@@ -213,7 +214,7 @@ class AppViewModel(
     fun attachPreparedImages(
         attachments: List<UploadImageAttachmentRequest>,
     ) {
-        val validAttachments = attachments.filter { it.contentBase64.isNotBlank() }
+        val validAttachments = attachments.filter { it.contentBytes.isNotEmpty() }
         if (validAttachments.isEmpty()) {
             _uiState.update { it.copy(message = "图片内容为空，无法附加。") }
             return
@@ -228,7 +229,7 @@ class AppViewModel(
                 mimeType = attachment.mimeType.ifBlank { "image/jpeg" },
                 previewSource = buildInlineImageSource(
                     mimeType = attachment.mimeType.ifBlank { "image/jpeg" },
-                    contentBase64 = attachment.contentBase64,
+                    contentBytes = attachment.contentBytes,
                 ),
                 uploadState = PendingImageUploadState.Uploading,
             )
@@ -2027,9 +2028,10 @@ private fun appendUserMessage(
 
 private fun buildInlineImageSource(
     mimeType: String,
-    contentBase64: String,
+    contentBytes: ByteArray,
 ): String {
-    return "data:$mimeType;base64,$contentBase64"
+    val encoded = Base64.getEncoder().encodeToString(contentBytes)
+    return "data:$mimeType;base64,$encoded"
 }
 
 private fun buildBridgeImageSource(stagedPath: String): String {

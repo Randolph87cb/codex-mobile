@@ -7,7 +7,7 @@ import type { UploadedImageAttachment } from "./types.js";
 interface CreateImageAttachmentInput {
   displayName: string;
   mimeType: string;
-  contentBase64: string;
+  content: Buffer;
 }
 
 export class AttachmentStore {
@@ -25,10 +25,9 @@ export class AttachmentStore {
     const extension = resolveImageExtension(normalizedMimeType, safeName);
     const fileName = `${id}${extension}`;
     const filePath = join(this.rootDir, fileName);
-    const content = decodeBase64(input.contentBase64);
 
     await mkdir(this.rootDir, { recursive: true });
-    await writeFile(filePath, content);
+    await writeFile(filePath, input.content);
 
     const attachment: UploadedImageAttachment = {
       id,
@@ -41,6 +40,14 @@ export class AttachmentStore {
     this.attachments.set(id, attachment);
     this.attachmentsByPath.set(normalizePathForComparison(filePath), attachment);
     return attachment;
+  }
+
+  async createImageFromBase64(input: Omit<CreateImageAttachmentInput, "content"> & { contentBase64: string }): Promise<UploadedImageAttachment> {
+    return this.createImage({
+      displayName: input.displayName,
+      mimeType: input.mimeType,
+      content: decodeBase64(input.contentBase64),
+    });
   }
 
   getImage(id: string): UploadedImageAttachment | undefined {
