@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import websocket from "@fastify/websocket";
 import { z } from "zod";
+import { AttachmentStore } from "./attachment-store.js";
 import { isHistoryCapableRunner, type BridgeRunner, type HistoryCapableBridgeRunner } from "./bridge-runner.js";
 import { AppServerRunner } from "./app-server-runner.js";
 import { MockRunner } from "./mock-runner.js";
@@ -13,7 +14,7 @@ const createSessionSchema = z.object({
   model: z.string().trim().min(1).default("gpt-5.5"),
   approvalMode: z.enum(["manual", "auto"]).default("manual"),
   reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).default("medium"),
-  serviceTier: z.enum(["default", "fast", "flex"]).default("default"),
+  serviceTier: z.enum(["default", "fast"]).default("default"),
 });
 
 const updateSessionConfigSchema = z.object({
@@ -21,11 +22,34 @@ const updateSessionConfigSchema = z.object({
   model: z.string().trim().min(1).optional(),
   approvalMode: z.enum(["manual", "auto"]).optional(),
   reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
-  serviceTier: z.enum(["default", "fast", "flex"]).optional(),
+  serviceTier: z.enum(["default", "fast"]).optional(),
 });
 
 const inputSchema = z.object({
-  text: z.string().trim().min(1),
+  text: z.string().optional(),
+  attachments: z.array(
+    z.object({
+      id: z.string().trim().min(1),
+    }),
+  ).optional(),
+}).superRefine((value, context) => {
+  const hasText = value.text?.trim().length ? value.text.trim().length > 0 : false;
+  const hasAttachments = (value.attachments?.length ?? 0) > 0;
+  if (hasText || hasAttachments) {
+    return;
+  }
+
+  context.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: "either text or attachments is required",
+    path: ["text"],
+  });
+});
+
+const uploadImageSchema = z.object({
+  displayName: z.string().trim().min(1),
+  mimeType: z.string().trim().min(1),
+  contentBase64: z.string().trim().min(1),
 });
 
 const approveSchema = z.object({
@@ -42,6 +66,7 @@ interface BuildBridgeAppOptions {
 export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
   const store = options.store ?? new SessionStore();
+  const attachmentStore = new AttachmentStore();
   const runner = options.runner ?? createRunner(store);
   const historyRunner = isHistoryCapableRunner(runner) ? runner : null;
   const security = options.security ?? resolveBridgeSecurityConfig();
@@ -79,6 +104,32 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   app.get("/api/sessions", async () => ({
     items: historyRunner ? await historyRunner.listSessionViews() : store.list(),
   }));
+
+  app.post("/api/attachment/image", async (request, reply) => {
+    const body = uploadImageSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: body.error.flatten(),
+      });
+    }
+
+    try {
+      const attachment = await attachmentStore.createImage(body.data);
+      return reply.status(201).send({
+        id: attachment.id,
+        kind: attachment.kind,
+        displayName: attachment.displayName,
+        mimeType: attachment.mimeType,
+        createdAt: attachment.createdAt,
+      });
+    } catch (error) {
+      return reply.status(400).send({
+        error: "invalid-image-upload",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
 
   app.post("/api/session", async (request, reply) => {
     const parsed = createSessionSchema.safeParse(request.body);
@@ -187,9 +238,33 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     }
 
     try {
-      await runner.submitInput(session.id, body.data.text);
+      const resolvedAttachments = (body.data.attachments ?? []).map((attachment) => {
+        const uploaded = attachmentStore.getImage(attachment.id);
+        if (!uploaded) {
+          throw new Error(`attachment-not-found:${attachment.id}`);
+        }
+
+        return {
+          id: uploaded.id,
+          kind: uploaded.kind,
+          path: uploaded.path,
+          displayName: uploaded.displayName,
+          mimeType: uploaded.mimeType,
+        } as const;
+      });
+
+      await runner.submitInput(session.id, {
+        text: body.data.text?.trim() ?? "",
+        attachments: resolvedAttachments,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith("attachment-not-found:")) {
+        return reply.status(400).send({
+          error: "attachment-not-found",
+          message,
+        });
+      }
       if (message === "thread-busy") {
         return reply.status(409).send({
           error: "thread-busy",

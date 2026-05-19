@@ -1,5 +1,6 @@
 import type {
   BridgeEvent,
+  ResolvedSessionInput,
   SessionApprovalInput,
   SessionApprovalResult,
   SessionRecord,
@@ -11,7 +12,7 @@ export type BridgeEventListener = (event: BridgeEvent) => void;
 export interface BridgeRunner {
   readonly mode: "mock" | "app-server";
   initializeSession(sessionId: string): Promise<void>;
-  submitInput(sessionId: string, text: string): Promise<void>;
+  submitInput(sessionId: string, input: ResolvedSessionInput): Promise<void>;
   approve(sessionId: string, input: SessionApprovalInput): Promise<SessionApprovalResult>;
   interrupt(sessionId: string): Promise<void>;
   subscribe(sessionId: string, listener: BridgeEventListener): () => void;

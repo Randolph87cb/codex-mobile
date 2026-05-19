@@ -137,14 +137,57 @@ class RealBridgeDataProvider(
         response.body.toSessionDetail()
     }
 
-    override suspend fun sendInput(sessionId: String, text: String) = withContext(Dispatchers.IO) {
-        appLogger.info("BridgeApi", "发送输入：sessionId=$sessionId, textLength=${text.length}")
-        val payload = JSONObject().put("text", text)
+    override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment = withContext(Dispatchers.IO) {
+        appLogger.info(
+            "BridgeApi",
+            "上传图片附件：displayName=${request.displayName}, mimeType=${request.mimeType}, base64Length=${request.contentBase64.length}",
+        )
+        val payload = JSONObject()
+            .put("displayName", request.displayName)
+            .put("mimeType", request.mimeType)
+            .put("contentBase64", request.contentBase64)
+        val response = request(
+            method = "POST",
+            url = "${requireBaseUrl()}/api/attachment/image",
+            body = payload.toString(),
+            summary = "upload image attachment, displayName=${request.displayName}",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "上传图片附件失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        JSONObject(response.body).let { json ->
+            UploadedImageAttachment(
+                id = json.optString("id").ifBlank { error("bridge 未返回附件 ID。") },
+                displayName = json.optString("displayName").ifBlank { request.displayName },
+                mimeType = json.optString("mimeType").ifBlank { request.mimeType },
+            )
+        }
+    }
+
+    override suspend fun sendInput(sessionId: String, request: SendInputRequest) = withContext(Dispatchers.IO) {
+        appLogger.info(
+            "BridgeApi",
+            "发送输入：sessionId=$sessionId, textLength=${request.text?.length ?: 0}, attachments=${request.attachments.size}",
+        )
+        val payload = JSONObject()
+        request.text?.takeIf { it.isNotBlank() }?.let { payload.put("text", it) }
+        if (request.attachments.isNotEmpty()) {
+            val attachments = JSONArray()
+            request.attachments.forEach { attachment ->
+                attachments.put(JSONObject().put("id", attachment.id))
+            }
+            payload.put("attachments", attachments)
+        }
         val response = request(
             method = "POST",
             url = "${requireBaseUrl()}/api/session/$sessionId/input",
             body = payload.toString(),
-            summary = "send input, sessionId=$sessionId, textLength=${text.length}",
+            summary = "send input, sessionId=$sessionId, textLength=${request.text?.length ?: 0}, attachments=${request.attachments.size}",
         )
         if (response.statusCode !in 200..299) {
             appLogger.warn(

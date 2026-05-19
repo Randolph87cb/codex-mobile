@@ -4,6 +4,7 @@ import { buildBridgeApp } from "../src/app.js";
 import { SessionStore } from "../src/session-store.js";
 import type {
   BridgeSecurityConfig,
+  ResolvedSessionInput,
   SessionApprovalInput,
   SessionApprovalResult,
   SessionView,
@@ -14,7 +15,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
   readonly initializeSession = vi.fn(async (sessionId: string) => {
     this.store.update(sessionId, { threadId: "thread-test" });
   });
-  readonly submitInput = vi.fn(async () => undefined);
+  readonly submitInput = vi.fn(async (_sessionId: string, _input: ResolvedSessionInput) => undefined);
   readonly approve = vi.fn(async (_sessionId: string, input: SessionApprovalInput): Promise<SessionApprovalResult> => ({
     requestId: input.requestId ?? 1,
     decision: input.decision ?? "approve",
@@ -311,7 +312,10 @@ describe("buildBridgeApp", () => {
       },
     });
     expect(input.statusCode).toBe(202);
-    expect(runner.submitInput).toHaveBeenCalledWith("thread-history", "你是谁");
+    expect(runner.submitInput).toHaveBeenCalledWith("thread-history", {
+      text: "你是谁",
+      attachments: [],
+    });
 
     await app.close();
   });
@@ -336,7 +340,7 @@ describe("buildBridgeApp", () => {
         model: "gpt-5",
         approvalMode: "auto",
         reasoningEffort: "high",
-        serviceTier: "flex",
+        serviceTier: "fast",
       },
     });
 
@@ -347,7 +351,7 @@ describe("buildBridgeApp", () => {
       model: "gpt-5",
       approvalMode: "auto",
       reasoningEffort: "high",
-      serviceTier: "flex",
+      serviceTier: "fast",
     });
 
     await app.close();
@@ -378,6 +382,63 @@ describe("buildBridgeApp", () => {
       id: session.id,
       serviceTier: "default",
     });
+
+    await app.close();
+  });
+
+  test("uploads an image and resolves it into a localImage input item", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+    });
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      payload: {
+        displayName: "sample.jpg",
+        mimeType: "image/jpeg",
+        contentBase64: Buffer.from("fake-image").toString("base64"),
+      },
+    });
+
+    expect(upload.statusCode).toBe(201);
+    const attachmentId = upload.json<{ id: string }>().id;
+
+    const input = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        text: "帮我看这张图",
+        attachments: [
+          {
+            id: attachmentId,
+          },
+        ],
+      },
+    });
+
+    expect(input.statusCode).toBe(202);
+    expect(runner.submitInput).toHaveBeenCalledWith(
+      session.id,
+      expect.objectContaining({
+        text: "帮我看这张图",
+        attachments: [
+          expect.objectContaining({
+            id: attachmentId,
+            kind: "image",
+            displayName: "sample.jpg",
+            mimeType: "image/jpeg",
+          }),
+        ],
+      }),
+    );
 
     await app.close();
   });

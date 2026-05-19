@@ -11,6 +11,7 @@ import type {
   ApprovalDecision,
   JsonRpcRequestId,
   ReasoningEffort,
+  ResolvedSessionInput,
   SessionApprovalInput,
   SessionApprovalResult,
   SessionRecord,
@@ -47,16 +48,8 @@ interface ThreadResumeResult {
   cwd?: string;
   model?: string;
   approvalPolicy?: "on-request" | "never";
-  serviceTier?: "fast" | "flex" | null;
+  serviceTier?: "fast" | null;
   reasoningEffort?: ReasoningEffort | null;
-}
-
-interface ModelListResult {
-  data?: Array<{
-    id?: string;
-    model?: string;
-    additionalSpeedTiers?: string[];
-  }>;
 }
 
 class ApprovalError extends Error {
@@ -77,7 +70,6 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   private readonly threadToSession = new Map<string, string>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   private readonly sessionApprovalKeys = new Map<string, string[]>();
-  private readonly modelSpeedTiers = new Map<string, Set<string>>();
   private readonly client: AppServerRpcClient;
 
   constructor(
@@ -108,8 +100,6 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       throw new Error("session-not-found");
     }
 
-    await this.assertServiceTierSupported(session.model, session.serviceTier);
-
     const result = await this.client.request<ThreadResumeResult>("thread/start", {
       cwd: session.cwd,
       model: session.model,
@@ -130,7 +120,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     });
   }
 
-  async submitInput(sessionId: string, text: string): Promise<void> {
+  async submitInput(sessionId: string, input: ResolvedSessionInput): Promise<void> {
     const originalSession = this.store.get(sessionId);
     const session = originalSession ? await this.syncSessionWithThreadRead(originalSession) : undefined;
     if (!session?.threadId) {
@@ -150,7 +140,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
 
     let result: { turn: { id: string } };
     try {
-      result = await this.startTurnWithResumeRetry(session, text);
+      result = await this.startTurnWithResumeRetry(session, input);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.store.update(sessionId, {
@@ -570,35 +560,6 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
   }
 
-  private async assertServiceTierSupported(model: string, serviceTier: ServiceTier): Promise<void> {
-    if (serviceTier !== "flex") {
-      return;
-    }
-
-    const supportedTiers = await this.getAdditionalSpeedTiers(model);
-    if (supportedTiers.has("flex")) {
-      return;
-    }
-
-    const tiersText = supportedTiers.size > 0 ? [...supportedTiers].join(", ") : "none";
-    throw new Error(
-      `Model ${model} does not support service tier flex on this app-server. additionalSpeedTiers=${tiersText}`,
-    );
-  }
-
-  private async getAdditionalSpeedTiers(model: string): Promise<Set<string>> {
-    const cached = this.modelSpeedTiers.get(model);
-    if (cached) {
-      return cached;
-    }
-
-    const result = await this.client.request<ModelListResult>("model/list", {});
-    const entry = result.data?.find((item) => item.id === model || item.model === model);
-    const tiers = new Set(entry?.additionalSpeedTiers ?? []);
-    this.modelSpeedTiers.set(model, tiers);
-    return tiers;
-  }
-
   private async tryReadThread(threadId: string): Promise<AppServerThread | null> {
     try {
       const result = await this.client.request<{ thread: AppServerThread }>("thread/read", {
@@ -613,25 +574,24 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
 
   private async startTurnWithResumeRetry(
     session: SessionRecord,
-    text: string,
+    input: ResolvedSessionInput,
   ): Promise<{ turn: { id: string } }> {
     try {
-      return await this.startTurn(session, text);
+      return await this.startTurn(session, input);
     } catch (error) {
       if (!shouldResumeMissingThread(error)) {
         throw error;
       }
 
       const resumed = await this.resumeThreadSession(session);
-      return this.startTurn(resumed, text);
+      return this.startTurn(resumed, input);
     }
   }
 
   private async startTurn(
     session: SessionRecord,
-    text: string,
+    input: ResolvedSessionInput,
   ): Promise<{ turn: { id: string } }> {
-    await this.assertServiceTierSupported(session.model, session.serviceTier);
     return this.client.request<{ turn: { id: string } }>("turn/start", {
       threadId: session.threadId,
       cwd: session.cwd,
@@ -639,12 +599,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
       effort: session.reasoningEffort,
       ...buildServiceTierParams(session.serviceTier),
-      input: [
-        {
-          type: "text",
-          text,
-        },
-      ],
+      input: buildTurnInput(input),
     });
   }
 
@@ -665,8 +620,6 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     if (!session.threadId) {
       return session;
     }
-
-    await this.assertServiceTierSupported(session.model, session.serviceTier);
 
     const resumed = await this.client.request<ThreadResumeResult>("thread/resume", {
       threadId: session.threadId,
@@ -975,23 +928,51 @@ function mapReasoningEffort(
 }
 
 function mapServiceTier(
-  serviceTier: "fast" | "flex" | null | undefined,
+  serviceTier: "fast" | null | undefined,
 ): SessionRecord["serviceTier"] | null {
   switch (serviceTier) {
     case "fast":
-    case "flex":
       return serviceTier;
     default:
       return null;
   }
 }
 
-function buildServiceTierParams(serviceTier: ServiceTier): { serviceTier?: "fast" | "flex" } {
-  if (serviceTier === "fast" || serviceTier === "flex") {
+function buildServiceTierParams(serviceTier: ServiceTier): { serviceTier?: "fast" } {
+  if (serviceTier === "fast") {
     return { serviceTier };
   }
 
   return {};
+}
+
+function buildTurnInput(input: ResolvedSessionInput): Array<Record<string, unknown>> {
+  const items: Array<Record<string, unknown>> = [];
+  const trimmedText = input.text.trim();
+  if (trimmedText) {
+    items.push({
+      type: "text",
+      text: trimmedText,
+    });
+  } else if (input.attachments.length > 0) {
+    items.push({
+      type: "text",
+      text: "请查看这个图片附件。",
+    });
+  }
+
+  for (const attachment of input.attachments) {
+    if (attachment.kind !== "image") {
+      continue;
+    }
+
+    items.push({
+      type: "localImage",
+      path: attachment.path,
+    });
+  }
+
+  return items;
 }
 
 function findLatestActiveTurnId(thread: AppServerThread): string | null {

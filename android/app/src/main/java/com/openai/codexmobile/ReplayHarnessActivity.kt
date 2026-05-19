@@ -11,7 +11,10 @@ import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CodexDataProvider
 import com.openai.codexmobile.data.CreateSessionRequest
+import com.openai.codexmobile.data.SendInputRequest
 import com.openai.codexmobile.data.SessionStreamEvent
+import com.openai.codexmobile.data.UploadImageAttachmentRequest
+import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.diagnostics.FileAppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
@@ -145,7 +148,15 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         )
     }
 
-    override suspend fun sendInput(sessionId: String, text: String) = Unit
+    override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {
+        return UploadedImageAttachment(
+            id = "replay-image",
+            displayName = request.displayName,
+            mimeType = request.mimeType,
+        )
+    }
+
+    override suspend fun sendInput(sessionId: String, request: SendInputRequest) = Unit
 
     override suspend fun approveSession(
         sessionId: String,

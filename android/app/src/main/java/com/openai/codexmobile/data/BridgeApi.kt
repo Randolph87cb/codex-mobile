@@ -20,6 +20,27 @@ data class SessionConfigUpdate(
     val serviceTier: String? = null,
 )
 
+data class SessionInputAttachmentRef(
+    val id: String,
+)
+
+data class SendInputRequest(
+    val text: String? = null,
+    val attachments: List<SessionInputAttachmentRef> = emptyList(),
+)
+
+data class UploadImageAttachmentRequest(
+    val displayName: String,
+    val mimeType: String,
+    val contentBase64: String,
+)
+
+data class UploadedImageAttachment(
+    val id: String,
+    val displayName: String,
+    val mimeType: String,
+)
+
 interface BridgeApi {
     fun updateAuthToken(token: String)
     suspend fun connect(endpoint: String): BridgeConnectionState
@@ -27,7 +48,8 @@ interface BridgeApi {
     suspend fun currentConnection(): BridgeConnectionState
     suspend fun createSession(request: CreateSessionRequest = CreateSessionRequest()): SessionDetail
     suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail
-    suspend fun sendInput(sessionId: String, text: String)
+    suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment
+    suspend fun sendInput(sessionId: String, request: SendInputRequest)
     suspend fun approveSession(
         sessionId: String,
         requestId: BridgeRequestId?,

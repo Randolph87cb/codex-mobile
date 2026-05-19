@@ -10,9 +10,12 @@ import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
+import com.openai.codexmobile.data.SendInputRequest
 import com.openai.codexmobile.data.SessionConfigUpdate
+import com.openai.codexmobile.data.SessionInputAttachmentRef
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
+import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
@@ -47,6 +50,7 @@ data class AppUiState(
     val message: String? = null,
     val settingsItems: List<Pair<String, String>>,
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
+    val pendingImageAttachment: PendingImageAttachmentUiState? = null,
     val queuedInputs: List<String> = emptyList(),
     val diagnosticsLog: String = "暂无日志。",
 ) {
@@ -78,6 +82,12 @@ data class PendingApprovalUiState(
     val method: String?,
     val paramsSummary: String?,
     val isSubmitting: Boolean = false,
+)
+
+data class PendingImageAttachmentUiState(
+    val displayName: String,
+    val mimeType: String,
+    val contentBase64: String,
 )
 
 class AppViewModel(
@@ -163,6 +173,37 @@ class AppViewModel(
         _uiState.update { it.copy(draftMessage = value) }
     }
 
+    fun attachPreparedImage(
+        displayName: String,
+        mimeType: String,
+        contentBase64: String,
+    ) {
+        if (contentBase64.isBlank()) {
+            _uiState.update { it.copy(message = "图片内容为空，无法附加。") }
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                pendingImageAttachment = PendingImageAttachmentUiState(
+                    displayName = displayName.ifBlank { "image.jpg" },
+                    mimeType = mimeType.ifBlank { "image/jpeg" },
+                    contentBase64 = contentBase64,
+                ),
+                message = "已附加图片：${displayName.ifBlank { "image.jpg" }}",
+            )
+        }
+    }
+
+    fun clearPendingImageAttachment() {
+        _uiState.update {
+            it.copy(
+                pendingImageAttachment = null,
+                message = "已移除图片附件。",
+            )
+        }
+    }
+
     fun connect() {
         val endpoint = uiState.value.endpointInput.trim()
         if (endpoint.isBlank()) {
@@ -224,6 +265,7 @@ class AppViewModel(
                     sessions = emptyList(),
                     selectedSession = null,
                     selectedDraftSession = null,
+                    pendingImageAttachment = null,
                     message = "已断开连接。",
                     queuedInputs = emptyList(),
                 ).withSettingsItems()
@@ -271,6 +313,7 @@ class AppViewModel(
             it.copy(
                 selectedDraftSession = null,
                 draftMessage = "",
+                pendingImageAttachment = null,
                 queuedInputs = emptyList(),
                 sessionRealtimeState = SessionRealtimeUiState(),
             )
@@ -382,7 +425,8 @@ class AppViewModel(
         val detail = uiState.value.selectedSession
         val draftSession = uiState.value.selectedDraftSession
         val text = uiState.value.draftMessage.trim()
-        if (text.isEmpty()) {
+        val pendingImageAttachment = uiState.value.pendingImageAttachment
+        if (text.isEmpty() && pendingImageAttachment == null) {
             return
         }
 
@@ -413,7 +457,12 @@ class AppViewModel(
                         )
                     }
                     refreshSessions()
-                    submitInputNow(created, text, fromQueue = false)
+                    submitInputNow(
+                        detail = created,
+                        text = text,
+                        pendingImageAttachment = pendingImageAttachment,
+                        fromQueue = false,
+                    )
                 } catch (error: Exception) {
                     appLogger.error("AppViewModel", "创建草稿对应远端会话失败。", error)
                     _uiState.update {
@@ -429,6 +478,13 @@ class AppViewModel(
         }
 
         if (detail != null && shouldQueueInput(detail, uiState.value.sessionRealtimeState)) {
+            if (pendingImageAttachment != null) {
+                appLogger.warn("AppViewModel", "当前轮未结束，暂不支持带图片的排队发送：sessionId=${detail.id}")
+                _uiState.update {
+                    it.copy(message = "当前轮尚未结束，暂不支持把图片加入排队。")
+                }
+                return
+            }
             appLogger.info(
                 "AppViewModel",
                 "当前轮未结束，消息进入排队：sessionId=${detail.id}, textLength=${text.length}",
@@ -451,9 +507,14 @@ class AppViewModel(
             try {
                 appLogger.info(
                     "AppViewModel",
-                    "发送消息：sessionId=${activeDetail.id}, textLength=${text.length}",
+                    "发送消息：sessionId=${activeDetail.id}, textLength=${text.length}, hasImage=${pendingImageAttachment != null}",
                 )
-                submitInputNow(activeDetail, text, fromQueue = false)
+                submitInputNow(
+                    detail = activeDetail,
+                    text = text,
+                    pendingImageAttachment = pendingImageAttachment,
+                    fromQueue = false,
+                )
             } catch (error: Exception) {
                 appLogger.error("AppViewModel", "发送消息失败：sessionId=${activeDetail.id}", error)
                 _uiState.update {
@@ -1113,22 +1174,48 @@ class AppViewModel(
     private suspend fun submitInputNow(
         detail: SessionDetail,
         text: String,
+        pendingImageAttachment: PendingImageAttachmentUiState?,
         fromQueue: Boolean,
     ) {
         appLogger.info(
             "AppViewModel",
-            "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, fromQueue=$fromQueue",
+            "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, hasImage=${pendingImageAttachment != null}, fromQueue=$fromQueue",
         )
-        bridgeApi.sendInput(detail.id, text)
+        val attachmentRefs = if (pendingImageAttachment != null) {
+            val uploaded = bridgeApi.uploadImageAttachment(
+                UploadImageAttachmentRequest(
+                    displayName = pendingImageAttachment.displayName,
+                    mimeType = pendingImageAttachment.mimeType,
+                    contentBase64 = pendingImageAttachment.contentBase64,
+                ),
+            )
+            listOf(SessionInputAttachmentRef(id = uploaded.id))
+        } else {
+            emptyList()
+        }
+        bridgeApi.sendInput(
+            detail.id,
+            SendInputRequest(
+                text = text.takeIf { it.isNotBlank() },
+                attachments = attachmentRefs,
+            ),
+        )
         activeAssistantTurnId = null
-        val updatedDetail = appendUserMessage(detail, text)
+        val updatedDetail = appendUserMessage(
+            detail = detail,
+            message = text,
+            imageDisplayName = pendingImageAttachment?.displayName,
+        )
         _uiState.update {
             it.copy(
                 isLoading = false,
                 selectedSession = updatedDetail,
                 draftMessage = "",
+                pendingImageAttachment = null,
                 message = if (fromQueue) {
                     "已发送排队消息。"
+                } else if (pendingImageAttachment != null) {
+                    "图片已发送，等待 Codex 回复。"
                 } else {
                     "消息已发送，等待实时输出。"
                 },
@@ -1137,6 +1224,8 @@ class AppViewModel(
                     statusText = localizedSessionStatus("running"),
                     lastEventText = if (fromQueue) {
                         "已发送一条排队消息，等待 Codex 回复。"
+                    } else if (pendingImageAttachment != null) {
+                        "已发送图片附件，等待 Codex 回复。"
                     } else {
                         "已发送消息，等待 Codex 回复。"
                     },
@@ -1197,7 +1286,12 @@ class AppViewModel(
 
         try {
             appLogger.info("AppViewModel", "开始发送排队消息：sessionId=$sessionId")
-            submitInputNow(detail, nextMessage, fromQueue = true)
+            submitInputNow(
+                detail = detail,
+                text = nextMessage,
+                pendingImageAttachment = null,
+                fromQueue = true,
+            )
         } catch (error: Exception) {
             appLogger.error("AppViewModel", "排队消息发送失败：sessionId=$sessionId", error)
             val restoredQueue = queuedInputsBySession.getOrPut(sessionId) { ArrayDeque() }
@@ -1380,6 +1474,7 @@ private fun mergeSessionDetail(
 private fun appendUserMessage(
     detail: SessionDetail,
     message: String,
+    imageDisplayName: String?,
 ): SessionDetail {
     val current = detail.transcriptPreview.trimEnd()
     val nextTranscript = buildString {
@@ -1388,7 +1483,16 @@ private fun appendUserMessage(
             append("\n\n")
         }
         append("你：")
-        append(message)
+        if (message.isNotBlank()) {
+            append(message)
+        }
+        if (!imageDisplayName.isNullOrBlank()) {
+            if (message.isNotBlank()) {
+                append("\n")
+            }
+            append("[图片] ")
+            append(imageDisplayName)
+        }
     }
 
     return detail.copy(
@@ -1537,7 +1641,6 @@ private fun localizedReasoningEffort(value: String): String {
 private fun localizedServiceTier(value: String): String {
     return when (value) {
         "default" -> "普通"
-        "flex" -> "平衡"
         "fast" -> "快速"
         else -> "普通"
     }
@@ -1563,7 +1666,7 @@ private fun normalizeReasoningEffort(value: String): String {
 }
 
 private fun normalizeServiceTier(value: String): String {
-    return value.takeIf { it == "default" || it == "fast" || it == "flex" } ?: "default"
+    return value.takeIf { it == "default" || it == "fast" } ?: "default"
 }
 
 private fun nowIsoString(): String = Instant.now().toString()

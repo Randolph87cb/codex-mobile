@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
@@ -57,6 +58,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.DraftSessionUiState
+import com.openai.codexmobile.PendingImageAttachmentUiState
 import com.openai.codexmobile.PendingApprovalUiState
 import com.openai.codexmobile.SessionRealtimeUiState
 import com.openai.codexmobile.data.ApprovalDecision
@@ -78,8 +80,11 @@ fun SessionDetailScreen(
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     draftMessage: String,
+    pendingImageAttachment: PendingImageAttachmentUiState?,
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
+    onPickImage: () -> Unit,
+    onClearPendingImageAttachment: () -> Unit,
     onSend: () -> Unit,
     onApprovalDecision: (ApprovalDecision) -> Unit,
     onUpdateCwd: (String) -> Unit,
@@ -165,6 +170,12 @@ fun SessionDetailScreen(
                 )
             }
         }
+        pendingImageAttachment?.let { attachment ->
+            PendingImageAttachmentCard(
+                attachment = attachment,
+                onClear = onClearPendingImageAttachment,
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom,
@@ -187,9 +198,20 @@ fun SessionDetailScreen(
                 },
                 maxLines = 4,
             )
+            OutlinedButton(
+                onClick = onPickImage,
+                enabled = !isLoading && detail != null,
+                modifier = Modifier.testTag(TestTags.SessionDetailAttachImageButton),
+            ) {
+                Icon(imageVector = Icons.Filled.Image, contentDescription = null)
+                Text(
+                    text = "图片",
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
             Button(
                 onClick = onSend,
-                enabled = !isLoading && detail != null && draftMessage.isNotBlank(),
+                enabled = !isLoading && detail != null && (draftMessage.isNotBlank() || pendingImageAttachment != null),
                 modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
             ) {
                 if (isLoading) {
@@ -197,6 +219,36 @@ fun SessionDetailScreen(
                 } else {
                     Text(if (draftSession != null) "开始" else "发送")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PendingImageAttachmentCard(
+    attachment: PendingImageAttachmentUiState,
+    onClear: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailPendingImageCard),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(imageVector = Icons.Filled.Image, contentDescription = null)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "已附加图片", style = MaterialTheme.typography.labelLarge)
+                Text(text = attachment.displayName, style = MaterialTheme.typography.bodyMedium)
+            }
+            TextButton(
+                onClick = onClear,
+                modifier = Modifier.testTag(TestTags.SessionDetailClearImageButton),
+            ) {
+                Text("移除")
             }
         }
     }
@@ -438,7 +490,6 @@ private fun ConfigEditorDialogs(
             options = listOf(
                 "default" to "普通",
                 "fast" to "快速",
-                "flex" to "平衡",
             ),
             onDismiss = onDismiss,
             onChoose = {
@@ -772,8 +823,8 @@ private fun localizedReasoning(value: String): String {
 private fun localizedService(value: String): String {
     return when (value) {
         "default" -> "普通"
-        "flex" -> "平衡"
-        else -> "快速"
+        "fast" -> "快速"
+        else -> "普通"
     }
 }
 

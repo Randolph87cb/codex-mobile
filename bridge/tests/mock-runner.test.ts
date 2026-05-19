@@ -20,7 +20,10 @@ describe("MockRunner", () => {
       events.push(event);
     });
 
-    await runner.submitInput(session.id, "hello");
+    await runner.submitInput(session.id, {
+      text: "hello",
+      attachments: [],
+    });
     unsubscribe();
 
     expect(events.some((event) => event.type === "assistant.delta")).toBe(true);

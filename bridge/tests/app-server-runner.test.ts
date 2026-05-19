@@ -112,7 +112,10 @@ describe("AppServerRunner", () => {
 
     const runner = new AppServerRunner(store, client);
     await runner.initializeSession("sess-2");
-    await runner.submitInput("sess-2", "请继续");
+    await runner.submitInput("sess-2", {
+      text: "请继续",
+      attachments: [],
+    });
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
@@ -142,22 +145,14 @@ describe("AppServerRunner", () => {
     expect(store.get("sess-2")?.serviceTier).toBe("default");
   });
 
-  test("rejects flex when model/list says the current model only exposes fast", async () => {
+  test("submits image attachments as localImage input blocks", async () => {
     const store = createSessionStore();
     store.update("sess-1", {
       status: "idle",
       activeTurnId: null,
-      serviceTier: "flex",
-      model: "gpt-5.4",
     });
 
     const client = new FakeAppServerClient();
-    const runner = new AppServerRunner(store, client);
-    const events: BridgeEvent[] = [];
-    runner.subscribe("sess-1", (event) => {
-      events.push(event);
-    });
-
     client.request.mockImplementation(async (method: string) => {
       if (method === "thread/read") {
         return {
@@ -173,24 +168,27 @@ describe("AppServerRunner", () => {
         };
       }
 
-      if (method === "model/list") {
-        return {
-          data: [
-            {
-              id: "gpt-5.4",
-              model: "gpt-5.4",
-              additionalSpeedTiers: ["fast"],
-            },
-          ],
-        };
+      if (method === "turn/start") {
+        return { turn: { id: "turn-image" } };
       }
 
       return {};
     });
 
-    await expect(runner.submitInput("sess-1", "继续")).rejects.toThrow(
-      "Model gpt-5.4 does not support service tier flex on this app-server. additionalSpeedTiers=fast",
-    );
+    const runner = new AppServerRunner(store, client);
+    await runner.submitInput("sess-1", {
+      text: "看这张图",
+      attachments: [
+        {
+          id: "att-1",
+          kind: "image",
+          displayName: "demo.jpg",
+          mimeType: "image/jpeg",
+          path: "C:\\temp\\demo.jpg",
+          createdAt: "2026-05-19T10:00:00.000Z",
+        },
+      ],
+    });
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
@@ -200,32 +198,90 @@ describe("AppServerRunner", () => {
         includeTurns: true,
       }),
     );
-    expect(client.request).toHaveBeenNthCalledWith(2, "model/list", {});
-    expect(client.request.mock.calls.some(([method]) => method === "turn/start")).toBe(false);
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
+      "turn/start",
+      expect.objectContaining({
+        threadId: "thread-1",
+        input: [
+          {
+            type: "text",
+            text: "看这张图",
+          },
+          {
+            type: "localImage",
+            path: "C:\\temp\\demo.jpg",
+          },
+        ],
+      }),
+    );
     expect(store.get("sess-1")).toMatchObject({
-      serviceTier: "flex",
-      activeTurnId: null,
-      status: "error",
-      lastError: "Model gpt-5.4 does not support service tier flex on this app-server. additionalSpeedTiers=fast",
+      activeTurnId: "turn-image",
+      status: "running",
+      lastError: null,
     });
-    expect(events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "error",
-          data: expect.objectContaining({
-            error: expect.objectContaining({
-              message: "Model gpt-5.4 does not support service tier flex on this app-server. additionalSpeedTiers=fast",
-            }),
-          }),
-        }),
-        expect.objectContaining({
-          type: "run.status",
-          data: expect.objectContaining({
-            status: "error",
-            reason: "turn-start-validation-failed",
-          }),
-        }),
-      ]),
+  });
+
+  test("submits image-only input with a fallback text block", async () => {
+    const store = createSessionStore();
+    store.update("sess-1", {
+      status: "idle",
+      activeTurnId: null,
+    });
+
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
+      if (method === "turn/start") {
+        return { turn: { id: "turn-image-only" } };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await runner.submitInput("sess-1", {
+      text: "",
+      attachments: [
+        {
+          id: "att-2",
+          kind: "image",
+          displayName: "only.jpg",
+          mimeType: "image/jpeg",
+          path: "C:\\temp\\only.jpg",
+          createdAt: "2026-05-19T10:10:00.000Z",
+        },
+      ],
+    });
+
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
+      "turn/start",
+      expect.objectContaining({
+        input: [
+          {
+            type: "text",
+            text: "请查看这个图片附件。",
+          },
+          {
+            type: "localImage",
+            path: "C:\\temp\\only.jpg",
+          },
+        ],
+      }),
     );
   });
 
@@ -427,7 +483,10 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    await runner.submitInput("sess-1", "继续这个历史线程");
+    await runner.submitInput("sess-1", {
+      text: "继续这个历史线程",
+      attachments: [],
+    });
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
@@ -552,7 +611,12 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    await expect(runner.submitInput("sess-1", "新输入")).rejects.toThrow("thread-busy");
+    await expect(
+      runner.submitInput("sess-1", {
+        text: "新输入",
+        attachments: [],
+      }),
+    ).rejects.toThrow("thread-busy");
     expect(store.get("sess-1")).toMatchObject({
       status: "running",
       activeTurnId: "turn-external",

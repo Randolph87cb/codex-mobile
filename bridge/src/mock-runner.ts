@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { BridgeEventListener, BridgeRunner } from "./bridge-runner.js";
-import type { BridgeEvent, SessionApprovalInput, SessionApprovalResult } from "./types.js";
+import type { BridgeEvent, ResolvedSessionInput, SessionApprovalInput, SessionApprovalResult } from "./types.js";
 import { SessionStore } from "./session-store.js";
 
 export class MockRunner implements BridgeRunner {
@@ -27,11 +27,12 @@ export class MockRunner implements BridgeRunner {
     };
   }
 
-  async submitInput(sessionId: string, text: string): Promise<void> {
+  async submitInput(sessionId: string, input: ResolvedSessionInput): Promise<void> {
     const session = this.store.get(sessionId);
     if (!session) {
       throw new Error("session-not-found");
     }
+    const summary = buildInputSummary(input);
 
     this.store.update(sessionId, { status: "running" });
     this.emit({
@@ -42,7 +43,7 @@ export class MockRunner implements BridgeRunner {
     });
 
     const chunks = [
-      `收到输入：${text}`,
+      `收到输入：${summary}`,
       "当前仍在使用 mock runner。",
       "下一步需要把这里替换成真实 codex app-server 会话桥接。",
     ];
@@ -103,4 +104,19 @@ export class MockRunner implements BridgeRunner {
       listener(event);
     }
   }
+}
+
+function buildInputSummary(input: ResolvedSessionInput): string {
+  const text = input.text.trim();
+  const imageCount = input.attachments.filter((attachment) => attachment.kind === "image").length;
+  if (imageCount === 0) {
+    return text || "空输入";
+  }
+
+  const imageSummary = `附带 ${imageCount} 张图片`;
+  if (!text) {
+    return imageSummary;
+  }
+
+  return `${text}（${imageSummary}）`;
 }

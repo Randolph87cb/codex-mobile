@@ -55,8 +55,12 @@ class FallbackCodexDataProvider(
         return requireActiveProvider().updateSessionConfig(sessionId, update)
     }
 
-    override suspend fun sendInput(sessionId: String, text: String) {
-        requireActiveProvider().sendInput(sessionId, text)
+    override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {
+        return requireActiveProvider().uploadImageAttachment(request)
+    }
+
+    override suspend fun sendInput(sessionId: String, request: SendInputRequest) {
+        requireActiveProvider().sendInput(sessionId, request)
     }
 
     override suspend fun approveSession(

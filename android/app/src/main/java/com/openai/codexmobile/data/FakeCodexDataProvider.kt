@@ -78,7 +78,16 @@ class FakeCodexDataProvider : CodexDataProvider {
         )
     }
 
-    override suspend fun sendInput(sessionId: String, text: String) {
+    override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {
+        delay(80)
+        return UploadedImageAttachment(
+            id = "fake-image-attachment",
+            displayName = request.displayName,
+            mimeType = request.mimeType,
+        )
+    }
+
+    override suspend fun sendInput(sessionId: String, request: SendInputRequest) {
         delay(100)
     }
 

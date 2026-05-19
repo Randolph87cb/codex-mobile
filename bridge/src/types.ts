@@ -3,7 +3,7 @@ export type JsonRpcRequestId = string | number;
 export type ApprovalDecision = "approve" | "approve_for_session" | "reject" | "reject_and_interrupt";
 export type ApprovalMode = "manual" | "auto";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
-export type ServiceTier = "default" | "fast" | "flex";
+export type ServiceTier = "default" | "fast";
 
 export interface CreateSessionInput {
   cwd: string;
@@ -49,7 +49,34 @@ export interface SessionView {
 }
 
 export interface SessionInput {
+  text?: string;
+  attachments?: SessionInputAttachmentRef[];
+}
+
+export interface SessionInputAttachmentRef {
+  id: string;
+}
+
+export interface ResolvedSessionInput {
   text: string;
+  attachments: ResolvedSessionInputAttachment[];
+}
+
+export interface ResolvedSessionInputAttachment {
+  id: string;
+  kind: "image";
+  path: string;
+  displayName: string;
+  mimeType: string;
+}
+
+export interface UploadedImageAttachment {
+  id: string;
+  kind: "image";
+  displayName: string;
+  mimeType: string;
+  path: string;
+  createdAt: string;
 }
 
 export interface SessionApprovalInput {

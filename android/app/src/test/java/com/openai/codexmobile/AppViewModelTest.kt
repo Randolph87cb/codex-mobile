@@ -7,7 +7,10 @@ import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
+import com.openai.codexmobile.data.SendInputRequest
 import com.openai.codexmobile.data.SessionConfigUpdate
+import com.openai.codexmobile.data.UploadImageAttachmentRequest
+import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.diagnostics.AppLogger
@@ -106,7 +109,7 @@ class AppViewModelTest {
                 model = "gpt-5.5-coder",
                 approvalMode = "auto",
                 reasoningEffort = "high",
-                serviceTier = "flex",
+                serviceTier = "fast",
                 threadId = "thread-1",
                 timestamp = "2026-05-19T10:00:01Z",
             ),
@@ -118,7 +121,7 @@ class AppViewModelTest {
         assertEquals("gpt-5.5-coder", selected?.model)
         assertEquals("auto", selected?.approvalMode)
         assertEquals("high", selected?.reasoningEffort)
-        assertEquals("flex", selected?.serviceTier)
+        assertEquals("fast", selected?.serviceTier)
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
     }
 
@@ -182,16 +185,16 @@ class AppViewModelTest {
 
         viewModel.updateSelectedSessionModel("gpt-5.5-coder")
         viewModel.updateSelectedSessionReasoningEffort("high")
-        viewModel.updateSelectedSessionServiceTier("flex")
+        viewModel.updateSelectedSessionServiceTier("fast")
         advanceUntilIdle()
 
         assertEquals(3, bridgeApi.sessionConfigUpdates.size)
         assertEquals("gpt-5.5-coder", settingsStore.saved.model)
         assertEquals("high", settingsStore.saved.reasoningEffort)
-        assertEquals("flex", settingsStore.saved.serviceTier)
+        assertEquals("fast", settingsStore.saved.serviceTier)
         assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedSession?.model)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
-        assertEquals("flex", viewModel.uiState.value.selectedSession?.serviceTier)
+        assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
     }
 
     @Test
@@ -225,7 +228,7 @@ class AppViewModelTest {
             id = "sess_known",
             model = "gpt-5.4",
             reasoningEffort = "high",
-            serviceTier = "flex",
+            serviceTier = "fast",
             status = "idle",
         )
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -258,7 +261,39 @@ class AppViewModelTest {
         assertEquals("gpt-5.4", viewModel.uiState.value.selectedSession?.model)
         assertEquals("manual", viewModel.uiState.value.selectedSession?.approvalMode)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
-        assertEquals("flex", viewModel.uiState.value.selectedSession?.serviceTier)
+        assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
+    }
+
+    @Test
+    fun imageAttachmentUploadsBeforeSendingInput() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_image", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_image")
+        advanceUntilIdle()
+        viewModel.attachPreparedImage(
+            displayName = "screen.png",
+            mimeType = "image/jpeg",
+            contentBase64 = "aGVsbG8=",
+        )
+        viewModel.updateDraftMessage("帮我看看")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(1, bridgeApi.uploadedImageRequests.size)
+        assertEquals("screen.png", bridgeApi.uploadedImageRequests.single().displayName)
+        assertEquals(1, bridgeApi.sendInputRequests.size)
+        assertEquals("帮我看看", bridgeApi.sendInputRequests.single().text)
+        assertEquals("uploaded-1", bridgeApi.sendInputRequests.single().attachments.single().id)
+        assertNull(viewModel.uiState.value.pendingImageAttachment)
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains("[图片] screen.png") == true,
+        )
     }
 
     @Test
@@ -313,6 +348,8 @@ private class FakeBridgeApi(
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     private var currentDetail: SessionDetail = createdDetail
     val sentInputs = mutableListOf<String>()
+    val sendInputRequests = mutableListOf<SendInputRequest>()
+    val uploadedImageRequests = mutableListOf<UploadImageAttachmentRequest>()
     val approvalCalls = mutableListOf<ApprovalCall>()
     val sessionConfigUpdates = mutableListOf<SessionConfigUpdate>()
     var updatedAuthToken: String = ""
@@ -359,8 +396,18 @@ private class FakeBridgeApi(
         return currentDetail
     }
 
-    override suspend fun sendInput(sessionId: String, text: String) {
-        sentInputs += text
+    override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {
+        uploadedImageRequests += request
+        return UploadedImageAttachment(
+            id = "uploaded-${uploadedImageRequests.size}",
+            displayName = request.displayName,
+            mimeType = request.mimeType,
+        )
+    }
+
+    override suspend fun sendInput(sessionId: String, request: SendInputRequest) {
+        sendInputRequests += request
+        request.text?.let { sentInputs += it }
     }
 
     override suspend fun approveSession(

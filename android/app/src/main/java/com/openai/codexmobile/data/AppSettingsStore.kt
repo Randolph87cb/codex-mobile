@@ -47,7 +47,7 @@ class SharedPreferencesAppSettingsStore(
                 ?.takeIf { it in setOf("minimal", "low", "medium", "high", "xhigh") }
                 ?: defaults.reasoningEffort,
             serviceTier = preferences.getString(KEY_SERVICE_TIER, defaults.serviceTier)
-                ?.takeIf { it == "default" || it == "fast" || it == "flex" }
+                ?.takeIf { it == "default" || it == "fast" }
                 ?: defaults.serviceTier,
         )
     }

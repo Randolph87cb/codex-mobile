@@ -1,5 +1,7 @@
 package com.openai.codexmobile.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -20,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -33,7 +36,9 @@ import com.openai.codexmobile.ui.screen.ConnectionScreen
 import com.openai.codexmobile.ui.screen.SessionDetailScreen
 import com.openai.codexmobile.ui.screen.SessionListScreen
 import com.openai.codexmobile.ui.screen.SettingsScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private object Routes {
     const val Connection = "connection"
@@ -49,10 +54,31 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) {
+            return@rememberLauncherForActivityResult
+        }
+        coroutineScope.launch {
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    prepareImageAttachmentForBridge(context, uri)
+                }
+            }.onSuccess { prepared ->
+                appViewModel.attachPreparedImage(
+                    displayName = prepared.displayName,
+                    mimeType = prepared.mimeType,
+                    contentBase64 = prepared.contentBase64,
+                )
+            }.onFailure { error ->
+                snackbarHostState.showSnackbar(error.message ?: "处理图片失败。")
+            }
+        }
+    }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let { snackbarHostState.showSnackbar(it) }
@@ -142,8 +168,11 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     sessionRealtimeState = uiState.sessionRealtimeState,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
+                    pendingImageAttachment = uiState.pendingImageAttachment,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
+                    onPickImage = { imagePickerLauncher.launch("image/*") },
+                    onClearPendingImageAttachment = appViewModel::clearPendingImageAttachment,
                     onSend = appViewModel::sendInput,
                     onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
@@ -170,8 +199,11 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     sessionRealtimeState = uiState.sessionRealtimeState,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
+                    pendingImageAttachment = uiState.pendingImageAttachment,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
+                    onPickImage = { imagePickerLauncher.launch("image/*") },
+                    onClearPendingImageAttachment = appViewModel::clearPendingImageAttachment,
                     onSend = appViewModel::sendInput,
                     onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
