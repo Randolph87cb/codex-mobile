@@ -133,6 +133,41 @@ describe("session view mapping", () => {
     expect(view.transcriptPreview).toContain("修改：bridge/src/app-server-runner.ts");
   });
 
+  test("does not crash when historical item fields are not strings", () => {
+    const view = buildSessionViewFromThread({
+      id: "thread-weird",
+      cwd: "D:\\workspace\\codex-mobile",
+      modelProvider: "openai",
+      preview: "异常字段",
+      createdAt: 1_779_117_160,
+      updatedAt: 1_779_117_360,
+      status: {
+        type: "idle",
+      },
+      turns: [
+        {
+          id: "turn-weird",
+          status: "completed",
+          startedAt: 1_779_117_260,
+          items: [
+            {
+              type: "enteredReviewMode",
+              review: { mode: "strict" } as never,
+            },
+            {
+              type: "imageGeneration",
+              result: { path: "artifact.png", size: 1234 } as never,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(view.title).toBe("异常字段");
+    expect(view.transcriptPreview).toContain("系统：进入审查模式");
+    expect(view.transcriptPreview).toContain("系统：图片生成");
+  });
+
   test("prefers newer thread status over stale local running status", () => {
     const view = buildSessionViewFromThread(
       {

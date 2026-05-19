@@ -348,11 +348,19 @@ function formatStatusLabel(status: SessionStatus): string {
   }
 }
 
-function normalizeText(value: string | null | undefined, fallback?: string): string | null {
-  const normalized = value?.trim();
-  if (normalized) {
-    return normalized;
+function normalizeText(value: unknown, fallback?: string): string | null {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (normalized) {
+      return normalized;
+    }
+  } else if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    const normalized = String(value).trim();
+    if (normalized) {
+      return normalized;
+    }
   }
+
   return fallback ?? null;
 }
 

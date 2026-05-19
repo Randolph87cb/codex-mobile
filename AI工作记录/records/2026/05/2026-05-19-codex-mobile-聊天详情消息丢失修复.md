@@ -86,3 +86,35 @@
 - `cd android && .\gradlew.bat testDebugUnitTest`：通过
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 
+## 模拟器联调补充
+- 用户要求补做 Android 模拟器真实联调，而不是只看单测和构建。
+- 联调环境：
+  - Android Emulator：`emulator-5554`
+  - bridge 地址：`http://10.0.2.2:8787`
+  - 安装方式：`scripts/install-android-debug-emulator.ps1`
+- 联调过程中先暴露出一个真实回归：
+  - 连接成功后，App 会自动打开会话列表第一条详情。
+  - 某些历史线程详情在 bridge `/api/session/:id` 上返回 `500`，错误为 `value?.trim is not a function`。
+  - 根因是 `bridge/src/session-view.ts` 的 `normalizeText` 假定字段一定是字符串；历史线程中存在非字符串字段时会在 `trim()` 处崩溃。
+- 追加修复：
+  - bridge `session-view.ts`
+    - `normalizeText` 改为只对字符串执行 `trim()`，对数字/布尔值做安全字符串化，其它类型直接回退，不再因为历史脏数据打爆详情页。
+  - bridge `session-view.test.ts`
+    - 新增“历史线程项字段不是字符串时也不应崩溃”的测试。
+- 模拟器联调结果：
+  - 修复后，连接页可以正常进入会话列表。
+  - 在 `codex-mobile` 目录下新建草稿线程并发送首条消息后，详情页能实时展示 `推理摘要`、`命令执行`、`文件修改`、`assistant.delta`，最后状态能回到 `idle`。
+  - 这说明“操作消息补全”在真实模拟器链路上已经生效，不只是单元测试通过。
+- 本次模拟器联调的局限：
+  - 由于 `adb input text` 会把空格输入成 `%20` 文本，测试提示词被截断，未完整走到用户原本想要的文件内容写入路径。
+  - 但这不影响验证目标：操作消息、状态流转和历史详情崩溃修复都已在模拟器上得到确认。
+
+## 本次验证补充（三）
+- `cd bridge && npm run check`：通过
+- `cd bridge && npm test`：通过
+- Android 模拟器真实联调：通过
+  - 连接 bridge 成功
+  - 会话列表和历史详情可打开
+  - 详情页可实时看到 `reasoning` / `commandExecution` / `fileChange`
+  - 最终状态由 `running` 回到 `idle`
+
