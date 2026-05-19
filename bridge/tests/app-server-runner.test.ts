@@ -70,6 +70,18 @@ describe("AppServerRunner", () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();
     client.request.mockImplementation(async (method: string) => {
+      if (method === "model/list") {
+        return {
+          data: [
+            {
+              id: "gpt-5.5",
+              model: "gpt-5.5",
+              additionalSpeedTiers: ["fast", "flex"],
+            },
+          ],
+        };
+      }
+
       if (method === "thread/start") {
         return { thread: { id: "thread-2" } };
       }
@@ -116,6 +128,11 @@ describe("AppServerRunner", () => {
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
+      "model/list",
+      {},
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
       "thread/start",
       expect.objectContaining({
         approvalPolicy: "on-request",
@@ -123,7 +140,7 @@ describe("AppServerRunner", () => {
       }),
     );
     expect(client.request).toHaveBeenNthCalledWith(
-      2,
+      3,
       "thread/read",
       expect.objectContaining({
         threadId: "thread-2",
@@ -131,7 +148,7 @@ describe("AppServerRunner", () => {
       }),
     );
     expect(client.request).toHaveBeenNthCalledWith(
-      3,
+      4,
       "turn/start",
       expect.objectContaining({
         approvalPolicy: "on-request",
@@ -141,16 +158,23 @@ describe("AppServerRunner", () => {
     );
   });
 
-  test("falls back to fast when turn/start rejects flex service tier", async () => {
+  test("rejects flex when model/list says the current model only exposes fast", async () => {
     const store = createSessionStore();
     store.update("sess-1", {
       status: "idle",
       activeTurnId: null,
       serviceTier: "flex",
+      model: "gpt-5.4",
     });
 
     const client = new FakeAppServerClient();
-    client.request.mockImplementation(async (method: string, params: unknown) => {
+    const runner = new AppServerRunner(store, client);
+    const events: BridgeEvent[] = [];
+    runner.subscribe("sess-1", (event) => {
+      events.push(event);
+    });
+
+    client.request.mockImplementation(async (method: string) => {
       if (method === "thread/read") {
         return {
           thread: {
@@ -165,38 +189,60 @@ describe("AppServerRunner", () => {
         };
       }
 
-      if (method === "turn/start") {
-        const payload = params as { serviceTier?: string };
-        if (payload.serviceTier === "flex") {
-          throw new Error("Unsupported service_tier: flex");
-        }
-        return { turn: { id: "turn-fallback-fast" } };
+      if (method === "model/list") {
+        return {
+          data: [
+            {
+              id: "gpt-5.4",
+              model: "gpt-5.4",
+              additionalSpeedTiers: ["fast"],
+            },
+          ],
+        };
       }
 
       return {};
     });
 
-    const runner = new AppServerRunner(store, client);
-    await runner.submitInput("sess-1", "继续");
+    await expect(runner.submitInput("sess-1", "继续")).rejects.toThrow(
+      "Model gpt-5.4 does not support service tier flex on this app-server. additionalSpeedTiers=fast",
+    );
 
-    const turnStartCalls = client.request.mock.calls.filter(([method]) => method === "turn/start");
-    expect(turnStartCalls).toHaveLength(2);
-    expect(turnStartCalls[0]?.[1]).toEqual(
+    expect(client.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/read",
       expect.objectContaining({
-        serviceTier: "flex",
+        threadId: "thread-1",
+        includeTurns: true,
       }),
     );
-    expect(turnStartCalls[1]?.[1]).toEqual(
-      expect.objectContaining({
-        serviceTier: "fast",
-      }),
-    );
+    expect(client.request).toHaveBeenNthCalledWith(2, "model/list", {});
+    expect(client.request.mock.calls.some(([method]) => method === "turn/start")).toBe(false);
     expect(store.get("sess-1")).toMatchObject({
-      serviceTier: "fast",
-      activeTurnId: "turn-fallback-fast",
-      status: "running",
-      lastError: null,
+      serviceTier: "flex",
+      activeTurnId: null,
+      status: "error",
+      lastError: "Model gpt-5.4 does not support service tier flex on this app-server. additionalSpeedTiers=fast",
     });
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          data: expect.objectContaining({
+            error: expect.objectContaining({
+              message: "Model gpt-5.4 does not support service tier flex on this app-server. additionalSpeedTiers=fast",
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          type: "run.status",
+          data: expect.objectContaining({
+            status: "error",
+            reason: "turn-start-validation-failed",
+          }),
+        }),
+      ]),
+    );
   });
 
   test("stores approval requests and resolves them through approve()", async () => {
