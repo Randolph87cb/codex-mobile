@@ -60,4 +60,32 @@ class TranscriptBubbleTest {
         assertEquals("approve（item/commandExecution/requestApproval）", bubbles[1].title)
         assertTrue(bubbles[1].parts.single() is TranscriptPart.Text)
     }
+
+    @Test
+    fun parseTranscriptBubblesSplitsSystemOperationTitleAndDefaultsItToCollapsed() {
+        val transcript = """
+            系统：命令执行
+            状态：已完成
+            命令：npm test
+        """.trimIndent()
+
+        val bubble = parseTranscriptBubbles(transcript).single()
+
+        assertEquals(TranscriptSpeaker.System, bubble.speaker)
+        assertEquals(TranscriptBubbleKind.Status, bubble.kind)
+        assertEquals("命令执行", bubble.title)
+        assertEquals(
+            listOf(
+                TranscriptPart.Text(
+                    """
+                    状态：已完成
+                    命令：npm test
+                    """.trimIndent(),
+                ),
+            ),
+            bubble.parts,
+        )
+        assertTrue(!bubble.prefersExpandedByDefault)
+        assertEquals("命令执行", bubble.summaryLine)
+    }
 }

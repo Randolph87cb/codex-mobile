@@ -656,9 +656,13 @@ private fun TranscriptBubbleList(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        bubbles.forEach { bubble ->
+        bubbles.forEachIndexed { index, bubble ->
             Box(modifier = Modifier.fillMaxWidth()) {
                 val isUser = bubble.speaker == TranscriptSpeaker.User
+                val isCollapsible = !bubble.prefersExpandedByDefault
+                var expanded by rememberSaveable(index, bubble.summaryLine, bubble.prefersExpandedByDefault) {
+                    mutableStateOf(bubble.prefersExpandedByDefault)
+                }
                 val backgroundColor = when (bubble.speaker) {
                     TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
                     TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
@@ -680,24 +684,60 @@ private fun TranscriptBubbleList(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(text = bubble.label, style = MaterialTheme.typography.labelLarge)
-                        bubble.title?.let { title ->
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                        }
-                        bubble.parts.forEach { part ->
-                            when (part) {
-                                is TranscriptPart.Text -> {
+                        if (isCollapsible) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(TestTags.SessionDetailTranscriptBubbleTogglePrefix + index)
+                                    .clickable { expanded = !expanded },
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
                                     Text(
-                                        text = part.text,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        text = bubble.label,
+                                        style = MaterialTheme.typography.labelLarge,
+                                    )
+                                    Text(
+                                        text = bubble.summaryLine,
+                                        style = MaterialTheme.typography.titleSmall,
                                     )
                                 }
+                                Icon(
+                                    imageVector = if (expanded) {
+                                        Icons.Default.KeyboardArrowUp
+                                    } else {
+                                        Icons.Default.KeyboardArrowDown
+                                    },
+                                    contentDescription = if (expanded) "收起消息" else "展开消息",
+                                )
+                            }
+                        } else {
+                            Text(text = bubble.label, style = MaterialTheme.typography.labelLarge)
+                            bubble.title?.let { title ->
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                            }
+                        }
 
-                                is TranscriptPart.CodeBlock -> {
-                                    CodeBlockCard(part)
+                        if (!isCollapsible || expanded) {
+                            bubble.parts.forEach { part ->
+                                when (part) {
+                                    is TranscriptPart.Text -> {
+                                        Text(
+                                            text = part.text,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
+
+                                    is TranscriptPart.CodeBlock -> {
+                                        CodeBlockCard(part)
+                                    }
                                 }
                             }
                         }

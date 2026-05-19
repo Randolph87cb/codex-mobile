@@ -118,3 +118,34 @@
   - 详情页可实时看到 `reasoning` / `commandExecution` / `fileChange`
   - 最终状态由 `running` 回到 `idle`
 
+## 后续补充修复（三）
+- 用户继续反馈：现在除了文字回复外，其他消息类型应默认折叠，交互上要和 Codex app 对齐。
+- 当前判断：
+  - Android 详情页已经能显示 `命令执行`、`推理摘要`、`审批结果` 等结构化消息，但默认全部展开，长操作块会占满屏幕。
+  - 现有测试只覆盖 transcript 解析，没有直接验证“默认折叠、点击展开”的 Compose 行为。
+- 实际修改：
+  - Android `TranscriptBubble.kt`
+    - 为 transcript bubble 增加 `prefersExpandedByDefault` 和 `summaryLine` 规则。
+    - 用户消息、助手普通文字消息默认展开；系统/工具/状态类消息默认折叠。
+    - `系统：...` 与首段兜底系统块现在会把第一行拆成标题，后续内容作为可折叠详情。
+  - Android `SessionDetailScreen.kt`
+    - 在 transcript 列表中为非文字消息增加折叠头，默认只显示标签、摘要和展开/收起箭头。
+    - 点击后再显示正文和代码块。
+  - Android `TestTags.kt`
+    - 为 transcript 折叠头补充稳定 test tag，便于 UI 自动化测试定位。
+  - Android `TranscriptBubbleTest.kt`
+    - 新增系统操作块标题拆分与默认折叠规则单测。
+  - Android `SessionDetailReplayTest.kt`
+    - 调整回放断言，验证结构化工具结果标题仍可见，详情默认隐藏。
+  - Android `SessionDetailTranscriptCollapseTest.kt`
+    - 新增模拟器仪表测试，直接验证“非文字消息默认折叠，点击后展开详情”。
+
+## 本次验证补充（四）
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+- `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+  - 回放链路测试通过
+  - 组件级折叠展开仪表测试通过
+- 额外说明：
+  - 中途尝试用旧历史会话做手动抓图时，抓到过一次旧进程残留页面；强制停进程后重新进入，确认需要以新进程和仪表测试结果为准。
+

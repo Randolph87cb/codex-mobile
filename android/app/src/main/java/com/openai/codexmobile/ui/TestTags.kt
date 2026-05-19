@@ -36,6 +36,7 @@ object TestTags {
     const val SessionDetailConfigServiceTierButton = "session_detail_config_service_tier_button"
     const val SessionDetailConfigSandboxButton = "session_detail_config_sandbox_button"
     const val SessionDetailConfigCwdButton = "session_detail_config_cwd_button"
+    const val SessionDetailTranscriptBubbleTogglePrefix = "session_detail_transcript_bubble_toggle_"
     const val SessionDetailApprovalCard = "session_detail_approval_card"
     const val SessionDetailApprovalSummary = "session_detail_approval_summary"
     const val SessionDetailQueuedInputsCard = "session_detail_queued_inputs_card"

@@ -30,6 +30,19 @@ internal data class TranscriptBubble(
     val parts: List<TranscriptPart>,
 )
 
+internal val TranscriptBubble.prefersExpandedByDefault: Boolean
+    get() = speaker == TranscriptSpeaker.User || (speaker == TranscriptSpeaker.Assistant && kind == TranscriptBubbleKind.Message)
+
+internal val TranscriptBubble.summaryLine: String
+    get() = title
+        ?: parts.firstNotNullOfOrNull { part ->
+            when (part) {
+                is TranscriptPart.Text -> part.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+                is TranscriptPart.CodeBlock -> part.language?.takeIf { it.isNotBlank() } ?: "代码块"
+            }
+        }
+        ?: label
+
 internal fun parseTranscriptBubbles(transcript: String): List<TranscriptBubble> {
     if (transcript.isBlank()) {
         return emptyList()
@@ -49,12 +62,7 @@ internal fun parseTranscriptBubbles(transcript: String): List<TranscriptBubble> 
             if (parsed != null) {
                 bubbles += parsed
             } else if (bubbles.isEmpty()) {
-                bubbles += buildBubble(
-                    speaker = TranscriptSpeaker.System,
-                    kind = TranscriptBubbleKind.Status,
-                    label = "系统",
-                    body = normalized,
-                )
+                bubbles += buildStatusBubble(normalized)
             } else {
                 val previous = bubbles.removeAt(bubbles.lastIndex)
                 bubbles += previous.copy(
@@ -91,6 +99,7 @@ private fun parseTranscriptBlock(block: String): TranscriptBubble? {
             kind = TranscriptBubbleKind.Status,
             label = "系统",
             body = block.removePrefix("系统：").trim(),
+            preferTitleLine = true,
         )
 
         block.startsWith("等待审批：") -> buildStructuredSystemBubble(
@@ -138,13 +147,52 @@ private fun buildBubble(
     kind: TranscriptBubbleKind,
     label: String,
     body: String,
+    preferTitleLine: Boolean = false,
 ): TranscriptBubble {
+    val normalizedBody = body.trim()
+    val titleAndParts = if (preferTitleLine) {
+        splitTitleAndParts(normalizedBody)
+    } else {
+        null to parseTranscriptParts(normalizedBody)
+    }
     return TranscriptBubble(
         speaker = speaker,
         kind = kind,
         label = label,
-        parts = parseTranscriptParts(body),
+        title = titleAndParts.first,
+        parts = titleAndParts.second,
     )
+}
+
+private fun buildStatusBubble(body: String): TranscriptBubble {
+    return buildBubble(
+        speaker = TranscriptSpeaker.System,
+        kind = TranscriptBubbleKind.Status,
+        label = "系统",
+        body = body,
+        preferTitleLine = true,
+    )
+}
+
+private fun splitTitleAndParts(body: String): Pair<String?, List<TranscriptPart>> {
+    val normalized = body.trim()
+    if (normalized.isBlank()) {
+        return null to emptyList()
+    }
+
+    val lines = normalized.lines()
+    if (lines.size <= 1) {
+        return null to parseTranscriptParts(normalized)
+    }
+
+    val title = lines.first().trim().ifBlank { null }
+    val details = lines.drop(1).joinToString("\n").trim()
+    val parts = if (details.isBlank()) {
+        emptyList()
+    } else {
+        parseTranscriptParts(details)
+    }
+    return title to parts
 }
 
 private fun parseTranscriptParts(body: String): List<TranscriptPart> {
