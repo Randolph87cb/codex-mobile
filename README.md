@@ -7,7 +7,7 @@
 - 在 Windows 本机运行一个 `bridge` 服务；
 - `bridge` 负责拉起并管理本地 `codex app-server`；
 - Android 原生客户端通过受控接口连接 `bridge`；
-- 第一阶段先做低延迟文本控制，不追求完整 ChatGPT mobile 体验。
+- 优先做低延迟、可调试的 Codex 远控链路，不追求完整 ChatGPT mobile 体验。
 
 ## 目录
 
@@ -18,14 +18,15 @@
 
 ## 当前状态
 
-第一版仓库脚手架已创建：
+当前主链路已经不是纯文本 MVP，而是具备以下能力：
 
-- `bridge` 已有 TypeScript MVP 骨架；
-- `android` 已有最小 Compose 客户端骨架；
 - `bridge` 同时支持 `mock` 与 `app-server` 两种 runner；
-- 已生成本地 `app-server` schema 到 `docs/generated/`，用于后续协议对齐。
+- Android 客户端已接通会话列表、会话详情、实时流、文本发送和状态恢复；
+- 已支持图片预上传、图片展示、预览和保存；
+- 已支持历史线程详情、执行过程展示和审批响应；
+- `bridge` 已支持后台常驻启动与登录自启动脚本；
+- 已生成本地 `app-server` schema 到 `docs/generated/`，用于后续协议对齐；
 - 已镜像上游 `codex-rs/app-server/README.md` 到 `docs/upstream/codex-app-server/README.md`，方便本地查看协议说明。
-- Android 当前默认把输入地址理解为 `bridge base URL`，不是直接连 `codex app-server`。
 
 ## 设计原则
 
@@ -37,8 +38,8 @@
 ## 下一步
 
 1. 扩展真实 `codex app-server` runner，补齐审批与更多事件映射。
-2. 给 Android 客户端接入真实 WebSocket 消息流。
-3. 补 Android 对 token 认证的请求头支持，并继续推进审批事件链路。
+2. 继续收紧公网暴露场景下的安全、鉴权和运维文档。
+3. 继续提升移动端状态识别、恢复能力和审批链路完整性。
 
 ## Bridge 启动
 
@@ -50,7 +51,7 @@ npm install
 npm run dev
 ```
 
-### app-server 模式
+### app-server 模式（开发）
 
 ```powershell
 cd D:\workspace\codex-mobile\bridge
@@ -59,6 +60,11 @@ npm run dev
 ```
 
 默认监听 `http://127.0.0.1:8787`。
+
+说明：
+
+- 这里的 `npm run dev` 更适合本地开发和调试 TypeScript 代码。
+- 如果是长期常驻、真机联调、Cloudflare 反代或登录自启动，优先使用后面的后台脚本，而不是长期挂 `dev` 模式。
 
 ## Bridge 安全控制面
 
@@ -83,7 +89,7 @@ npm run dev
 - 不设置 `CODEX_MOBILE_ALLOWED_CWDS`：bridge 不限制创建会话时的 `cwd`，当前 Android 默认请求体里的相对路径行为保持不变。
 - `/health` 始终可访问，并返回当前是否启用了 token 与白名单，便于局域网诊断。
 
-当前 Android MVP 还没有携带 Bearer token 的能力，因此一旦启用 `CODEX_MOBILE_AUTH_TOKEN`，Android 现有版本只能继续访问 `/health`，其余 `/api/*` 会收到 `401 unauthorized`，需要后续客户端补请求头支持。
+当前 Android 客户端已经支持填写并携带 Bearer token。
 
 ### 手机联调
 
@@ -113,6 +119,8 @@ powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\resta
 ```
 
 如果 bridge 配置了 `CODEX_MOBILE_AUTH_TOKEN`，Android 端需要先进入“设置”页填写 token，再发起连接并进入会话详情页实时流。
+
+bridge 后台模式会在需要时直接拉起 `codex.exe app-server`，不依赖桌面版 Codex UI 先手动打开；但它依赖当前用户环境里能找到 `codex.exe`，并且该用户下的 Codex 本地登录态可用。
 
 ### bridge 自启动
 

@@ -443,3 +443,21 @@
     - 执行命令：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/restart-bridge-background.ps1 ...`
   - 实际执行 `Start-ScheduledTask -TaskName "CodexMobileBridge"` 后，`http://127.0.0.1:8787/health` 返回 `ok=true`，确认登录自启动链路有效。
 
+## 后续补充处理（十三）
+- 用户要求反思文档是否需要更新，并明确要求同步文档。
+- 当前判断：
+  - `docs/api.md` 仍停留在很早的草案阶段，缺少图片上传、附件路径引用、`/api/image/file` 和 `activity` 实时流事件说明。
+  - `docs/architecture.md` 仍写着“第一版不做图片、语音和附件”，已经与当前实现冲突。
+  - `README.md` 的启动方式说明大体可用，但仍残留“只做低延迟文本控制”“后续再补 token 支持”等已过时表述。
+- 实际修改：
+  - 重写 `docs/api.md`，按当前实现补齐：
+    - 图片上传接口
+    - `multipart/form-data` 与旧 JSON Base64 兼容
+    - `/api/session/:id/input` 的附件路径引用
+    - `/api/image/file`
+    - `activity` 等实时流事件
+  - 重写 `docs/architecture.md`，把图片能力、bridge 后台常驻、自启动和 `codex.exe app-server` 拉起方式写清楚。
+  - 更新 `README.md`，去掉已过时的“仅文本 MVP / token 未来支持”表述，并把下一步改成更符合当前项目阶段的事项。
+- 说明：
+  - 这次是文档收口，没有涉及运行时逻辑变更，因此未新增测试。
+
