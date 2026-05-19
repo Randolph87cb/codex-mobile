@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -18,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.openai.codexmobile.ui.TestTags
 
@@ -32,6 +34,7 @@ fun SettingsScreen(
     approvalModeInput: String,
     reasoningEffortInput: String,
     serviceTierInput: String,
+    diagnosticsLog: String,
     onEndpointChange: (String) -> Unit,
     onAuthTokenChange: (String) -> Unit,
     onCwdChange: (String) -> Unit,
@@ -39,6 +42,9 @@ fun SettingsScreen(
     onApprovalModeChange: (String) -> Unit,
     onReasoningEffortChange: (String) -> Unit,
     onServiceTierChange: (String) -> Unit,
+    onRefreshLogs: () -> Unit,
+    onClearLogs: () -> Unit,
+    onCopyLogs: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -137,6 +143,57 @@ fun SettingsScreen(
                     ),
                     onValueChange = onApprovalModeChange,
                 )
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "应用日志",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "保留最近一段本地日志，便于真机排查连接、会话和实时流问题。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = onRefreshLogs,
+                        modifier = Modifier.testTag(TestTags.SettingsRefreshLogsButton),
+                    ) {
+                        Text("刷新日志")
+                    }
+                    OutlinedButton(
+                        onClick = onClearLogs,
+                        modifier = Modifier.testTag(TestTags.SettingsClearLogsButton),
+                    ) {
+                        Text("清空日志")
+                    }
+                }
+                OutlinedButton(
+                    onClick = { onCopyLogs(diagnosticsLog) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SettingsCopyLogsButton),
+                ) {
+                    Text("复制日志")
+                }
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SettingsLogsCard),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = diagnosticsLog,
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
             }
         }
         Button(

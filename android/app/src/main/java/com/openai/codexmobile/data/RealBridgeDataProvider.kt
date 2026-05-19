@@ -1,5 +1,6 @@
 package com.openai.codexmobile.data
 
+import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
@@ -23,7 +24,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
 
-class RealBridgeDataProvider : CodexDataProvider {
+class RealBridgeDataProvider(
+    private val appLogger: AppLogger,
+) : CodexDataProvider {
     private var baseUrl: String? = null
     private var authToken: String? = null
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
@@ -31,16 +34,26 @@ class RealBridgeDataProvider : CodexDataProvider {
 
     override fun updateAuthToken(token: String) {
         authToken = token.trim().takeIf { it.isNotEmpty() }
+        appLogger.info(
+            tag = "BridgeApi",
+            message = if (authToken == null) "已清除 bridge 鉴权令牌。" else "已更新 bridge 鉴权令牌状态。",
+        )
     }
 
     override suspend fun connect(endpoint: String): BridgeConnectionState = withContext(Dispatchers.IO) {
         val normalizedEndpoint = normalizeEndpoint(endpoint)
+        appLogger.info("BridgeApi", "开始连接 bridge：$normalizedEndpoint")
         val response = request(
             method = "GET",
             url = "$normalizedEndpoint/health",
+            summary = "health check",
         )
 
         if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "bridge 健康检查失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
             throw BridgeRequestException(response.statusCode, response.body)
         }
 
@@ -52,17 +65,26 @@ class RealBridgeDataProvider : CodexDataProvider {
         )
         baseUrl = normalizedEndpoint
         connectionState = nextState
+        appLogger.info(
+            "BridgeApi",
+            "bridge 连接成功：endpoint=$normalizedEndpoint, runnerMode=${nextState.runnerMode ?: "unknown"}",
+        )
         nextState
     }
 
     override suspend fun disconnect() {
         baseUrl = null
         connectionState = BridgeConnectionState.Disconnected
+        appLogger.info("BridgeApi", "已断开 bridge 连接。")
     }
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
 
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail = withContext(Dispatchers.IO) {
+        appLogger.info(
+            "BridgeApi",
+            "创建会话：cwd=${request.cwd}, model=${request.model}, approval=${request.approvalMode}",
+        )
         val payload = JSONObject()
             .put("cwd", request.cwd)
             .put("model", request.model)
@@ -74,8 +96,13 @@ class RealBridgeDataProvider : CodexDataProvider {
             method = "POST",
             url = "${requireBaseUrl()}/api/session",
             body = payload.toString(),
+            summary = "create session, cwd=${request.cwd}, model=${request.model}",
         )
         if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "创建会话失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
             throw BridgeRequestException(response.statusCode, response.body)
         }
 
@@ -83,6 +110,7 @@ class RealBridgeDataProvider : CodexDataProvider {
     }
 
     override suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "更新会话配置：sessionId=$sessionId, update=$update")
         val payload = JSONObject()
         update.cwd?.let { payload.put("cwd", it) }
         update.model?.let { payload.put("model", it) }
@@ -94,8 +122,13 @@ class RealBridgeDataProvider : CodexDataProvider {
             method = "PATCH",
             url = "${requireBaseUrl()}/api/session/$sessionId/config",
             body = payload.toString(),
+            summary = "update session config, sessionId=$sessionId",
         )
         if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "更新会话配置失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
             throw BridgeRequestException(response.statusCode, response.body)
         }
 
@@ -103,13 +136,19 @@ class RealBridgeDataProvider : CodexDataProvider {
     }
 
     override suspend fun sendInput(sessionId: String, text: String) = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "发送输入：sessionId=$sessionId, textLength=${text.length}")
         val payload = JSONObject().put("text", text)
         val response = request(
             method = "POST",
             url = "${requireBaseUrl()}/api/session/$sessionId/input",
             body = payload.toString(),
+            summary = "send input, sessionId=$sessionId, textLength=${text.length}",
         )
         if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "发送输入失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
             throw BridgeRequestException(response.statusCode, response.body)
         }
     }
@@ -119,6 +158,10 @@ class RealBridgeDataProvider : CodexDataProvider {
         requestId: BridgeRequestId?,
         decision: ApprovalDecision,
     ): ApprovalActionResult = withContext(Dispatchers.IO) {
+        appLogger.info(
+            "BridgeApi",
+            "提交审批：sessionId=$sessionId, decision=${decision.wireValue}, requestId=${requestId ?: "none"}",
+        )
         val payload = JSONObject().put("decision", decision.wireValue)
         requestId?.let { payload.put("requestId", it.toJsonValue()) }
 
@@ -126,8 +169,13 @@ class RealBridgeDataProvider : CodexDataProvider {
             method = "POST",
             url = "${requireBaseUrl()}/api/session/$sessionId/approve",
             body = payload.toString(),
+            summary = "approve session, sessionId=$sessionId, decision=${decision.wireValue}",
         )
         if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "提交审批失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
             throw BridgeRequestException(response.statusCode, response.body)
         }
 
@@ -144,12 +192,14 @@ class RealBridgeDataProvider : CodexDataProvider {
     }
 
     override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = callbackFlow {
+        appLogger.info("BridgeApi", "开始订阅会话实时流：sessionId=$sessionId")
         val requestBuilder = Request.Builder()
             .url(toWebSocketUrl("${requireBaseUrl()}/api/session/$sessionId/ws"))
         authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
         val request = requestBuilder.build()
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                appLogger.info("BridgeApi", "实时流已连接：sessionId=$sessionId")
                 trySend(SessionStreamEvent.StreamOpened(sessionId = sessionId))
             }
 
@@ -157,10 +207,17 @@ class RealBridgeDataProvider : CodexDataProvider {
                 parseSessionStreamEvent(
                     sessionId = sessionId,
                     payload = text,
-                )?.let { trySend(it) }
+                )?.let { event ->
+                    appLogger.debug("BridgeApi", "实时流事件：${event.toLogSummary()}")
+                    trySend(event)
+                }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                appLogger.info(
+                    "BridgeApi",
+                    "实时流关闭中：sessionId=$sessionId, code=$code, reason=${reason.ifBlank { "none" }}",
+                )
                 trySend(
                     SessionStreamEvent.StreamClosed(
                         sessionId = sessionId,
@@ -171,6 +228,10 @@ class RealBridgeDataProvider : CodexDataProvider {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                appLogger.info(
+                    "BridgeApi",
+                    "实时流已关闭：sessionId=$sessionId, code=$code, reason=${reason.ifBlank { "none" }}",
+                )
                 trySend(
                     SessionStreamEvent.StreamClosed(
                         sessionId = sessionId,
@@ -181,6 +242,11 @@ class RealBridgeDataProvider : CodexDataProvider {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                appLogger.error(
+                    "BridgeApi",
+                    "实时流失败：sessionId=$sessionId, code=${response?.code ?: "n/a"}",
+                    t,
+                )
                 trySend(
                     SessionStreamEvent.Error(
                         sessionId = sessionId,
@@ -194,6 +260,7 @@ class RealBridgeDataProvider : CodexDataProvider {
 
         val webSocket = webSocketClient.newWebSocket(request, listener)
         awaitClose {
+            appLogger.info("BridgeApi", "结束实时流订阅：sessionId=$sessionId")
             webSocket.cancel()
         }
     }
@@ -202,8 +269,13 @@ class RealBridgeDataProvider : CodexDataProvider {
         val response = request(
             method = "GET",
             url = "${requireBaseUrl()}/api/sessions",
+            summary = "list sessions",
         )
         if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "获取会话列表失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
             throw BridgeRequestException(response.statusCode, response.body)
         }
 
@@ -217,11 +289,18 @@ class RealBridgeDataProvider : CodexDataProvider {
         val response = request(
             method = "GET",
             url = "${requireBaseUrl()}/api/session/$sessionId",
+            summary = "get session detail, sessionId=$sessionId",
         )
         when (response.statusCode) {
             404 -> null
             in 200..299 -> response.body.toSessionDetail()
-            else -> throw BridgeRequestException(response.statusCode, response.body)
+            else -> {
+                appLogger.warn(
+                    "BridgeApi",
+                    "获取会话详情失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+                )
+                throw BridgeRequestException(response.statusCode, response.body)
+            }
         }
     }
 
@@ -247,7 +326,9 @@ class RealBridgeDataProvider : CodexDataProvider {
         method: String,
         url: String,
         body: String? = null,
+        summary: String? = null,
     ): HttpResponse {
+        appLogger.debug("BridgeApi", "HTTP 请求：$method $url${summary?.let { " ($it)" } ?: ""}")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = 5_000
@@ -269,6 +350,10 @@ class RealBridgeDataProvider : CodexDataProvider {
 
             val statusCode = connection.responseCode
             val payload = readBody(connection.errorStream ?: connection.inputStream)
+            appLogger.debug(
+                "BridgeApi",
+                "HTTP 响应：$method $url -> $statusCode${if (payload.isBlank()) "" else ", body=${payload.compactForLog()}"}",
+            )
             HttpResponse(statusCode = statusCode, body = payload)
         } finally {
             connection.disconnect()
@@ -520,6 +605,26 @@ private fun extractEventError(value: Any?): String? {
         }
         else -> value.toString().takeIf { it.isNotBlank() }
     }
+}
+
+private fun SessionStreamEvent.toLogSummary(): String {
+    return when (this) {
+        is SessionStreamEvent.StreamOpened -> "stream.opened sessionId=$sessionId"
+        is SessionStreamEvent.StreamClosed -> "stream.closed sessionId=$sessionId reason=${reason ?: "none"}"
+        is SessionStreamEvent.SessionStarted -> "session.started sessionId=$sessionId status=$status"
+        is SessionStreamEvent.AssistantDelta -> "assistant.delta sessionId=$sessionId chars=${text.length}"
+        is SessionStreamEvent.AssistantDone -> "assistant.done sessionId=$sessionId status=${turnStatus ?: "unknown"}"
+        is SessionStreamEvent.RunStatus -> "run.status sessionId=$sessionId status=$status"
+        is SessionStreamEvent.RunInterrupted -> "run.interrupted sessionId=$sessionId status=${status ?: "unknown"}"
+        is SessionStreamEvent.ToolRequest -> "tool.request sessionId=$sessionId method=${method ?: "unknown"}"
+        is SessionStreamEvent.ToolResult -> "tool.result sessionId=$sessionId method=${method ?: "unknown"} status=${status ?: "unknown"}"
+        is SessionStreamEvent.Error -> "error sessionId=$sessionId message=$message"
+    }
+}
+
+private fun String.compactForLog(maxLength: Int = 400): String {
+    val compact = replace("\r", "\\r").replace("\n", "\\n")
+    return if (compact.length <= maxLength) compact else "${compact.take(maxLength)}..."
 }
 
 private fun localizedStatus(status: String): String {

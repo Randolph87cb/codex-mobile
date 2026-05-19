@@ -17,7 +17,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -30,6 +33,7 @@ import com.openai.codexmobile.ui.screen.ConnectionScreen
 import com.openai.codexmobile.ui.screen.SessionDetailScreen
 import com.openai.codexmobile.ui.screen.SessionListScreen
 import com.openai.codexmobile.ui.screen.SettingsScreen
+import kotlinx.coroutines.launch
 
 private object Routes {
     const val Connection = "connection"
@@ -44,6 +48,8 @@ private object Routes {
 fun CodexMobileApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -176,6 +182,9 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 )
             }
             composable(Routes.Settings) {
+                LaunchedEffect(Unit) {
+                    appViewModel.refreshDiagnosticsLog()
+                }
                 SettingsScreen(
                     paddingValues = paddingValues,
                     items = uiState.settingsItems,
@@ -186,6 +195,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     approvalModeInput = uiState.approvalModeInput,
                     reasoningEffortInput = uiState.reasoningEffortInput,
                     serviceTierInput = uiState.serviceTierInput,
+                    diagnosticsLog = uiState.diagnosticsLog,
                     onEndpointChange = appViewModel::updateEndpointInput,
                     onAuthTokenChange = appViewModel::updateAuthTokenInput,
                     onCwdChange = appViewModel::updateCwdInput,
@@ -193,6 +203,14 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onApprovalModeChange = appViewModel::updateApprovalModeInput,
                     onReasoningEffortChange = appViewModel::updateReasoningEffortInput,
                     onServiceTierChange = appViewModel::updateServiceTierInput,
+                    onRefreshLogs = appViewModel::refreshDiagnosticsLog,
+                    onClearLogs = appViewModel::clearDiagnosticsLog,
+                    onCopyLogs = { logs ->
+                        clipboardManager.setText(AnnotatedString(logs))
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("日志已复制到剪贴板。")
+                        }
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }

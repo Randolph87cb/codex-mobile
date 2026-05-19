@@ -8,6 +8,7 @@ import com.openai.codexmobile.data.AppSettingsDefaults
 import com.openai.codexmobile.data.RealBridgeDataProvider
 import com.openai.codexmobile.data.SharedPreferencesAppSettingsStore
 import com.openai.codexmobile.data.defaultEndpointForCurrentDevice
+import com.openai.codexmobile.diagnostics.FileAppLogger
 import com.openai.codexmobile.ui.CodexMobileApp
 import com.openai.codexmobile.ui.theme.CodexMobileTheme
 
@@ -22,7 +23,11 @@ class MainActivity : ComponentActivity() {
                 cwd = "D:\\workspace\\codex-mobile",
             ),
         )
-        val dataProvider = RealBridgeDataProvider()
+        val appLogger = FileAppLogger(applicationContext).also {
+            it.installCrashHandler()
+            it.info("MainActivity", "应用启动。")
+        }
+        val dataProvider = RealBridgeDataProvider(appLogger)
 
         setContent {
             CodexMobileTheme {
@@ -31,6 +36,7 @@ class MainActivity : ComponentActivity() {
                         bridgeApi = dataProvider,
                         sessionRepository = dataProvider,
                         settingsStore = settingsStore,
+                        appLogger = appLogger,
                     ),
                 )
                 CodexMobileApp(appViewModel = appViewModel)

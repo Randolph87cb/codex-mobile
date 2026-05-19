@@ -13,6 +13,7 @@ import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SessionConfigUpdate
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
+import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
@@ -47,6 +48,7 @@ data class AppUiState(
     val settingsItems: List<Pair<String, String>>,
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
     val queuedInputs: List<String> = emptyList(),
+    val diagnosticsLog: String = "暂无日志。",
 ) {
     val isDraftSelected: Boolean
         get() = selectedDraftSession != null
@@ -82,6 +84,7 @@ class AppViewModel(
     private val bridgeApi: BridgeApi,
     private val sessionRepository: SessionRepository,
     private val settingsStore: AppSettingsStore,
+    private val appLogger: AppLogger,
 ) : ViewModel() {
 
     private val initialSettings = settingsStore.load().sanitize()
@@ -96,6 +99,8 @@ class AppViewModel(
 
     init {
         bridgeApi.updateAuthToken(initialSettings.authToken)
+        appLogger.info("AppViewModel", "ViewModel 初始化完成。")
+        refreshDiagnosticsLog()
         refreshConnection()
     }
 
@@ -140,6 +145,20 @@ class AppViewModel(
         }
     }
 
+    fun refreshDiagnosticsLog() {
+        _uiState.update {
+            it.copy(diagnosticsLog = appLogger.readRecentLogs())
+        }
+    }
+
+    fun clearDiagnosticsLog() {
+        appLogger.clear()
+        refreshDiagnosticsLog()
+        _uiState.update {
+            it.copy(message = "已清空应用日志。")
+        }
+    }
+
     fun updateDraftMessage(value: String) {
         _uiState.update { it.copy(draftMessage = value) }
     }
@@ -147,6 +166,7 @@ class AppViewModel(
     fun connect() {
         val endpoint = uiState.value.endpointInput.trim()
         if (endpoint.isBlank()) {
+            appLogger.warn("AppViewModel", "用户尝试连接，但桥接地址为空。")
             _uiState.update { it.copy(message = "请先填写桥接地址。") }
             return
         }
@@ -155,9 +175,14 @@ class AppViewModel(
             stopSessionStream()
             _uiState.update { it.copy(isLoading = true, message = null, selectedSession = null, selectedDraftSession = null) }
             try {
+                appLogger.info("AppViewModel", "开始连接桥接服务：$endpoint")
                 val connectionState = bridgeApi.connect(endpoint)
                 val sessions = sessionRepository.listSessions()
                 val selectedSession = sessions.firstOrNull()?.let { sessionRepository.getSessionDetail(it.id) }
+                appLogger.info(
+                    "AppViewModel",
+                    "桥接连接成功，会话数=${sessions.size}${selectedSession?.id?.let { ", 默认会话=$it" } ?: ""}",
+                )
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
@@ -168,7 +193,9 @@ class AppViewModel(
                         message = connectedMessage(connectionState),
                     ).withSettingsItems()
                 }
+                refreshDiagnosticsLog()
             } catch (error: Exception) {
+                appLogger.error("AppViewModel", "连接桥接服务失败：$endpoint", error)
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
@@ -179,12 +206,14 @@ class AppViewModel(
                         message = error.message ?: "连接桥接服务失败。",
                     ).withSettingsItems()
                 }
+                refreshDiagnosticsLog()
             }
         }
     }
 
     fun disconnect() {
         viewModelScope.launch {
+            appLogger.info("AppViewModel", "用户主动断开桥接连接。")
             stopSessionStream()
             bridgeApi.disconnect()
             queuedInputsBySession.clear()
@@ -199,6 +228,7 @@ class AppViewModel(
                     queuedInputs = emptyList(),
                 ).withSettingsItems()
             }
+            refreshDiagnosticsLog()
         }
     }
 
@@ -210,6 +240,10 @@ class AppViewModel(
             approvalMode = uiState.value.approvalModeInput,
             reasoningEffort = uiState.value.reasoningEffortInput,
             serviceTier = uiState.value.serviceTierInput,
+        )
+        appLogger.info(
+            "AppViewModel",
+            "创建本地草稿线程：cwd=${draft.cwd.ifBlank { "<empty>" }}, model=${draft.model}",
         )
         _uiState.update {
             it.copy(
@@ -252,6 +286,7 @@ class AppViewModel(
         }
 
         viewModelScope.launch {
+            appLogger.info("AppViewModel", "打开会话详情：sessionId=$sessionId")
             stopSessionStream(resetRealtimeState = false)
             _uiState.update {
                 it.copy(
@@ -275,6 +310,7 @@ class AppViewModel(
             val detail = try {
                 sessionRepository.getSessionDetail(sessionId)
             } catch (error: Exception) {
+                appLogger.error("AppViewModel", "加载会话详情失败：sessionId=$sessionId", error)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -290,10 +326,12 @@ class AppViewModel(
                         ),
                     )
                 }
+                refreshDiagnosticsLog()
                 return@launch
             }
 
             if (detail == null) {
+                appLogger.warn("AppViewModel", "找不到会话详情：sessionId=$sessionId")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -309,6 +347,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                refreshDiagnosticsLog()
                 return@launch
             }
 
@@ -326,6 +365,7 @@ class AppViewModel(
 
             startSessionStream(sessionId)
             flushNextQueuedInputIfIdle(sessionId)
+            refreshDiagnosticsLog()
         }
     }
 
@@ -353,12 +393,17 @@ class AppViewModel(
 
         if (draftSession != null) {
             if (draftSession.cwd.trim().isBlank()) {
+                appLogger.warn("AppViewModel", "草稿线程发送失败，工作目录为空。")
                 _uiState.update { it.copy(message = "请先为草稿线程填写工作目录。") }
                 return
             }
             viewModelScope.launch {
                 _uiState.update { it.copy(isLoading = true, message = null) }
                 try {
+                    appLogger.info(
+                        "AppViewModel",
+                        "草稿线程转正式会话：cwd=${draftSession.cwd}, firstMessageLength=${text.length}",
+                    )
                     val created = bridgeApi.createSession(buildCreateSessionRequest(draftSession))
                     _uiState.update {
                         it.copy(
@@ -370,18 +415,24 @@ class AppViewModel(
                     refreshSessions()
                     submitInputNow(created, text, fromQueue = false)
                 } catch (error: Exception) {
+                    appLogger.error("AppViewModel", "创建草稿对应远端会话失败。", error)
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             message = error.message ?: "创建会话失败。",
                         )
                     }
+                    refreshDiagnosticsLog()
                 }
             }
             return
         }
 
         if (detail != null && shouldQueueInput(detail, uiState.value.sessionRealtimeState)) {
+            appLogger.info(
+                "AppViewModel",
+                "当前轮未结束，消息进入排队：sessionId=${detail.id}, textLength=${text.length}",
+            )
             enqueueQueuedInput(detail.id, text)
             _uiState.update {
                 it.copy(
@@ -398,14 +449,20 @@ class AppViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, message = null) }
             try {
+                appLogger.info(
+                    "AppViewModel",
+                    "发送消息：sessionId=${activeDetail.id}, textLength=${text.length}",
+                )
                 submitInputNow(activeDetail, text, fromQueue = false)
             } catch (error: Exception) {
+                appLogger.error("AppViewModel", "发送消息失败：sessionId=${activeDetail.id}", error)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         message = error.message ?: "发送消息失败。",
                     )
                 }
+                refreshDiagnosticsLog()
             }
         }
     }
@@ -415,6 +472,10 @@ class AppViewModel(
         val approval = uiState.value.sessionRealtimeState.pendingApproval ?: return
 
         viewModelScope.launch {
+            appLogger.info(
+                "AppViewModel",
+                "提交审批决定：sessionId=${detail.id}, decision=${decision.wireValue}, requestId=${approval.requestId ?: "none"}",
+            )
             _uiState.update {
                 it.copy(
                     isLoading = true,
@@ -429,6 +490,7 @@ class AppViewModel(
                 val result = bridgeApi.approveSession(detail.id, approval.requestId, decision)
                 applyApprovalResult(result)
             } catch (error: Exception) {
+                appLogger.error("AppViewModel", "提交审批失败：sessionId=${detail.id}", error)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -438,6 +500,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                refreshDiagnosticsLog()
             }
         }
     }
@@ -560,6 +623,10 @@ class AppViewModel(
 
         viewModelScope.launch {
             try {
+                appLogger.info(
+                    "AppViewModel",
+                    "更新会话配置：sessionId=${detail.id}, model=${model ?: detail.model}, cwd=${cwd ?: detail.cwd}",
+                )
                 val updated = bridgeApi.updateSessionConfig(
                     detail.id,
                     SessionConfigUpdate(
@@ -581,16 +648,20 @@ class AppViewModel(
                     }
                 }
                 refreshSessions()
+                refreshDiagnosticsLog()
             } catch (error: Exception) {
+                appLogger.error("AppViewModel", "更新会话配置失败：sessionId=${detail.id}", error)
                 _uiState.update {
                     it.copy(message = error.message ?: "更新会话配置失败。")
                 }
                 refreshSessionSnapshot(detail.id)
+                refreshDiagnosticsLog()
             }
         }
     }
 
     private fun startSessionStream(sessionId: String) {
+        appLogger.info("AppViewModel", "开始监听实时流：sessionId=$sessionId")
         stopSessionStream(resetRealtimeState = false)
         activeStreamSessionId = sessionId
         sessionStreamJob = viewModelScope.launch {
@@ -602,6 +673,7 @@ class AppViewModel(
                 throw error
             } catch (error: Exception) {
                 if (activeStreamSessionId == sessionId) {
+                    appLogger.error("AppViewModel", "实时流监听失败：sessionId=$sessionId", error)
                     _uiState.update {
                         it.copy(
                             sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -615,12 +687,14 @@ class AppViewModel(
                         )
                     }
                     refreshSessionSnapshot(sessionId)
+                    refreshDiagnosticsLog()
                 }
             }
         }
     }
 
     private fun stopSessionStream(resetRealtimeState: Boolean = true) {
+        activeStreamSessionId?.let { appLogger.info("AppViewModel", "停止实时流监听：sessionId=$it") }
         sessionStreamJob?.cancel()
         sessionStreamJob = null
         activeStreamSessionId = null
@@ -642,6 +716,7 @@ class AppViewModel(
 
         when (event) {
             is SessionStreamEvent.StreamOpened -> {
+                appLogger.info("AppViewModel", "实时流已连接：sessionId=$sessionId")
                 _uiState.update {
                     it.copy(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -656,6 +731,10 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.StreamClosed -> {
+                appLogger.warn(
+                    "AppViewModel",
+                    "实时流关闭：sessionId=$sessionId, reason=${event.reason ?: "none"}",
+                )
                 _uiState.update {
                     it.copy(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -671,6 +750,10 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.SessionStarted -> {
+                appLogger.info(
+                    "AppViewModel",
+                    "会话实时流就绪：sessionId=$sessionId, status=${event.status}, threadId=${event.threadId ?: "none"}",
+                )
                 _uiState.update {
                     it.copy(
                         selectedSession = buildOrUpdateSessionFromStart(
@@ -713,6 +796,10 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.AssistantDone -> {
+                appLogger.info(
+                    "AppViewModel",
+                    "助手回复结束：sessionId=$sessionId, turnStatus=${event.turnStatus ?: "done"}",
+                )
                 activeAssistantTurnId = null
                 val nextStatus = if (event.turnStatus == "failed") "error" else "idle"
                 _uiState.update {
@@ -742,6 +829,7 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.RunStatus -> {
+                appLogger.debug("AppViewModel", "运行状态变化：sessionId=$sessionId, status=${event.status}")
                 _uiState.update {
                     it.copy(
                         selectedSession = it.selectedSession?.copy(
@@ -770,6 +858,7 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.RunInterrupted -> {
+                appLogger.warn("AppViewModel", "任务被中断：sessionId=$sessionId")
                 activeAssistantTurnId = null
                 _uiState.update {
                     it.copy(
@@ -798,6 +887,10 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.ToolRequest -> {
+                appLogger.info(
+                    "AppViewModel",
+                    "收到审批请求：sessionId=$sessionId, method=${event.method ?: "unknown"}",
+                )
                 _uiState.update {
                     it.copy(
                         selectedSession = it.selectedSession
@@ -833,6 +926,10 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.ToolResult -> {
+                appLogger.info(
+                    "AppViewModel",
+                    "收到审批结果：sessionId=$sessionId, method=${event.method ?: "unknown"}, status=${event.status ?: "unknown"}",
+                )
                 _uiState.update {
                     it.copy(
                         selectedSession = it.selectedSession
@@ -867,6 +964,7 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.Error -> {
+                appLogger.error("AppViewModel", "实时流错误事件：sessionId=$sessionId, message=${event.message}")
                 activeAssistantTurnId = null
                 _uiState.update {
                     it.copy(
@@ -897,7 +995,8 @@ class AppViewModel(
     private suspend fun refreshSessionSnapshot(sessionId: String) {
         val detail = try {
             sessionRepository.getSessionDetail(sessionId)
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            appLogger.error("AppViewModel", "刷新会话快照失败：sessionId=$sessionId", error)
             null
         }
 
@@ -920,7 +1019,8 @@ class AppViewModel(
         try {
             val sessions = sessionRepository.listSessions()
             _uiState.update { it.copy(sessions = sessions) }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            appLogger.error("AppViewModel", "刷新会话列表失败。", error)
             // Keep the latest visible list if list refresh fails.
         }
     }
@@ -968,11 +1068,16 @@ class AppViewModel(
     }
 
     override fun onCleared() {
+        appLogger.info("AppViewModel", "ViewModel 即将销毁。")
         stopSessionStream()
         super.onCleared()
     }
 
     private fun applyApprovalResult(result: ApprovalActionResult) {
+        appLogger.info(
+            "AppViewModel",
+            "审批已提交：decision=${result.decision.wireValue}, status=${result.status}, requestId=${result.requestId}",
+        )
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -1002,6 +1107,7 @@ class AppViewModel(
                 ),
             )
         }
+        refreshDiagnosticsLog()
     }
 
     private suspend fun submitInputNow(
@@ -1009,6 +1115,10 @@ class AppViewModel(
         text: String,
         fromQueue: Boolean,
     ) {
+        appLogger.info(
+            "AppViewModel",
+            "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, fromQueue=$fromQueue",
+        )
         bridgeApi.sendInput(detail.id, text)
         activeAssistantTurnId = null
         val updatedDetail = appendUserMessage(detail, text)
@@ -1037,6 +1147,7 @@ class AppViewModel(
         if (activeStreamSessionId != detail.id || sessionStreamJob?.isActive != true) {
             startSessionStream(detail.id)
         }
+        refreshDiagnosticsLog()
     }
 
     private fun shouldQueueInput(
@@ -1085,8 +1196,10 @@ class AppViewModel(
         flushingQueuedSessions += sessionId
 
         try {
+            appLogger.info("AppViewModel", "开始发送排队消息：sessionId=$sessionId")
             submitInputNow(detail, nextMessage, fromQueue = true)
         } catch (error: Exception) {
+            appLogger.error("AppViewModel", "排队消息发送失败：sessionId=$sessionId", error)
             val restoredQueue = queuedInputsBySession.getOrPut(sessionId) { ArrayDeque() }
             restoredQueue.addFirst(nextMessage)
             _uiState.update {
@@ -1096,6 +1209,7 @@ class AppViewModel(
                     queuedInputs = queuedInputsFor(sessionId),
                 )
             }
+            refreshDiagnosticsLog()
         } finally {
             flushingQueuedSessions -= sessionId
         }
@@ -1399,6 +1513,7 @@ private fun defaultSettingsItems(
         "审批模式" to localizedApprovalMode(approvalModeInput),
         "运行器" to (connectedState?.runnerMode ?: "未连接"),
         "遥测" to "已关闭",
+        "应用日志" to "已开启（本地文件）",
     )
 }
 
@@ -1455,11 +1570,12 @@ class AppViewModelFactory(
     private val bridgeApi: BridgeApi,
     private val sessionRepository: SessionRepository,
     private val settingsStore: AppSettingsStore,
+    private val appLogger: AppLogger,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AppViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return AppViewModel(bridgeApi, sessionRepository, settingsStore) as T
+            return AppViewModel(bridgeApi, sessionRepository, settingsStore, appLogger) as T
         }
         error("Unknown ViewModel class: ${modelClass.name}")
     }

@@ -10,6 +10,7 @@ import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SessionConfigUpdate
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
+import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
@@ -54,7 +55,7 @@ class AppViewModelTest {
         )
         val bridgeApi = FakeBridgeApi(createdDetail = createdDetail)
         val repository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap())
-        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
         viewModel.startDraftSession("D:\\workspace\\project-a")
         advanceUntilIdle()
@@ -92,7 +93,7 @@ class AppViewModelTest {
             sessionSummaries = listOf(detail.toSummary()),
             detailsById = mapOf(detail.id to detail),
         )
-        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
         viewModel.openSessionDetail("sess_stream")
         advanceUntilIdle()
@@ -129,7 +130,7 @@ class AppViewModelTest {
             sessionSummaries = listOf(detail.toSummary()),
             detailsById = mapOf(detail.id to detail),
         )
-        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
         viewModel.openSessionDetail("sess_queue")
         advanceUntilIdle()
@@ -174,7 +175,7 @@ class AppViewModelTest {
             detailsById = mapOf(detail.id to detail),
         )
         val settingsStore = FakeAppSettingsStore()
-        val viewModel = AppViewModel(bridgeApi, repository, settingsStore)
+        val viewModel = AppViewModel(bridgeApi, repository, settingsStore, FakeAppLogger())
 
         viewModel.openSessionDetail("sess_config")
         advanceUntilIdle()
@@ -215,7 +216,7 @@ class AppViewModelTest {
                 ),
             ),
         )
-        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore())
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
         viewModel.openSessionDetail("sess_known")
         advanceUntilIdle()
@@ -244,7 +245,7 @@ class AppViewModelTest {
             detailsById = mapOf(detail.id to detail),
         )
         val settingsStore = FakeAppSettingsStore()
-        val viewModel = AppViewModel(bridgeApi, repository, settingsStore)
+        val viewModel = AppViewModel(bridgeApi, repository, settingsStore, FakeAppLogger())
 
         viewModel.updateAuthTokenInput("bridge-secret")
         viewModel.connect()
@@ -258,6 +259,26 @@ class AppViewModelTest {
             },
         )
         assertEquals("bridge-secret", settingsStore.saved.authToken)
+    }
+
+    @Test
+    fun refreshAndClearDiagnosticsLogUpdatesUiState() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_logs", status = "idle")
+        val appLogger = FakeAppLogger(initialLog = "初始日志")
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = detail),
+            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = appLogger,
+        )
+
+        viewModel.refreshDiagnosticsLog()
+
+        assertTrue(viewModel.uiState.value.diagnosticsLog.contains("初始日志"))
+
+        viewModel.clearDiagnosticsLog()
+
+        assertEquals("暂无日志。", viewModel.uiState.value.diagnosticsLog)
     }
 }
 
@@ -377,6 +398,44 @@ private class FakeAppSettingsStore(
 
     override fun save(settings: AppSettings) {
         saved = settings
+    }
+}
+
+private class FakeAppLogger(
+    initialLog: String = "暂无日志。",
+) : AppLogger {
+    private var content = initialLog
+
+    override fun debug(tag: String, message: String) = append(tag, message)
+
+    override fun info(tag: String, message: String) = append(tag, message)
+
+    override fun warn(tag: String, message: String) = append(tag, message)
+
+    override fun error(tag: String, message: String, throwable: Throwable?) {
+        append(tag, buildString {
+            append(message)
+            throwable?.message?.let { append(": ").append(it) }
+        })
+    }
+
+    override fun readRecentLogs(maxChars: Int): String {
+        return if (content.isBlank()) "暂无日志。" else content.takeLast(maxChars)
+    }
+
+    override fun clear() {
+        content = ""
+    }
+
+    override fun installCrashHandler() = Unit
+
+    private fun append(tag: String, message: String) {
+        val line = "[$tag] $message"
+        content = if (content.isBlank() || content == "暂无日志。") {
+            line
+        } else {
+            "$content\n$line"
+        }
     }
 }
 

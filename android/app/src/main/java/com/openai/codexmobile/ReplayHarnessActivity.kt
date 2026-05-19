@@ -12,6 +12,7 @@ import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CodexDataProvider
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SessionStreamEvent
+import com.openai.codexmobile.diagnostics.FileAppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
@@ -36,6 +37,9 @@ class ReplayHarnessActivity : ComponentActivity() {
             ),
         )
         val dataProvider = DeterministicReplayDataProvider()
+        val appLogger = FileAppLogger(applicationContext).also {
+            it.info("ReplayHarness", "启动 UI 回放模式。")
+        }
 
         setContent {
             CodexMobileTheme {
@@ -44,6 +48,7 @@ class ReplayHarnessActivity : ComponentActivity() {
                         bridgeApi = dataProvider,
                         sessionRepository = dataProvider,
                         settingsStore = settingsStore,
+                        appLogger = appLogger,
                     ),
                 )
                 CodexMobileApp(appViewModel = appViewModel)

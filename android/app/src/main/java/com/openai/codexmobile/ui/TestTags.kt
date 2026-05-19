@@ -54,5 +54,9 @@ object TestTags {
     const val SettingsServiceFlexButton = "settings_service_flex_button"
     const val SettingsApprovalManualButton = "settings_approval_manual_button"
     const val SettingsApprovalAutoButton = "settings_approval_auto_button"
+    const val SettingsRefreshLogsButton = "settings_refresh_logs_button"
+    const val SettingsClearLogsButton = "settings_clear_logs_button"
+    const val SettingsCopyLogsButton = "settings_copy_logs_button"
+    const val SettingsLogsCard = "settings_logs_card"
     const val SettingsBackButton = "settings_back_button"
 }
