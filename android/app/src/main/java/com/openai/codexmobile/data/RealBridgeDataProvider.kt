@@ -90,7 +90,9 @@ class RealBridgeDataProvider(
             .put("model", request.model)
             .put("approvalMode", request.approvalMode)
             .put("reasoningEffort", request.reasoningEffort)
-            .put("serviceTier", request.serviceTier)
+        if (request.serviceTier != "default") {
+            payload.put("serviceTier", request.serviceTier)
+        }
 
         val response = request(
             method = "POST",
@@ -550,7 +552,7 @@ private fun JSONObject.toSessionSummary(): SessionSummary {
         model = model,
         approvalMode = optString("approvalMode").ifBlank { "manual" },
         reasoningEffort = optString("reasoningEffort").ifBlank { "medium" },
-        serviceTier = optString("serviceTier").ifBlank { "fast" },
+        serviceTier = optString("serviceTier").ifBlank { "default" },
         status = status,
     )
 }
@@ -565,7 +567,7 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
     val model = optString("model").ifBlank { "未知模型" }
     val approvalMode = optString("approvalMode").ifBlank { "未知审批模式" }
     val reasoningEffort = optString("reasoningEffort").ifBlank { "medium" }
-    val serviceTier = optString("serviceTier").ifBlank { "fast" }
+    val serviceTier = optString("serviceTier").ifBlank { "default" }
     val status = optString("status").ifBlank { "unknown" }
     val cwd = optString("cwd").ifBlank { "未提供工作目录" }
     val threadId = optString("threadId").ifBlank { "尚未分配" }

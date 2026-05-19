@@ -129,6 +129,7 @@ fun SettingsScreen(
                     title = "速度",
                     currentValue = serviceTierInput,
                     options = listOf(
+                        SettingOption("普通", "default", TestTags.SettingsServiceDefaultButton),
                         SettingOption("快速", "fast", TestTags.SettingsServiceFastButton),
                         SettingOption("平衡", "flex", TestTags.SettingsServiceFlexButton),
                     ),

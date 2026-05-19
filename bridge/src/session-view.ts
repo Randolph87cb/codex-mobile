@@ -74,7 +74,7 @@ export function buildSessionViewFromThread(
   const transcriptPreview = buildThreadTranscriptPreview(thread);
   const model = session?.model ?? normalizeText(thread.modelProvider, "openai") ?? "openai";
   const reasoningEffort = session?.reasoningEffort ?? "medium";
-  const serviceTier = session?.serviceTier ?? "fast";
+  const serviceTier = session?.serviceTier ?? "default";
   const title = firstNonEmpty(
     normalizeText(thread.name),
     extractFirstUserMessage(thread),

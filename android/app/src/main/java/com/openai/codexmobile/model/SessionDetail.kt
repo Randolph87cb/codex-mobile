@@ -10,6 +10,6 @@ data class SessionDetail(
     val model: String = "gpt-5.5",
     val approvalMode: String = "manual",
     val reasoningEffort: String = "medium",
-    val serviceTier: String = "fast",
+    val serviceTier: String = "default",
     val status: String = "unknown",
 )

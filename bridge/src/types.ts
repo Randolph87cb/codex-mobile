@@ -3,7 +3,7 @@ export type JsonRpcRequestId = string | number;
 export type ApprovalDecision = "approve" | "approve_for_session" | "reject" | "reject_and_interrupt";
 export type ApprovalMode = "manual" | "auto";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
-export type ServiceTier = "fast" | "flex";
+export type ServiceTier = "default" | "fast" | "flex";
 
 export interface CreateSessionInput {
   cwd: string;

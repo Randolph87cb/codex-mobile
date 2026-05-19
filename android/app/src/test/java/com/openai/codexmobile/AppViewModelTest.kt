@@ -73,7 +73,7 @@ class AppViewModelTest {
                 model = "gpt-5.5",
                 approvalMode = "manual",
                 reasoningEffort = "medium",
-                serviceTier = "fast",
+                serviceTier = "default",
             ),
             bridgeApi.lastCreateSessionRequest,
         )
@@ -192,6 +192,31 @@ class AppViewModelTest {
         assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedSession?.model)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("flex", viewModel.uiState.value.selectedSession?.serviceTier)
+    }
+
+    @Test
+    fun defaultServiceTierUsesOrdinaryModeAndPersistsAsDefault() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_default", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val settingsStore = FakeAppSettingsStore()
+        val viewModel = AppViewModel(bridgeApi, repository, settingsStore, FakeAppLogger())
+
+        assertEquals("default", viewModel.uiState.value.serviceTierInput)
+
+        viewModel.openSessionDetail("sess_default")
+        advanceUntilIdle()
+
+        viewModel.updateSelectedSessionServiceTier("default")
+        advanceUntilIdle()
+
+        assertTrue(bridgeApi.sessionConfigUpdates.isNotEmpty())
+        assertEquals("default", bridgeApi.sessionConfigUpdates.last().serviceTier)
+        assertEquals("default", settingsStore.saved.serviceTier)
+        assertEquals("default", viewModel.uiState.value.selectedSession?.serviceTier)
     }
 
     @Test
@@ -388,7 +413,7 @@ private class FakeAppSettingsStore(
         model = "gpt-5.5",
         approvalMode = "manual",
         reasoningEffort = "medium",
-        serviceTier = "fast",
+        serviceTier = "default",
     ),
 ) : AppSettingsStore {
     var saved: AppSettings = initial
@@ -445,7 +470,7 @@ private fun sampleDetail(
     model: String = "gpt-5.5",
     approvalMode: String = "manual",
     reasoningEffort: String = "medium",
-    serviceTier: String = "fast",
+    serviceTier: String = "default",
     status: String,
 ): SessionDetail {
     return SessionDetail(

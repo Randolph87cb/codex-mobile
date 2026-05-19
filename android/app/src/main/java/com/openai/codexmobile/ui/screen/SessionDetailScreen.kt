@@ -436,6 +436,7 @@ private fun ConfigEditorDialogs(
         SessionConfigEditor.ServiceTier -> ChoiceConfigDialog(
             title = "选择速度",
             options = listOf(
+                "default" to "普通",
                 "fast" to "快速",
                 "flex" to "平衡",
             ),
@@ -770,6 +771,7 @@ private fun localizedReasoning(value: String): String {
 
 private fun localizedService(value: String): String {
     return when (value) {
+        "default" -> "普通"
         "flex" -> "平衡"
         else -> "快速"
     }

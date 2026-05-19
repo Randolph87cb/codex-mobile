@@ -19,7 +19,7 @@ data class AppSettingsDefaults(
     val model: String = "gpt-5.5",
     val approvalMode: String = "manual",
     val reasoningEffort: String = "medium",
-    val serviceTier: String = "fast",
+    val serviceTier: String = "default",
 )
 
 interface AppSettingsStore {
@@ -47,7 +47,7 @@ class SharedPreferencesAppSettingsStore(
                 ?.takeIf { it in setOf("minimal", "low", "medium", "high", "xhigh") }
                 ?: defaults.reasoningEffort,
             serviceTier = preferences.getString(KEY_SERVICE_TIER, defaults.serviceTier)
-                ?.takeIf { it == "fast" || it == "flex" }
+                ?.takeIf { it == "default" || it == "fast" || it == "flex" }
                 ?: defaults.serviceTier,
         )
     }

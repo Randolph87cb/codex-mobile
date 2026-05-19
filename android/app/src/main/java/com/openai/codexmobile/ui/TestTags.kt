@@ -50,6 +50,7 @@ object TestTags {
     const val SettingsReasoningMediumButton = "settings_reasoning_medium_button"
     const val SettingsReasoningHighButton = "settings_reasoning_high_button"
     const val SettingsReasoningXHighButton = "settings_reasoning_xhigh_button"
+    const val SettingsServiceDefaultButton = "settings_service_default_button"
     const val SettingsServiceFastButton = "settings_service_fast_button"
     const val SettingsServiceFlexButton = "settings_service_flex_button"
     const val SettingsApprovalManualButton = "settings_approval_manual_button"

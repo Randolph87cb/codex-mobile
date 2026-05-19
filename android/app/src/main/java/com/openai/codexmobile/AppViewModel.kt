@@ -1270,7 +1270,7 @@ private fun buildOrUpdateSessionFromStart(
     val model = event.model ?: current?.model ?: "gpt-5.5"
     val approvalMode = event.approvalMode ?: current?.approvalMode ?: "manual"
     val reasoningEffort = event.reasoningEffort ?: current?.reasoningEffort ?: "medium"
-    val serviceTier = event.serviceTier ?: current?.serviceTier ?: "fast"
+    val serviceTier = event.serviceTier ?: current?.serviceTier ?: "default"
     val cwd = event.cwd ?: current?.cwd ?: ""
 
     if (current != null && current.id == event.sessionId) {
@@ -1354,7 +1354,7 @@ private fun mergeSessionDetail(
         ?: "medium"
     val serviceTier = incoming.serviceTier.takeUnless { it.isBlank() || it == "unknown" }
         ?: current?.serviceTier
-        ?: "fast"
+        ?: "default"
     val cwd = incoming.cwd.takeUnless { it.isBlank() || it == "未提供工作目录" }
         ?: current?.cwd
         ?: ""
@@ -1499,7 +1499,7 @@ private fun defaultSettingsItems(
     modelInput: String = "gpt-5.5",
     approvalModeInput: String = "manual",
     reasoningEffortInput: String = "medium",
-    serviceTierInput: String = "fast",
+    serviceTierInput: String = "default",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     return listOf(
@@ -1536,8 +1536,10 @@ private fun localizedReasoningEffort(value: String): String {
 
 private fun localizedServiceTier(value: String): String {
     return when (value) {
-        "flex" -> "Flex"
-        else -> "Fast"
+        "default" -> "普通"
+        "flex" -> "平衡"
+        "fast" -> "快速"
+        else -> "普通"
     }
 }
 
@@ -1561,7 +1563,7 @@ private fun normalizeReasoningEffort(value: String): String {
 }
 
 private fun normalizeServiceTier(value: String): String {
-    return value.takeIf { it == "fast" || it == "flex" } ?: "fast"
+    return value.takeIf { it == "default" || it == "fast" || it == "flex" } ?: "default"
 }
 
 private fun nowIsoString(): String = Instant.now().toString()

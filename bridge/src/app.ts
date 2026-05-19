@@ -13,7 +13,7 @@ const createSessionSchema = z.object({
   model: z.string().trim().min(1).default("gpt-5.5"),
   approvalMode: z.enum(["manual", "auto"]).default("manual"),
   reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).default("medium"),
-  serviceTier: z.enum(["fast", "flex"]).default("fast"),
+  serviceTier: z.enum(["default", "fast", "flex"]).default("default"),
 });
 
 const updateSessionConfigSchema = z.object({
@@ -21,7 +21,7 @@ const updateSessionConfigSchema = z.object({
   model: z.string().trim().min(1).optional(),
   approvalMode: z.enum(["manual", "auto"]).optional(),
   reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
-  serviceTier: z.enum(["fast", "flex"]).optional(),
+  serviceTier: z.enum(["default", "fast", "flex"]).optional(),
 });
 
 const inputSchema = z.object({

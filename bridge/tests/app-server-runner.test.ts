@@ -52,9 +52,9 @@ function createSessionStore(): SessionStore {
     id: "sess-1",
     cwd: "D:\\workspace\\codex-mobile",
     model: "gpt-5.5",
-    approvalMode: "manual",
-    reasoningEffort: "medium",
-    serviceTier: "fast",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
     status: "running",
     threadId: "thread-1",
     activeTurnId: "turn-1",
@@ -70,20 +70,8 @@ describe("AppServerRunner", () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();
     client.request.mockImplementation(async (method: string) => {
-      if (method === "model/list") {
-        return {
-          data: [
-            {
-              id: "gpt-5.5",
-              model: "gpt-5.5",
-              additionalSpeedTiers: ["fast", "flex"],
-            },
-          ],
-        };
-      }
-
       if (method === "thread/start") {
-        return { thread: { id: "thread-2" } };
+        return { thread: { id: "thread-2" }, serviceTier: null };
       }
 
       if (method === "thread/read") {
@@ -113,7 +101,7 @@ describe("AppServerRunner", () => {
       model: "gpt-5.5",
       approvalMode: "manual",
       reasoningEffort: "high",
-      serviceTier: "flex",
+      serviceTier: "default",
       status: "idle",
       threadId: null,
       activeTurnId: null,
@@ -128,19 +116,14 @@ describe("AppServerRunner", () => {
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
-      "model/list",
-      {},
-    );
-    expect(client.request).toHaveBeenNthCalledWith(
-      2,
       "thread/start",
       expect.objectContaining({
         approvalPolicy: "on-request",
-        serviceTier: "flex",
       }),
     );
+    expect(client.request.mock.calls[0]?.[1]).not.toHaveProperty("serviceTier");
     expect(client.request).toHaveBeenNthCalledWith(
-      3,
+      2,
       "thread/read",
       expect.objectContaining({
         threadId: "thread-2",
@@ -148,14 +131,15 @@ describe("AppServerRunner", () => {
       }),
     );
     expect(client.request).toHaveBeenNthCalledWith(
-      4,
+      3,
       "turn/start",
       expect.objectContaining({
         approvalPolicy: "on-request",
         effort: "high",
-        serviceTier: "flex",
       }),
     );
+    expect(client.request.mock.calls[2]?.[1]).not.toHaveProperty("serviceTier");
+    expect(store.get("sess-2")?.serviceTier).toBe("default");
   });
 
   test("rejects flex when model/list says the current model only exposes fast", async () => {

@@ -33,7 +33,7 @@ class ReplayHarnessActivity : ComponentActivity() {
                 model = "gpt-5.5",
                 approvalMode = "manual",
                 reasoningEffort = "medium",
-                serviceTier = "fast",
+                serviceTier = "default",
             ),
         )
         val dataProvider = DeterministicReplayDataProvider()
@@ -79,7 +79,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         model = "gpt-5.5",
         approvalMode = "manual",
         reasoningEffort = "medium",
-        serviceTier = "fast",
+        serviceTier = "default",
         status = "idle",
     )
     private val detail = SessionDetail(

@@ -47,7 +47,7 @@ interface ThreadResumeResult {
   cwd?: string;
   model?: string;
   approvalPolicy?: "on-request" | "never";
-  serviceTier?: ServiceTier | null;
+  serviceTier?: "fast" | "flex" | null;
   reasoningEffort?: ReasoningEffort | null;
 }
 
@@ -113,8 +113,8 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     const result = await this.client.request<ThreadResumeResult>("thread/start", {
       cwd: session.cwd,
       model: session.model,
-      serviceTier: session.serviceTier,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      ...buildServiceTierParams(session.serviceTier),
     });
 
     this.rememberThreadSession(result.thread.id, sessionId);
@@ -344,7 +344,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       model: thread.modelProvider ?? "openai",
       approvalMode: "manual",
       reasoningEffort: "medium",
-      serviceTier: "fast",
+      serviceTier: "default",
       status: mapThreadStatus(thread.status),
       threadId: thread.id,
       activeTurnId: null,
@@ -636,9 +636,9 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       threadId: session.threadId,
       cwd: session.cwd,
       model: session.model,
-      serviceTier: session.serviceTier,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
       effort: session.reasoningEffort,
+      ...buildServiceTierParams(session.serviceTier),
       input: [
         {
           type: "text",
@@ -672,9 +672,9 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       threadId: session.threadId,
       cwd: session.cwd,
       model: session.model,
-      serviceTier: session.serviceTier,
       approvalPolicy: this.getApprovalPolicy(session.approvalMode),
       excludeTurns: true,
+      ...buildServiceTierParams(session.serviceTier),
     });
 
     this.rememberThreadSession(resumed.thread.id, session.id);
@@ -710,7 +710,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       model: resumed.model ?? resumed.thread.modelProvider ?? "openai",
       approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? "manual",
       reasoningEffort: mapReasoningEffort(resumed.reasoningEffort) ?? "medium",
-      serviceTier: mapServiceTier(resumed.serviceTier) ?? "fast",
+      serviceTier: mapServiceTier(resumed.serviceTier) ?? "default",
       status: mapThreadStatus(resumed.thread.status),
       threadId: resumed.thread.id,
       activeTurnId: null,
@@ -975,7 +975,7 @@ function mapReasoningEffort(
 }
 
 function mapServiceTier(
-  serviceTier: ServiceTier | null | undefined,
+  serviceTier: "fast" | "flex" | null | undefined,
 ): SessionRecord["serviceTier"] | null {
   switch (serviceTier) {
     case "fast":
@@ -984,6 +984,14 @@ function mapServiceTier(
     default:
       return null;
   }
+}
+
+function buildServiceTierParams(serviceTier: ServiceTier): { serviceTier?: "fast" | "flex" } {
+  if (serviceTier === "fast" || serviceTier === "flex") {
+    return { serviceTier };
+  }
+
+  return {};
 }
 
 function findLatestActiveTurnId(thread: AppServerThread): string | null {

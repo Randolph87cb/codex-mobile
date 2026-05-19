@@ -42,7 +42,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
         model: "openai",
         approvalMode: "manual",
         reasoningEffort: "medium",
-        serviceTier: "fast",
+        serviceTier: "default",
         status: "idle",
         threadId: "thread-history",
         activeTurnId: null,
@@ -69,7 +69,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
       model: "openai",
       approvalMode: "manual",
       reasoningEffort: "medium",
-      serviceTier: "fast",
+      serviceTier: "default",
       status: "idle",
       threadId: "thread-history",
       activeTurnId: null,
@@ -90,7 +90,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
       model: "openai",
       approvalMode: "manual",
       reasoningEffort: "medium",
-      serviceTier: "fast",
+      serviceTier: "default",
       status: "idle",
       threadId: "thread-history",
       activeTurnId: null,
@@ -146,7 +146,7 @@ describe("buildBridgeApp", () => {
       cwd: "D:\\workspace\\codex-mobile",
       model: "gpt-5.5",
       reasoningEffort: "medium",
-      serviceTier: "fast",
+      serviceTier: "default",
       threadId: "thread-test",
     });
 
@@ -325,7 +325,7 @@ describe("buildBridgeApp", () => {
       model: "gpt-5.5",
       approvalMode: "manual",
       reasoningEffort: "medium",
-      serviceTier: "fast",
+      serviceTier: "default",
     });
 
     const response = await app.inject({
@@ -353,6 +353,35 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("accepts default service tier and keeps it as ordinary mode", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "fast",
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/session/${session.id}/config`,
+      payload: {
+        serviceTier: "default",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: session.id,
+      serviceTier: "default",
+    });
+
+    await app.close();
+  });
+
   test("returns 409 when thread is already active in another client", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
@@ -363,7 +392,7 @@ describe("buildBridgeApp", () => {
       model: "gpt-5.5",
       approvalMode: "manual",
       reasoningEffort: "medium",
-      serviceTier: "fast",
+      serviceTier: "default",
     });
 
     const response = await app.inject({
@@ -452,7 +481,7 @@ describe("buildBridgeApp", () => {
       model: "gpt-5.5",
       approvalMode: "manual",
       reasoningEffort: "medium",
-      serviceTier: "fast",
+      serviceTier: "default",
     });
 
     const approve = await app.inject({
