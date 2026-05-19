@@ -1066,6 +1066,7 @@ private fun TranscriptImageThumbnail(
         source = source,
         bridgeEndpoint = bridgeEndpoint,
         bridgeAuthToken = bridgeAuthToken,
+        maxDimension = TranscriptThumbnailMaxDimension,
     )
 
     Card(
@@ -1146,6 +1147,7 @@ private fun ImagePreviewDialog(
         source = preview.source,
         bridgeEndpoint = bridgeEndpoint,
         bridgeAuthToken = bridgeAuthToken,
+        maxDimension = TranscriptPreviewMaxDimension,
     )
     var isSaving by remember(preview.source) { mutableStateOf(false) }
 

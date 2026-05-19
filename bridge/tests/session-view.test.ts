@@ -217,6 +217,44 @@ describe("session view mapping", () => {
     expect(view.transcriptPreview).toContain("系统：图片生成");
   });
 
+  test("uses saved image path instead of dumping base64 image payload", () => {
+    const savedPath = "D:\\workspace\\临时目录\\pets\\image.png";
+    const base64Payload = "A".repeat(2_048);
+    const view = buildSessionViewFromThread({
+      id: "thread-image-generation",
+      cwd: "D:\\workspace\\临时目录",
+      modelProvider: "openai",
+      preview: "图片生成",
+      createdAt: 1_779_117_160,
+      updatedAt: 1_779_117_360,
+      status: {
+        type: "idle",
+      },
+      turns: [
+        {
+          id: "turn-image-generation",
+          status: "completed",
+          startedAt: 1_779_117_260,
+          items: [
+            {
+              type: "imageGeneration",
+              result: base64Payload,
+              savedPath,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(view.transcriptPreview).toContain("系统：图片生成");
+    expect(view.transcriptPreview).toContain("图片内容已生成。");
+    expect(view.transcriptPreview).toContain(`已保存：${savedPath}`);
+    expect(view.transcriptPreview).toContain(
+      `![image.png](/api/image/file?path=${encodeURIComponent(savedPath)})`,
+    );
+    expect(view.transcriptPreview).not.toContain(base64Payload.slice(0, 128));
+  });
+
   test("prefers newer thread status over stale local running status", () => {
     const view = buildSessionViewFromThread(
       {

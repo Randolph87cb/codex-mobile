@@ -271,3 +271,42 @@
   - transcript 中的图片可点开进入大图预览。
   - 预览弹窗的保存按钮在模拟器里实际可用，相关仪表测试已通过。
 
+## 后续补充修复（七）
+- 用户反馈：`Create custom pet` 这类含多张生成图的大线程，在手机端查看图片会闪退。
+- 结合日志和真实会话详情，当前判断有两条叠加问题：
+  - bridge `session-view.ts` 在处理 `imageGeneration` 线程项时，把协议里的 `result` 原样塞进 transcript；而该字段真实内容是整段 PNG Base64，导致详情页出现超长文本。
+  - Android `TranscriptImageSupport.kt` 会把图片完整读入内存，再按原始尺寸直接 `decodeByteArray` 成 `Bitmap`，并把 `bytes + bitmap` 一起放进全局缓存。对大 PNG、spritesheet 或连续多张图，这是明显的 OOM 风险。
+- 实际修改：
+  - bridge `session-view.ts`
+    - 适配协议里的 `savedPath` 字段，`imageGeneration` 现在优先展示“图片内容已生成”“已保存路径”和可点击图片 Markdown。
+    - 对疑似 Base64 图片载荷不再原样输出到 transcript，避免把大块二进制文本渲染到详情页。
+  - bridge `session-view.test.ts`
+    - 新增 `imageGeneration` 使用 `savedPath`、且不会把 Base64 原文泄漏进 transcript 的测试。
+  - Android `TranscriptImageSupport.kt`
+    - 图片缓存从“原始 bytes + 完整 bitmap”改成“缓存原始 bytes，按展示场景采样解码 bitmap”。
+    - 新增缩略图和预览两档最大边长，避免为 220dp 缩略图解完整大图。
+    - 支持把 bridge 返回的相对地址 `/api/image/file?...` 自动补成完整 bridge URL。
+  - Android `TranscriptImageSupportTest.kt`
+    - 新增相对 URL 解析和采样倍率计算单测。
+- 影响面说明：
+  - 这次优先修的是“历史/生成图片查看闪退”主链路。
+  - 待发送附件状态目前仍保留 Base64 于 ViewModel 中，后续如果用户继续反馈“大量待发送原图”场景的内存压力，再单独做第二轮收敛。
+
+## 本次验证补充（八）
+- `cd bridge && npm run check`：通过
+- `cd bridge && npm test`：通过
+  - `5` 个测试文件通过
+  - `36` 个测试用例通过
+- `cd android && .\gradlew.bat testDebugUnitTest`：通过
+- `cd android && .\gradlew.bat connectedDebugAndroidTest`：通过
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+
+## 模拟器与真实会话回归补充
+- 对用户给出的真实会话 `019e3eb2-3589-7983-a1d0-eb8f2a4bf68d` 重新抓取 `/api/session/:id`：
+  - 原先 `系统：图片生成` 后面的超长 PNG Base64 片段已经消失。
+  - 现在返回的是：
+    - `图片内容已生成。`
+    - `已保存：...generated_images...png`
+    - `![...png](/api/image/file?path=...)`
+- 模拟器回归继续通过，说明修复后至少没有把新增的相对 URL 支持、采样解码和预览保存路径打坏。
+

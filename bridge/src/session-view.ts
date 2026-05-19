@@ -46,6 +46,8 @@ interface AppServerThreadItem {
   query?: string;
   review?: string;
   path?: string;
+  savedPath?: string;
+  revisedPrompt?: string | null;
 }
 
 interface AppServerTurnError {
@@ -248,9 +250,9 @@ export function formatThreadItemAsTranscriptBlock(item: AppServerThreadItem): st
       ]);
     case "imageGeneration":
       return buildSystemBlock("图片生成", [
-        prettyJson(item.result),
-        normalizeText(String(item.path ?? "")),
-        buildBridgeFileImageMarkdown(normalizeText(String(item.path ?? ""))),
+        summarizeImageGenerationResult(item.result),
+        normalizeText(String(item.savedPath ?? item.path ?? "")) ? `已保存：${normalizeText(String(item.savedPath ?? item.path ?? ""))}` : null,
+        buildBridgeFileImageMarkdown(normalizeText(String(item.savedPath ?? item.path ?? ""))),
       ]);
     case "enteredReviewMode":
       return buildSystemBlock("进入审查模式", [normalizeText(item.review)]);
@@ -447,6 +449,31 @@ function buildImageMarkdown(alt: string | null | undefined, source: string | nul
   }
 
   return `![${normalizeText(alt, "图片") ?? "图片"}](${normalizedSource})`;
+}
+
+function summarizeImageGenerationResult(result: unknown): string | null {
+  if (typeof result !== "string") {
+    return normalizeText(prettyJson(result));
+  }
+
+  const normalized = normalizeText(result);
+  if (!normalized) {
+    return null;
+  }
+
+  if (looksLikeBase64ImagePayload(normalized)) {
+    return "图片内容已生成。";
+  }
+
+  return truncateText(normalized, 400);
+}
+
+function looksLikeBase64ImagePayload(value: string): boolean {
+  if (value.length < 512) {
+    return false;
+  }
+
+  return /^[A-Za-z0-9+/=\r\n]+$/.test(value);
 }
 
 function buildCommandExecutionBlock(item: AppServerThreadItem): string {
