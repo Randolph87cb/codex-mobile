@@ -99,12 +99,14 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       throw new Error("session-not-found");
     }
 
-    const result = await this.client.request<ThreadResumeResult>("thread/start", {
-      cwd: session.cwd,
-      model: session.model,
-      serviceTier: session.serviceTier,
-      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
-    });
+    const { result, serviceTier } = await this.requestWithServiceTierFallback(session, (nextServiceTier) =>
+      this.client.request<ThreadResumeResult>("thread/start", {
+        cwd: session.cwd,
+        model: session.model,
+        serviceTier: nextServiceTier,
+        approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+      }),
+    );
 
     this.rememberThreadSession(result.thread.id, sessionId);
     this.store.update(sessionId, {
@@ -113,7 +115,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       model: result.model ?? session.model,
       approvalMode: mapApprovalMode(result.approvalPolicy) ?? session.approvalMode,
       reasoningEffort: mapReasoningEffort(result.reasoningEffort) ?? session.reasoningEffort,
-      serviceTier: mapServiceTier(result.serviceTier) ?? session.serviceTier,
+      serviceTier: mapServiceTier(result.serviceTier) ?? serviceTier,
       status: mapThreadStatus(result.thread.status),
       lastError: null,
     });
@@ -536,6 +538,32 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
   }
 
+  private async requestWithServiceTierFallback<TResult>(
+    session: SessionRecord,
+    execute: (serviceTier: ServiceTier) => Promise<TResult>,
+  ): Promise<{ result: TResult; serviceTier: ServiceTier }> {
+    const initialServiceTier = session.serviceTier;
+    try {
+      return {
+        result: await execute(initialServiceTier),
+        serviceTier: initialServiceTier,
+      };
+    } catch (error) {
+      if (!shouldFallbackToFast(initialServiceTier, error)) {
+        throw error;
+      }
+
+      this.store.update(session.id, {
+        serviceTier: "fast",
+        lastError: null,
+      });
+      return {
+        result: await execute("fast"),
+        serviceTier: "fast",
+      };
+    }
+  }
+
   private async tryReadThread(threadId: string): Promise<AppServerThread | null> {
     try {
       const result = await this.client.request<{ thread: AppServerThread }>("thread/read", {
@@ -568,20 +596,23 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     session: SessionRecord,
     text: string,
   ): Promise<{ turn: { id: string } }> {
-    return this.client.request<{ turn: { id: string } }>("turn/start", {
-      threadId: session.threadId,
-      cwd: session.cwd,
-      model: session.model,
-      serviceTier: session.serviceTier,
-      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
-      effort: session.reasoningEffort,
-      input: [
-        {
-          type: "text",
-          text,
-        },
-      ],
-    });
+    const { result } = await this.requestWithServiceTierFallback(session, (nextServiceTier) =>
+      this.client.request<{ turn: { id: string } }>("turn/start", {
+        threadId: session.threadId,
+        cwd: session.cwd,
+        model: session.model,
+        serviceTier: nextServiceTier,
+        approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+        effort: session.reasoningEffort,
+        input: [
+          {
+            type: "text",
+            text,
+          },
+        ],
+      }),
+    );
+    return result;
   }
 
   private async tryResumeAttachedSession(session: SessionRecord): Promise<SessionRecord | null> {
@@ -602,14 +633,16 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return session;
     }
 
-    const resumed = await this.client.request<ThreadResumeResult>("thread/resume", {
-      threadId: session.threadId,
-      cwd: session.cwd,
-      model: session.model,
-      serviceTier: session.serviceTier,
-      approvalPolicy: this.getApprovalPolicy(session.approvalMode),
-      excludeTurns: true,
-    });
+    const { result: resumed, serviceTier } = await this.requestWithServiceTierFallback(session, (nextServiceTier) =>
+      this.client.request<ThreadResumeResult>("thread/resume", {
+        threadId: session.threadId,
+        cwd: session.cwd,
+        model: session.model,
+        serviceTier: nextServiceTier,
+        approvalPolicy: this.getApprovalPolicy(session.approvalMode),
+        excludeTurns: true,
+      }),
+    );
 
     this.rememberThreadSession(resumed.thread.id, session.id);
     return (
@@ -619,7 +652,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         model: resumed.model ?? session.model,
         approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? session.approvalMode,
         reasoningEffort: mapReasoningEffort(resumed.reasoningEffort) ?? session.reasoningEffort,
-        serviceTier: mapServiceTier(resumed.serviceTier) ?? session.serviceTier,
+        serviceTier: mapServiceTier(resumed.serviceTier) ?? serviceTier,
         status: mapThreadStatus(resumed.thread.status),
         lastError: null,
       }) ?? session
@@ -881,6 +914,14 @@ function shouldResumeMissingThread(error: unknown): boolean {
   }
 
   return /thread not found/i.test(error.message);
+}
+
+function shouldFallbackToFast(serviceTier: ServiceTier, error: unknown): boolean {
+  if (serviceTier !== "flex" || !(error instanceof Error)) {
+    return false;
+  }
+
+  return /unsupported service_tier:\s*flex/i.test(error.message);
 }
 
 function mapApprovalMode(approvalPolicy: "on-request" | "never" | undefined): SessionRecord["approvalMode"] | null {

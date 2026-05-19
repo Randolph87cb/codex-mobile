@@ -141,6 +141,64 @@ describe("AppServerRunner", () => {
     );
   });
 
+  test("falls back to fast when turn/start rejects flex service tier", async () => {
+    const store = createSessionStore();
+    store.update("sess-1", {
+      status: "idle",
+      activeTurnId: null,
+      serviceTier: "flex",
+    });
+
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: unknown) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
+      if (method === "turn/start") {
+        const payload = params as { serviceTier?: string };
+        if (payload.serviceTier === "flex") {
+          throw new Error("Unsupported service_tier: flex");
+        }
+        return { turn: { id: "turn-fallback-fast" } };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await runner.submitInput("sess-1", "继续");
+
+    const turnStartCalls = client.request.mock.calls.filter(([method]) => method === "turn/start");
+    expect(turnStartCalls).toHaveLength(2);
+    expect(turnStartCalls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        serviceTier: "flex",
+      }),
+    );
+    expect(turnStartCalls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        serviceTier: "fast",
+      }),
+    );
+    expect(store.get("sess-1")).toMatchObject({
+      serviceTier: "fast",
+      activeTurnId: "turn-fallback-fast",
+      status: "running",
+      lastError: null,
+    });
+  });
+
   test("stores approval requests and resolves them through approve()", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();
