@@ -21,12 +21,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.ui.TestTags
 
 @Composable
 fun SettingsScreen(
     paddingValues: PaddingValues,
     items: List<Pair<String, String>>,
+    selectedConnectionName: String,
+    savedConnections: List<SavedBridgeConnection>,
+    selectedConnectionId: String,
     endpointInput: String,
     authTokenInput: String,
     cwdInput: String,
@@ -36,6 +40,10 @@ fun SettingsScreen(
     serviceTierInput: String,
     sandboxModeInput: String,
     diagnosticsLog: String,
+    onConnectionNameChange: (String) -> Unit,
+    onAddSavedConnection: () -> Unit,
+    onSelectSavedConnection: (String) -> Unit,
+    onDeleteSavedConnection: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
     onAuthTokenChange: (String) -> Unit,
     onCwdChange: (String) -> Unit,
@@ -64,6 +72,77 @@ fun SettingsScreen(
             text = "设置",
             style = MaterialTheme.typography.headlineMedium,
         )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SettingsConnectionsCard),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "已保存连接",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                savedConnections.forEach { connection ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(TestTags.SettingsConnectionsItemPrefix + connection.id),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = connection.name.ifBlank { "未命名连接" },
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = connection.endpoint.ifBlank { "未配置桥接地址" },
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                text = if (connection.authToken.isBlank()) "令牌：未配置" else "令牌：已配置",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (connection.id == selectedConnectionId) {
+                                    Button(onClick = {}, enabled = false) {
+                                        Text("当前使用")
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { onSelectSavedConnection(connection.id) },
+                                        modifier = Modifier.testTag(
+                                            TestTags.SettingsConnectionsSelectPrefix + connection.id,
+                                        ),
+                                    ) {
+                                        Text("设为当前")
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { onDeleteSavedConnection(connection.id) },
+                                    enabled = savedConnections.size > 1,
+                                    modifier = Modifier.testTag(
+                                        TestTags.SettingsConnectionsDeletePrefix + connection.id,
+                                    ),
+                                ) {
+                                    Text("删除")
+                                }
+                            }
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = onAddSavedConnection,
+                    modifier = Modifier.testTag(TestTags.SettingsConnectionsAddButton),
+                ) {
+                    Text("新增连接")
+                }
+            }
+        }
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -75,6 +154,15 @@ fun SettingsScreen(
                         Text(text = value, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
+                OutlinedTextField(
+                    value = selectedConnectionName,
+                    onValueChange = onConnectionNameChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SettingsConnectionNameField),
+                    singleLine = true,
+                    label = { Text("当前连接名称") },
+                )
                 OutlinedTextField(
                     value = endpointInput,
                     onValueChange = onEndpointChange,

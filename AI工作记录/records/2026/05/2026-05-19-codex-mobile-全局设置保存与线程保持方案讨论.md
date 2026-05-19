@@ -92,3 +92,63 @@
 - [x] 确认问题不在 bridge 字段名映射：Android PATCH payload、bridge `/api/session/:id/config` schema 与 store 更新字段均为 `reasoningEffort` / `sandboxMode`。
 - [x] 最终定位到真实根因不是按钮回调串位，而是“配置更新响应带回旧字段并被重新合并”：bridge PATCH 会把未定义字段写回 store，Android 又会把过时响应覆盖到当前会话。
 - [x] 已完成 bridge 与 Android 双侧修复，并通过模拟器回归用例验证。
+
+## 追加记录：多后端连接配置保存
+
+### 任务输入摘要
+
+- 最终结果：Android 端可以长期保存多套 bridge 连接配置，并让桥接地址与 Bridge Token 成对切换。
+- 现有素材：沿用同一轮中的 `AppSettingsStore.kt`、`AppViewModel.kt`、`SettingsScreen.kt`、`ConnectionScreen.kt`、`CodexMobileApp.kt` 与 `AppViewModelTest.kt`。
+- 明确约束：Bridge Token 必须和地址一起保存；先讨论方案，用户确认后再实施；不把连接配置和线程级配置重新耦合。
+- 完成标准：支持保存多条连接配置、选中当前连接、编辑当前连接、删除非最后一条连接，并兼容旧单地址存储。
+- 产出后动作：完成 Android 验证并提交。
+
+### 关键过程
+
+- 先做只读排查，确认当前 Android 端只有单个 `endpoint/authToken`：
+  - `SharedPreferencesAppSettingsStore` 只存一组桥接地址与 token；
+  - 连接页和设置页直接绑定同一对输入框；
+  - 图片加载和连接状态显示也都依赖这一个当前 endpoint。
+- 与用户确认后，采用“多套连接配置 + 当前选中项”的实现方式，而不是简单做最近地址历史：
+  - 每条配置至少包含 `id/name/endpoint/authToken`；
+  - 全局默认工作目录、模型、推理强度等仍保持单套全局设置；
+  - `Bridge Token` 跟随连接配置一起保存和切换。
+- 数据层改造：
+  - `AppSettings` 新增 `savedConnections` 与 `selectedConnectionId`；
+  - `SharedPreferencesAppSettingsStore` 新增连接配置列表的 JSON 编解码；
+  - 旧版只有 `endpoint/authToken` 的存储会在 `AppViewModel` 初始化时自动视作一条默认连接，兼容原有用户数据。
+- 状态层改造：
+  - `AppUiState` 新增 `savedConnections`、`selectedConnectionId`、`selectedConnection`；
+  - `updateEndpointInput()` / `updateAuthTokenInput()` 不再只改顶层输入框，而是同步写回当前选中的连接配置；
+  - 新增 `updateSelectedConnectionName()`、`addSavedConnection()`、`selectSavedConnection()`、`deleteSavedConnection()`；
+  - 切换当前连接时同步调用 `bridgeApi.updateAuthToken()`，确保连接动作使用新 token。
+- UI 改造：
+  - 设置页新增“已保存连接”区域，支持查看全部连接、设为当前、新增连接、删除非最后一条连接；
+  - 连接名称、桥接地址、Bridge Token 作为“当前连接”可编辑字段；
+  - 连接页增加当前连接名称提示，保持现有连接流程不变。
+- 测试补充：
+  - 新增“旧单地址设置自动映射为一条已保存连接”单测；
+  - 新增“切换连接时地址和 token 一起切换”单测；
+  - 新增“编辑当前连接不会污染其它已保存连接”单测；
+  - 复跑现有设置页回放测试，确认日志区和滚动行为未被破坏。
+
+### 结果
+
+- 已修改文件：
+  - `android/app/src/main/java/com/openai/codexmobile/data/AppSettingsStore.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/TestTags.kt`
+  - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+- 结果：
+  - Android 端现已支持保存多套 bridge 连接配置；
+  - 桥接地址与 Bridge Token 会作为同一套连接配置一起保存、切换；
+  - 原有单地址配置能继续使用，不会因升级丢失；
+  - 连接页仍保持原有快速连接入口，设置页承担多连接管理职责。
+- 验证：
+  - `cd android; .\gradlew.bat testDebugUnitTest`
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - `cd android; .\gradlew.bat app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`
+  - 上述验证均通过。

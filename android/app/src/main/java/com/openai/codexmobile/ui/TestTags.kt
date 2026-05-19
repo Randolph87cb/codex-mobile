@@ -57,6 +57,12 @@ object TestTags {
     const val SessionDetailRejectAndInterruptButton = "session_detail_reject_and_interrupt_button"
 
     const val SettingsScreen = "settings_screen"
+    const val SettingsConnectionNameField = "settings_connection_name_field"
+    const val SettingsConnectionsCard = "settings_connections_card"
+    const val SettingsConnectionsAddButton = "settings_connections_add_button"
+    const val SettingsConnectionsItemPrefix = "settings_connections_item_"
+    const val SettingsConnectionsSelectPrefix = "settings_connections_select_"
+    const val SettingsConnectionsDeletePrefix = "settings_connections_delete_"
     const val SettingsEndpointField = "settings_endpoint_field"
     const val SettingsAuthTokenField = "settings_auth_token_field"
     const val SettingsCwdField = "settings_cwd_field"

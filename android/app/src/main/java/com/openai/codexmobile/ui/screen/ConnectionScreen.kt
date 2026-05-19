@@ -22,6 +22,7 @@ import com.openai.codexmobile.ui.TestTags
 @Composable
 fun ConnectionScreen(
     paddingValues: PaddingValues,
+    currentConnectionName: String,
     endpoint: String,
     connectionState: BridgeConnectionState,
     isLoading: Boolean,
@@ -61,6 +62,10 @@ fun ConnectionScreen(
                         .testTag(TestTags.ConnectionEndpointField),
                     label = { Text("桥接地址") },
                     singleLine = true,
+                )
+                Text(
+                    text = "当前连接配置：${currentConnectionName.ifBlank { "默认连接" }}",
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
                     text = "模拟器请使用 10.0.2.2:8787；真机请填写 Windows 电脑的局域网地址。设置页会保存默认连接参数。",

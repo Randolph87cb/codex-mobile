@@ -8,6 +8,7 @@ import com.openai.codexmobile.data.BridgeApi
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SendInputRequest
+import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.data.SessionConfigUpdate
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
@@ -779,6 +780,134 @@ class AppViewModelTest {
             },
         )
         assertEquals("bridge-secret", settingsStore.saved.authToken)
+    }
+
+    @Test
+    fun legacySingleConnectionSettingsAreExposedAsSavedConnection() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_legacy", status = "idle")
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = detail),
+            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            settingsStore = FakeAppSettingsStore(
+                AppSettings(
+                    endpoint = "https://bridge-a.example.com",
+                    authToken = "token-a",
+                    cwd = "D:\\workspace\\codex-mobile",
+                    model = "gpt-5.5",
+                    approvalMode = "manual",
+                    reasoningEffort = "medium",
+                    serviceTier = "default",
+                    sandboxMode = "workspace-write",
+                ),
+            ),
+            appLogger = FakeAppLogger(),
+        )
+
+        val state = viewModel.uiState.value
+        assertEquals(1, state.savedConnections.size)
+        assertEquals("https://bridge-a.example.com", state.savedConnections.single().endpoint)
+        assertEquals("token-a", state.savedConnections.single().authToken)
+        assertEquals(state.savedConnections.single().id, state.selectedConnectionId)
+    }
+
+    @Test
+    fun selectingSavedConnectionSwitchesEndpointAndTokenTogether() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_select_connection", status = "idle")
+        val settingsStore = FakeAppSettingsStore(
+            AppSettings(
+                endpoint = "https://bridge-a.example.com",
+                authToken = "token-a",
+                cwd = "D:\\workspace\\codex-mobile",
+                model = "gpt-5.5",
+                approvalMode = "manual",
+                reasoningEffort = "medium",
+                serviceTier = "default",
+                sandboxMode = "workspace-write",
+                savedConnections = listOf(
+                    SavedBridgeConnection(
+                        id = "conn-a",
+                        name = "办公室",
+                        endpoint = "https://bridge-a.example.com",
+                        authToken = "token-a",
+                    ),
+                    SavedBridgeConnection(
+                        id = "conn-b",
+                        name = "家里",
+                        endpoint = "https://bridge-b.example.com",
+                        authToken = "token-b",
+                    ),
+                ),
+                selectedConnectionId = "conn-a",
+            ),
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val viewModel = AppViewModel(
+            bridgeApi = bridgeApi,
+            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            settingsStore = settingsStore,
+            appLogger = FakeAppLogger(),
+        )
+
+        viewModel.selectSavedConnection("conn-b")
+        advanceUntilIdle()
+
+        assertEquals("https://bridge-b.example.com", viewModel.uiState.value.endpointInput)
+        assertEquals("token-b", viewModel.uiState.value.authTokenInput)
+        assertEquals("token-b", bridgeApi.updatedAuthToken)
+        assertEquals("conn-b", settingsStore.saved.selectedConnectionId)
+    }
+
+    @Test
+    fun editingCurrentConnectionKeepsOtherSavedConnectionsUntouched() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_edit_connection", status = "idle")
+        val settingsStore = FakeAppSettingsStore(
+            AppSettings(
+                endpoint = "https://bridge-a.example.com",
+                authToken = "token-a",
+                cwd = "D:\\workspace\\codex-mobile",
+                model = "gpt-5.5",
+                approvalMode = "manual",
+                reasoningEffort = "medium",
+                serviceTier = "default",
+                sandboxMode = "workspace-write",
+                savedConnections = listOf(
+                    SavedBridgeConnection(
+                        id = "conn-a",
+                        name = "办公室",
+                        endpoint = "https://bridge-a.example.com",
+                        authToken = "token-a",
+                    ),
+                    SavedBridgeConnection(
+                        id = "conn-b",
+                        name = "家里",
+                        endpoint = "https://bridge-b.example.com",
+                        authToken = "token-b",
+                    ),
+                ),
+                selectedConnectionId = "conn-a",
+            ),
+        )
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = detail),
+            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            settingsStore = settingsStore,
+            appLogger = FakeAppLogger(),
+        )
+
+        viewModel.updateSelectedConnectionName("办公室新桥接")
+        viewModel.updateEndpointInput("https://bridge-a2.example.com")
+        viewModel.updateAuthTokenInput("token-a2")
+        advanceUntilIdle()
+
+        val savedConnections = settingsStore.saved.savedConnections
+        val office = savedConnections.first { it.id == "conn-a" }
+        val home = savedConnections.first { it.id == "conn-b" }
+        assertEquals("办公室新桥接", office.name)
+        assertEquals("https://bridge-a2.example.com", office.endpoint)
+        assertEquals("token-a2", office.authToken)
+        assertEquals("家里", home.name)
+        assertEquals("https://bridge-b.example.com", home.endpoint)
+        assertEquals("token-b", home.authToken)
     }
 
     @Test

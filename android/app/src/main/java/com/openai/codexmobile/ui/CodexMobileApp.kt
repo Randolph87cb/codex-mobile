@@ -146,6 +146,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
             composable(Routes.Connection) {
                 ConnectionScreen(
                     paddingValues = paddingValues,
+                    currentConnectionName = uiState.selectedConnection?.name.orEmpty(),
                     endpoint = uiState.endpointInput,
                     connectionState = uiState.connectionState,
                     isLoading = uiState.isLoading,
@@ -260,6 +261,9 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 SettingsScreen(
                     paddingValues = paddingValues,
                     items = uiState.settingsItems,
+                    selectedConnectionName = uiState.selectedConnection?.name.orEmpty(),
+                    savedConnections = uiState.savedConnections,
+                    selectedConnectionId = uiState.selectedConnectionId,
                     endpointInput = uiState.endpointInput,
                     authTokenInput = uiState.authTokenInput,
                     cwdInput = uiState.cwdInput,
@@ -269,6 +273,10 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     serviceTierInput = uiState.serviceTierInput,
                     sandboxModeInput = uiState.sandboxModeInput,
                     diagnosticsLog = uiState.diagnosticsLog,
+                    onConnectionNameChange = appViewModel::updateSelectedConnectionName,
+                    onAddSavedConnection = appViewModel::addSavedConnection,
+                    onSelectSavedConnection = appViewModel::selectSavedConnection,
+                    onDeleteSavedConnection = appViewModel::deleteSavedConnection,
                     onEndpointChange = appViewModel::updateEndpointInput,
                     onAuthTokenChange = appViewModel::updateAuthTokenInput,
                     onCwdChange = appViewModel::updateCwdInput,

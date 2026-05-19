@@ -11,6 +11,7 @@ import com.openai.codexmobile.data.BridgeApi
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SendInputRequest
+import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.data.SessionConfigUpdate
 import com.openai.codexmobile.data.SessionInputAttachmentRef
 import com.openai.codexmobile.data.SessionRepository
@@ -48,6 +49,8 @@ private const val SessionStreamReconnectMaxAttempts = 5
 data class AppUiState(
     val endpointInput: String,
     val authTokenInput: String,
+    val savedConnections: List<SavedBridgeConnection>,
+    val selectedConnectionId: String,
     val cwdInput: String,
     val modelInput: String,
     val approvalModeInput: String,
@@ -69,6 +72,9 @@ data class AppUiState(
 ) {
     val isDraftSelected: Boolean
         get() = selectedDraftSession != null
+
+    val selectedConnection: SavedBridgeConnection?
+        get() = savedConnections.firstOrNull { it.id == selectedConnectionId }
 }
 
 data class DraftSessionUiState(
@@ -156,12 +162,92 @@ class AppViewModel(
     }
 
     fun updateEndpointInput(value: String) {
-        updateSettingsState { it.copy(endpointInput = value) }
+        updateSettingsState { state ->
+            state.copy(
+                endpointInput = value,
+                savedConnections = state.savedConnections.replaceConnection(state.selectedConnectionId) {
+                    it.copy(endpoint = value)
+                },
+            )
+        }
     }
 
     fun updateAuthTokenInput(value: String) {
         bridgeApi.updateAuthToken(value)
-        updateSettingsState { it.copy(authTokenInput = value) }
+        updateSettingsState { state ->
+            state.copy(
+                authTokenInput = value,
+                savedConnections = state.savedConnections.replaceConnection(state.selectedConnectionId) {
+                    it.copy(authToken = value)
+                },
+            )
+        }
+    }
+
+    fun updateSelectedConnectionName(value: String) {
+        updateSettingsState { state ->
+            state.copy(
+                savedConnections = state.savedConnections.replaceConnection(state.selectedConnectionId) {
+                    it.copy(name = value)
+                },
+            )
+        }
+    }
+
+    fun addSavedConnection() {
+        updateSettingsState { state ->
+            val newConnection = SavedBridgeConnection(
+                id = UUID.randomUUID().toString(),
+                name = buildNextConnectionName(state.savedConnections),
+                endpoint = "",
+                authToken = "",
+            )
+            bridgeApi.updateAuthToken("")
+            state.copy(
+                savedConnections = state.savedConnections + newConnection,
+                selectedConnectionId = newConnection.id,
+                endpointInput = "",
+                authTokenInput = "",
+                message = "已新增连接，请填写桥接地址和令牌。",
+            )
+        }
+    }
+
+    fun selectSavedConnection(connectionId: String) {
+        val selected = uiState.value.savedConnections.firstOrNull { it.id == connectionId } ?: return
+        bridgeApi.updateAuthToken(selected.authToken)
+        updateSettingsState { state ->
+            state.copy(
+                selectedConnectionId = selected.id,
+                endpointInput = selected.endpoint,
+                authTokenInput = selected.authToken,
+                message = "已切换当前连接：${selected.name.ifBlank { "未命名连接" }}",
+            )
+        }
+    }
+
+    fun deleteSavedConnection(connectionId: String) {
+        val currentState = uiState.value
+        if (currentState.savedConnections.size <= 1) {
+            _uiState.update { it.copy(message = "至少保留一个连接配置。") }
+            return
+        }
+        updateSettingsState { state ->
+            val remaining = state.savedConnections.filterNot { it.id == connectionId }
+            val nextSelected = if (state.selectedConnectionId == connectionId) {
+                remaining.first()
+            } else {
+                remaining.firstOrNull { it.id == state.selectedConnectionId } ?: remaining.first()
+            }
+            bridgeApi.updateAuthToken(nextSelected.authToken)
+            state.copy(
+                savedConnections = remaining,
+                selectedConnectionId = nextSelected.id,
+                endpointInput = nextSelected.endpoint,
+                authTokenInput = nextSelected.authToken,
+                message = "已删除连接配置：${currentState.savedConnections.firstOrNull { it.id == connectionId }?.name ?: "未命名连接"}",
+            )
+        }
     }
 
     fun updateCwdInput(value: String) {
@@ -1507,6 +1593,19 @@ class AppViewModel(
     }
 
     private fun persistSettings(state: AppUiState) {
+        val normalizedConnections = state.savedConnections
+            .replaceConnection(state.selectedConnectionId) {
+                it.copy(
+                    endpoint = state.endpointInput,
+                    authToken = state.authTokenInput,
+                )
+            }
+            .mapIndexed { index, connection ->
+                connection.copy(
+                    name = connection.name.trim().ifBlank { defaultConnectionName(index) },
+                    endpoint = connection.endpoint.trim(),
+                )
+            }
         settingsStore.save(
             AppSettings(
                 endpoint = state.endpointInput.trim(),
@@ -1517,6 +1616,8 @@ class AppViewModel(
                 reasoningEffort = state.reasoningEffortInput,
                 serviceTier = state.serviceTierInput,
                 sandboxMode = state.sandboxModeInput,
+                savedConnections = normalizedConnections,
+                selectedConnectionId = state.selectedConnectionId,
             ),
         )
     }
@@ -1762,6 +1863,8 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
     return AppUiState(
         endpointInput = settings.endpoint,
         authTokenInput = settings.authToken,
+        savedConnections = settings.savedConnections,
+        selectedConnectionId = settings.selectedConnectionId ?: settings.savedConnections.first().id,
         cwdInput = settings.cwd,
         modelInput = settings.model,
         approvalModeInput = settings.approvalMode,
@@ -1769,6 +1872,8 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
         serviceTierInput = settings.serviceTier,
         sandboxModeInput = settings.sandboxMode,
         settingsItems = defaultSettingsItems(
+            savedConnections = settings.savedConnections,
+            selectedConnectionId = settings.selectedConnectionId ?: settings.savedConnections.first().id,
             endpointInput = settings.endpoint,
             authTokenInput = settings.authToken,
             cwdInput = settings.cwd,
@@ -1785,6 +1890,8 @@ private fun AppUiState.withSettingsItems(): AppUiState {
     return copy(
         settingsItems = defaultSettingsItems(
             connectionState = connectionState,
+            savedConnections = savedConnections,
+            selectedConnectionId = selectedConnectionId,
             endpointInput = endpointInput,
             authTokenInput = authTokenInput,
             cwdInput = cwdInput,
@@ -1798,14 +1905,41 @@ private fun AppUiState.withSettingsItems(): AppUiState {
 }
 
 private fun AppSettings.sanitize(): AppSettings {
+    val fallbackConnection = SavedBridgeConnection(
+        id = selectedConnectionId ?: "default-connection",
+        name = defaultConnectionName(0),
+        endpoint = endpoint,
+        authToken = authToken,
+    )
+    val normalizedConnections = savedConnections
+        .ifEmpty { listOf(fallbackConnection) }
+        .mapIndexed { index, connection ->
+            val connectionId = connection.id.ifBlank {
+                if (index == 0) {
+                    fallbackConnection.id
+                } else {
+                    "connection-${index + 1}"
+                }
+            }
+            connection.copy(
+                id = connectionId,
+                name = connection.name.trim().ifBlank { defaultConnectionName(index) },
+                endpoint = connection.endpoint.trim(),
+            )
+        }
+    val resolvedSelectedConnection = normalizedConnections.firstOrNull { it.id == selectedConnectionId }
+        ?: normalizedConnections.first()
     return copy(
-        endpoint = endpoint.trim(),
+        endpoint = resolvedSelectedConnection.endpoint.trim(),
+        authToken = resolvedSelectedConnection.authToken,
         cwd = cwd.trim(),
         model = model.trim().ifEmpty { "gpt-5.5" },
         approvalMode = approvalMode.takeIf { it == "manual" || it == "auto" } ?: "manual",
         reasoningEffort = normalizeReasoningEffort(reasoningEffort),
         serviceTier = normalizeServiceTier(serviceTier),
         sandboxMode = normalizeSandboxMode(sandboxMode),
+        savedConnections = normalizedConnections,
+        selectedConnectionId = resolvedSelectedConnection.id,
     )
 }
 
@@ -2275,6 +2409,8 @@ private fun connectedMessage(connectionState: BridgeConnectionState): String {
 
 private fun defaultSettingsItems(
     connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
+    savedConnections: List<SavedBridgeConnection> = emptyList(),
+    selectedConnectionId: String = "",
     endpointInput: String = "",
     authTokenInput: String = "",
     cwdInput: String = "",
@@ -2285,8 +2421,11 @@ private fun defaultSettingsItems(
     sandboxModeInput: String = "workspace-write",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
+    val selectedConnection = savedConnections.firstOrNull { it.id == selectedConnectionId }
     return listOf(
         "桥接模式" to "真实桥接",
+        "当前连接" to (selectedConnection?.name?.ifBlank { "未命名连接" } ?: "未配置"),
+        "已保存连接数" to savedConnections.size.toString(),
         "桥接地址" to (connectedState?.endpoint ?: endpointInput.ifBlank { "未配置" }),
         "鉴权令牌" to if (authTokenInput.isBlank()) "未配置" else "已配置",
         "默认工作目录" to cwdInput.ifBlank { "未配置" },
@@ -2299,6 +2438,31 @@ private fun defaultSettingsItems(
         "遥测" to "已关闭",
         "应用日志" to "已开启（本地文件）",
     )
+}
+
+private fun List<SavedBridgeConnection>.replaceConnection(
+    connectionId: String,
+    transform: (SavedBridgeConnection) -> SavedBridgeConnection,
+): List<SavedBridgeConnection> {
+    return map { connection ->
+        if (connection.id == connectionId) {
+            transform(connection)
+        } else {
+            connection
+        }
+    }
+}
+
+private fun buildNextConnectionName(connections: List<SavedBridgeConnection>): String {
+    return "连接 ${connections.size + 1}"
+}
+
+private fun defaultConnectionName(index: Int): String {
+    return if (index == 0) {
+        "默认连接"
+    } else {
+        "连接 ${index + 1}"
+    }
 }
 
 private fun localizedApprovalMode(mode: String): String {

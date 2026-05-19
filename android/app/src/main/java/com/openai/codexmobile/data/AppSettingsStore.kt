@@ -2,6 +2,15 @@ package com.openai.codexmobile.data
 
 import android.content.Context
 import android.os.Build
+import org.json.JSONArray
+import org.json.JSONObject
+
+data class SavedBridgeConnection(
+    val id: String,
+    val name: String,
+    val endpoint: String,
+    val authToken: String,
+)
 
 data class AppSettings(
     val endpoint: String,
@@ -12,6 +21,8 @@ data class AppSettings(
     val reasoningEffort: String,
     val serviceTier: String,
     val sandboxMode: String,
+    val savedConnections: List<SavedBridgeConnection> = emptyList(),
+    val selectedConnectionId: String? = null,
 )
 
 data class AppSettingsDefaults(
@@ -37,6 +48,9 @@ class SharedPreferencesAppSettingsStore(
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     override fun load(): AppSettings {
+        val savedConnections = decodeSavedConnections(
+            preferences.getString(KEY_SAVED_CONNECTIONS, null),
+        )
         return AppSettings(
             endpoint = preferences.getString(KEY_ENDPOINT, defaults.endpoint).orEmpty(),
             authToken = preferences.getString(KEY_AUTH_TOKEN, "").orEmpty(),
@@ -54,6 +68,8 @@ class SharedPreferencesAppSettingsStore(
             sandboxMode = preferences.getString(KEY_SANDBOX_MODE, defaults.sandboxMode)
                 ?.takeIf { it == "read-only" || it == "workspace-write" || it == "danger-full-access" }
                 ?: defaults.sandboxMode,
+            savedConnections = savedConnections,
+            selectedConnectionId = preferences.getString(KEY_SELECTED_CONNECTION_ID, null),
         )
     }
 
@@ -67,6 +83,8 @@ class SharedPreferencesAppSettingsStore(
             .putString(KEY_REASONING_EFFORT, settings.reasoningEffort)
             .putString(KEY_SERVICE_TIER, settings.serviceTier)
             .putString(KEY_SANDBOX_MODE, settings.sandboxMode)
+            .putString(KEY_SAVED_CONNECTIONS, encodeSavedConnections(settings.savedConnections))
+            .putString(KEY_SELECTED_CONNECTION_ID, settings.selectedConnectionId)
             .apply()
     }
 
@@ -80,7 +98,46 @@ class SharedPreferencesAppSettingsStore(
         const val KEY_REASONING_EFFORT = "reasoning_effort"
         const val KEY_SERVICE_TIER = "service_tier"
         const val KEY_SANDBOX_MODE = "sandbox_mode"
+        const val KEY_SAVED_CONNECTIONS = "saved_connections"
+        const val KEY_SELECTED_CONNECTION_ID = "selected_connection_id"
     }
+}
+
+private fun decodeSavedConnections(raw: String?): List<SavedBridgeConnection> {
+    if (raw.isNullOrBlank()) {
+        return emptyList()
+    }
+    return runCatching {
+        val json = JSONArray(raw)
+        buildList {
+            for (index in 0 until json.length()) {
+                val item = json.optJSONObject(index) ?: continue
+                add(
+                    SavedBridgeConnection(
+                        id = item.optString("id"),
+                        name = item.optString("name"),
+                        endpoint = item.optString("endpoint"),
+                        authToken = item.optString("authToken"),
+                    ),
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun encodeSavedConnections(connections: List<SavedBridgeConnection>): String {
+    val json = JSONArray()
+    connections.forEach { connection ->
+        json.put(
+            JSONObject().apply {
+                put("id", connection.id)
+                put("name", connection.name)
+                put("endpoint", connection.endpoint)
+                put("authToken", connection.authToken)
+            },
+        )
+    }
+    return json.toString()
 }
 
 fun defaultEndpointForCurrentDevice(): String {
