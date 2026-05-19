@@ -24,6 +24,7 @@
 - `android` 已有最小 Compose 客户端骨架；
 - `bridge` 同时支持 `mock` 与 `app-server` 两种 runner；
 - 已生成本地 `app-server` schema 到 `docs/generated/`，用于后续协议对齐。
+- 已镜像上游 `codex-rs/app-server/README.md` 到 `docs/upstream/codex-app-server/README.md`，方便本地查看协议说明。
 - Android 当前默认把输入地址理解为 `bridge base URL`，不是直接连 `codex app-server`。
 
 ## 设计原则
