@@ -1662,8 +1662,13 @@ private fun mergeSessionDetail(
     val status = incoming.status.takeUnless { it.isBlank() || it == "unknown" }
         ?: current?.status
         ?: "idle"
+    val transcriptPreview = chooseMoreCompleteTranscript(
+        current = current?.transcriptPreview,
+        incoming = incoming.transcriptPreview,
+    )
 
     return incoming.copy(
+        transcriptPreview = transcriptPreview,
         cwd = cwd,
         model = model,
         approvalMode = approvalMode,
@@ -1677,6 +1682,67 @@ private fun mergeSessionDetail(
             status = status,
         ),
     )
+}
+
+private fun chooseMoreCompleteTranscript(
+    current: String?,
+    incoming: String,
+): String {
+    val currentText = current?.trim().orEmpty()
+    val incomingText = incoming.trim()
+
+    if (incomingText.isBlank()) {
+        return currentText
+    }
+    if (currentText.isBlank()) {
+        return incomingText
+    }
+    if (incomingText == currentText) {
+        return incomingText
+    }
+    if (incomingText.contains(currentText)) {
+        return incomingText
+    }
+    if (currentText.contains(incomingText)) {
+        return currentText
+    }
+
+    val currentScore = transcriptCompletenessScore(currentText)
+    val incomingScore = transcriptCompletenessScore(incomingText)
+    return when {
+        incomingScore > currentScore -> incomingText
+        currentScore > incomingScore -> currentText
+        incomingText.length >= currentText.length -> incomingText
+        else -> currentText
+    }
+}
+
+private fun transcriptCompletenessScore(transcript: String): Int {
+    val normalized = transcript.trim()
+    if (normalized.isBlank()) {
+        return 0
+    }
+
+    val conversationBlocks = listOf(
+        "你：",
+        "Codex：",
+        "系统：",
+        "等待审批：",
+        "审批结果：",
+    ).sumOf { marker ->
+        Regex(Regex.escape(marker)).findAll(normalized).count()
+    }
+    val metadataLines = listOf(
+        "工作目录：",
+        "线程 ID：",
+        "当前轮次：",
+        "最近错误：",
+        "预览：",
+    ).count { marker ->
+        normalized.lines().any { line -> line.startsWith(marker) }
+    }
+
+    return (conversationBlocks * 10) + normalized.length - (metadataLines * 3)
 }
 
 private fun appendUserMessage(

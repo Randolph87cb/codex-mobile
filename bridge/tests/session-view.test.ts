@@ -44,6 +44,48 @@ describe("session view mapping", () => {
     expect(view.threadId).toBe("thread-1");
   });
 
+  test("keeps earlier transcript blocks instead of trimming to the latest tail", () => {
+    const turns = Array.from({ length: 7 }, (_, index) => ({
+      id: `turn-${index + 1}`,
+      status: "completed",
+      startedAt: 1_779_117_160 + index,
+      completedAt: 1_779_117_260 + index,
+      items: [
+        {
+          type: "userMessage",
+          content: [
+            {
+              type: "text",
+              text: `第 ${index + 1} 条用户消息`,
+            },
+          ],
+        },
+        {
+          type: "agentMessage",
+          text: `第 ${index + 1} 条助手回复`,
+        },
+      ],
+    }));
+
+    const view = buildSessionViewFromThread({
+      id: "thread-history",
+      cwd: "D:\\workspace\\codex-mobile",
+      modelProvider: "openai",
+      preview: "历史消息",
+      createdAt: 1_779_117_160,
+      updatedAt: 1_779_117_360,
+      status: {
+        type: "idle",
+      },
+      turns,
+    });
+
+    expect(view.transcriptPreview).toContain("你：第 1 条用户消息");
+    expect(view.transcriptPreview).toContain("Codex：第 1 条助手回复");
+    expect(view.transcriptPreview).toContain("你：第 7 条用户消息");
+    expect(view.transcriptPreview).toContain("Codex：第 7 条助手回复");
+  });
+
   test("prefers newer thread status over stale local running status", () => {
     const view = buildSessionViewFromThread(
       {

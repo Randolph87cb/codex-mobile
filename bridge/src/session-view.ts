@@ -146,8 +146,7 @@ function buildThreadTranscriptPreview(thread: AppServerThread): string {
     ].join("\n");
   }
 
-  const joined = lines.slice(-12).join("\n\n");
-  return joined.length <= 4000 ? joined : joined.slice(joined.length - 4000);
+  return lines.join("\n\n");
 }
 
 function collectTranscriptLines(thread: AppServerThread): string[] {

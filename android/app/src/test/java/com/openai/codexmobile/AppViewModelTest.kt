@@ -274,6 +274,33 @@ class AppViewModelTest {
     }
 
     @Test
+    fun updatingSessionConfigDoesNotDiscardMoreCompleteTranscript() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(
+            id = "sess_transcript",
+            status = "idle",
+        ).copy(
+            transcriptPreview = "你：第一句\n\nCodex：第一段回复\n\n你：第二句",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail.copy(transcriptPreview = "工作目录：D:\\workspace\\codex-mobile"))
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_transcript")
+        advanceUntilIdle()
+
+        viewModel.updateSelectedSessionModel("gpt-5.5-coder")
+        advanceUntilIdle()
+
+        assertEquals(
+            "你：第一句\n\nCodex：第一段回复\n\n你：第二句",
+            viewModel.uiState.value.selectedSession?.transcriptPreview,
+        )
+    }
+
+    @Test
     fun defaultServiceTierUsesOrdinaryModeAndPersistsAsDefault() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_default", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
