@@ -3,12 +3,14 @@ package com.openai.codexmobile
 import android.content.Intent
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Before
@@ -56,6 +58,27 @@ class SessionDetailReplayTest {
         waitUntilTagMissing(TestTags.SessionDetailApprovalCard)
     }
 
+    @Test
+    fun settingsScreenCanShowAndOperateDiagnosticsLogs() {
+        waitForTag(TestTags.ConnectionScreen)
+        composeRule.onNodeWithTag(TestTags.ConnectionOpenSettingsButton).performClick()
+
+        waitForTag(TestTags.SettingsScreen)
+        composeRule.onNodeWithTag(TestTags.SettingsScreen)
+            .performScrollToNode(hasTestTag(TestTags.SettingsLogsCard))
+        composeRule.onNodeWithTag(TestTags.SettingsLogsCard).assertIsDisplayed()
+        waitForText("启动 UI 回放模式。", substring = true)
+
+        composeRule.onNodeWithTag(TestTags.SettingsCopyLogsButton).performClick()
+        waitForText("日志已复制到剪贴板。")
+
+        composeRule.onNodeWithTag(TestTags.SettingsClearLogsButton).performClick()
+        waitForText("已清空应用日志。", substring = true)
+
+        composeRule.onNodeWithTag(TestTags.SettingsRefreshLogsButton).performClick()
+        waitForText("已清空应用日志。", substring = true)
+    }
+
     private fun waitForTag(tag: String) {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
@@ -65,6 +88,15 @@ class SessionDetailReplayTest {
     private fun waitUntilTagMissing(tag: String) {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    private fun waitForText(
+        text: String,
+        substring: Boolean = false,
+    ) {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
