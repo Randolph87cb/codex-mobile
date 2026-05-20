@@ -83,6 +83,42 @@
   - 参考点：AI 助手场景下的输入区、消息区和工具区布局
   - 链接：`https://www.behance.net/gallery/220143229/AI-Chatbot-Mobile-App-Design-UIUX-Case-Study`
 
+## 补充调研：Codex 可用 UI Skill
+
+- 已按“是否能在 Codex 用、是否偏 UI、是否更贴近移动端/工程落地”做筛选。
+- 当前较值得关注的候选：
+  - `ceorkm/mobile-app-ui-design`
+    - 特点：偏移动端设计流程，强调 8pt 栅格、拇指热区、颜色比例和行业设计惯例。
+    - 现状：GitHub 公开仓库，约 25 stars，描述主要面向 Claude Code，但本质仍是 `SKILL.md` 结构，可迁移到 Codex 使用。
+    - 适合：先出移动端视觉规范、页面框架和改版原则。
+  - `howells/arc` 的 `$design`
+    - 特点：明确声明可直接在 Codex 使用，包含 UI/UX 设计、线框、复用模式和 critique 工作流。
+    - 现状：仓库活跃度较高，约 494 commits，偏完整工作流而不是单一“美化 UI”规则。
+    - 适合：从“需求 -> 设计 -> 实施”一体化推进。
+  - `hursh-shah/codex-design-skill`
+    - 特点：明确写的是 Codex UI 设计 skill，强调先定视觉方向，再落代码。
+    - 现状：体量小，约 2 stars，更像轻量实验型 skill。
+    - 适合：作为灵感和 prompt 结构参考，不建议单独作为主依赖。
+  - `vadimcomanescu/codex-skills` 里的 `frontend-design`
+    - 特点：是一个 Codex 技能目录，`frontend-design` 属于 curated 稳定项，另有 `ui-design-system`、`accessibility-auditor` 等设计相关技能。
+    - 现状：更偏 Web/Next.js，不是移动端专用。
+    - 适合：抽取它的设计约束和审美规则，少量借鉴，不适合作为 Android 直接模板。
+  - `addyosmani/agent-skills` 的 `frontend-ui-engineering`
+    - 特点：目标明确，要求 UI 看起来像顶级产品工程师做的，而不是 AI 生成物。
+    - 现状：偏工程实现规范，不是移动端视觉专用。
+    - 适合：给真正开始写界面代码时补“实现质量约束”。
+
+## 当前结论
+
+- 如果目标是“给 Codex 一个更会做移动端 UI 的工作流”，目前最值得参考的是：
+  - 移动端设计思路：`ceorkm/mobile-app-ui-design`
+  - Codex 直接可用工作流：`howells/arc` 的 `$design`
+  - 代码落地质量约束：`addyosmani/agent-skills` 的 `frontend-ui-engineering`
+- 如果你后面要我真的给这个仓库装一个项目级 UI skill，我建议不是直接照搬某个现成 skill，而是：
+  - 以 `ceorkm/mobile-app-ui-design` 的移动端规则为骨架
+  - 混合 `frontend-ui-engineering` 的实现约束
+  - 再按你这个项目“轻客户端、低认知负担、中文文案、Compose + Material3”的特点定制一个项目 skill
+
 ## 后续建议
 
 - 基于当前产品定位，优先讨论三块：
