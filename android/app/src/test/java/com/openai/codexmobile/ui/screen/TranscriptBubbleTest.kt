@@ -90,6 +90,36 @@ class TranscriptBubbleTest {
     }
 
     @Test
+    fun parseTranscriptBubblesPreservesBlankLinesInsideSingleAssistantMessage() {
+        val transcript = """
+            Codex：## 结果
+
+            - 第一项
+            - 第二项
+
+            继续补一句。
+
+            你：收到
+        """.trimIndent()
+
+        val bubbles = parseTranscriptBubbles(transcript)
+
+        assertEquals(2, bubbles.size)
+        assertEquals(
+            """
+            ## 结果
+
+            - 第一项
+            - 第二项
+
+            继续补一句。
+            """.trimIndent(),
+            bubbles[0].rawBody,
+        )
+        assertEquals(listOf(TranscriptPart.Text(bubbles[0].rawBody)), bubbles[0].parts)
+    }
+
+    @Test
     fun parseTranscriptBubblesSplitsSystemOperationTitleAndDefaultsItToCollapsed() {
         val transcript = """
             系统：命令执行

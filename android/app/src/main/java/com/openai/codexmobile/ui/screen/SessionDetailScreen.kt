@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
@@ -65,7 +66,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,6 +123,7 @@ fun SessionDetailScreen(
     onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
 ) {
+    val clipboardManager = LocalClipboardManager.current
     val detail = remember(sessionDetail, draftSession) {
         sessionDetail ?: draftSession?.toDraftDetail()
     }
@@ -130,6 +134,12 @@ fun SessionDetailScreen(
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
     val hasPendingUploadBlockers = pendingImageAttachments.any {
         it.uploadState == PendingImageUploadState.Uploading || it.uploadState == PendingImageUploadState.Failed
+    }
+    val copyToClipboard: (String, String) -> Unit = remember(clipboardManager, onShowMessage) {
+        { content, successMessage ->
+            clipboardManager.setText(AnnotatedString(content))
+            onShowMessage(successMessage)
+        }
     }
 
     LaunchedEffect(
@@ -219,6 +229,8 @@ fun SessionDetailScreen(
                     liveActivities = sessionRealtimeState.liveExecutionActivities,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
+                    onCopyText = { copyToClipboard(it, "内容已复制到剪贴板。") },
+                    onCopyCode = { copyToClipboard(it, "代码已复制到剪贴板。") },
                     onOpenImagePreview = { title, source ->
                         imagePreviewState = ImagePreviewState(
                             title = title,
@@ -809,6 +821,8 @@ private fun TranscriptBubbleList(
     liveActivities: List<com.openai.codexmobile.model.SessionActivityEntry>,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    onCopyText: (String) -> Unit,
+    onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
     val items = buildTranscriptDisplayItems(
@@ -831,6 +845,8 @@ private fun TranscriptBubbleList(
                     toggleTag = TestTags.SessionDetailTranscriptBubbleTogglePrefix + index,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
+                    onCopyText = onCopyText,
+                    onCopyCode = onCopyCode,
                     onOpenImagePreview = onOpenImagePreview,
                 )
 
@@ -839,6 +855,8 @@ private fun TranscriptBubbleList(
                     group = item,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
+                    onCopyText = onCopyText,
+                    onCopyCode = onCopyCode,
                     onOpenImagePreview = onOpenImagePreview,
                 )
             }
@@ -852,6 +870,8 @@ private fun TranscriptBubbleCard(
     toggleTag: String,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    onCopyText: (String) -> Unit,
+    onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -887,18 +907,17 @@ private fun TranscriptBubbleCard(
                         title = bubble.summaryLine,
                         expanded = expanded,
                         toggleTag = toggleTag,
+                        copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
+                        onCopy = { onCopyText(bubble.copyText) },
                         onToggle = { expanded = !expanded },
                     )
                 } else {
-                    Text(text = bubble.label, style = MaterialTheme.typography.labelLarge)
-                    bubble.title?.let { title ->
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    TranscriptStaticHeader(
+                        label = bubble.label,
+                        title = bubble.title,
+                        copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
+                        onCopy = { onCopyText(bubble.copyText) },
+                    )
                 }
 
                 if (!isCollapsible || expanded) {
@@ -907,6 +926,7 @@ private fun TranscriptBubbleCard(
                         bridgeEndpoint = bridgeEndpoint,
                         bridgeAuthToken = bridgeAuthToken,
                         testTagPrefix = toggleTag,
+                        onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
                     )
                 }
@@ -921,6 +941,8 @@ private fun ExecutionProcessCard(
     group: TranscriptDisplayItem.ExecutionGroup,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    onCopyText: (String) -> Unit,
+    onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
     var expanded by rememberSaveable(index, group.summaryLine) { mutableStateOf(false) }
@@ -941,6 +963,10 @@ private fun ExecutionProcessCard(
                     title = group.summaryLine,
                     expanded = expanded,
                     toggleTag = TestTags.SessionDetailExecutionGroupTogglePrefix + index,
+                    copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + "execution_group_" + index,
+                    onCopy = {
+                        onCopyText(group.activities.joinToString("\n\n") { it.copyText })
+                    },
                     onToggle = { expanded = !expanded },
                 )
 
@@ -952,6 +978,8 @@ private fun ExecutionProcessCard(
                                 bubble = bubble,
                                 bridgeEndpoint = bridgeEndpoint,
                                 bridgeAuthToken = bridgeAuthToken,
+                                onCopyText = onCopyText,
+                                onCopyCode = onCopyCode,
                                 onOpenImagePreview = onOpenImagePreview,
                             )
                         }
@@ -968,6 +996,8 @@ private fun ExecutionActivityCard(
     bubble: TranscriptBubble,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    onCopyText: (String) -> Unit,
+    onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
     var expanded by rememberSaveable(toggleTag, bubble.summaryLine) { mutableStateOf(false) }
@@ -985,6 +1015,8 @@ private fun ExecutionActivityCard(
                 title = bubble.summaryLine,
                 expanded = expanded,
                 toggleTag = toggleTag,
+                copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
+                onCopy = { onCopyText(bubble.copyText) },
                 onToggle = { expanded = !expanded },
             )
 
@@ -994,6 +1026,7 @@ private fun ExecutionActivityCard(
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     testTagPrefix = toggleTag,
+                    onCopyCode = onCopyCode,
                     onOpenImagePreview = onOpenImagePreview,
                 )
             }
@@ -1007,18 +1040,20 @@ private fun TranscriptToggleHeader(
     title: String,
     expanded: Boolean,
     toggleTag: String,
+    copyTag: String,
+    onCopy: () -> Unit,
     onToggle: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(toggleTag)
-            .clickable(onClick = onToggle),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .testTag(toggleTag)
+                .clickable(onClick = onToggle),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
@@ -1030,6 +1065,15 @@ private fun TranscriptToggleHeader(
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(
+            onClick = onCopy,
+            modifier = Modifier.testTag(copyTag),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ContentCopy,
+                contentDescription = "复制消息",
             )
         }
         Icon(
@@ -1044,17 +1088,56 @@ private fun TranscriptToggleHeader(
 }
 
 @Composable
+private fun TranscriptStaticHeader(
+    label: String,
+    title: String?,
+    copyTag: String,
+    onCopy: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(text = label, style = MaterialTheme.typography.labelLarge)
+            title?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        IconButton(
+            onClick = onCopy,
+            modifier = Modifier.testTag(copyTag),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ContentCopy,
+                contentDescription = "复制消息",
+            )
+        }
+    }
+}
+
+@Composable
 private fun TranscriptPartsColumn(
     parts: List<TranscriptPart>,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     testTagPrefix: String,
+    onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
     parts.forEachIndexed { index, part ->
         when (part) {
             is TranscriptPart.Text -> {
-                Text(
+                MarkdownTextBlock(
                     text = part.text,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -1074,14 +1157,22 @@ private fun TranscriptPartsColumn(
             }
 
             is TranscriptPart.CodeBlock -> {
-                CodeBlockCard(part)
+                CodeBlockCard(
+                    part = part,
+                    copyTag = TestTags.SessionDetailCodeBlockCopyPrefix + "${testTagPrefix}_$index",
+                    onCopyCode = onCopyCode,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CodeBlockCard(part: TranscriptPart.CodeBlock) {
+private fun CodeBlockCard(
+    part: TranscriptPart.CodeBlock,
+    copyTag: String,
+    onCopyCode: (String) -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -1092,12 +1183,27 @@ private fun CodeBlockCard(part: TranscriptPart.CodeBlock) {
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            part.language?.let { language ->
-                Text(
-                    text = language,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                part.language?.let { language ->
+                    Text(
+                        text = language,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } ?: SpacerWidth()
+                IconButton(
+                    onClick = { onCopyCode(part.code) },
+                    modifier = Modifier.testTag(copyTag),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ContentCopy,
+                        contentDescription = "复制代码",
+                    )
+                }
             }
             Text(
                 text = part.code,
@@ -1107,6 +1213,11 @@ private fun CodeBlockCard(part: TranscriptPart.CodeBlock) {
             )
         }
     }
+}
+
+@Composable
+private fun SpacerWidth() {
+    Box(modifier = Modifier.size(1.dp))
 }
 
 @Composable

@@ -246,6 +246,47 @@
   - 旧连接关闭后，手机端会优先立即重连；若新 bridge 尚未完全就绪，再自动退回现有重连退避。
   - bridge drain 期间不会再接受新的写操作，避免在切换窗口接受请求后又因为进程退出而丢失。
 
+## 补充进展：Android Markdown 显示与复制
+
+- 用户后续反馈：详情页里的回复仍按纯文本显示，Markdown 没有渲染；同时消息内容无法直接复制，希望补这两项能力。
+- 现状排查结论：
+  - 详情页外层已经有自己的 transcript 结构化逻辑，不是单个大文本框：
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptBubble.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - 当前只识别两种特殊内容：
+    - fenced code block
+    - `![alt](src)` 图片
+  - 其他正文都会被当作 `TranscriptPart.Text` 用普通 `Text` 渲染，因此粗体、列表、引用、标题、行内代码、链接都不会生效。
+  - 当前剪贴板能力只在设置页“复制日志”用过，没有接到会话消息与代码块。
+- 已完成实现：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptBubble.kt`
+    - 为 `TranscriptBubble` 增加 `rawBody`
+    - 调整 transcript 分段逻辑：先按会话消息头分组，再把同一条消息内的空行段落重新并回 `rawBody`
+    - 避免 Markdown 段落、列表、标题因为空行被提前切碎
+  - 新增 `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptMarkdown.kt`
+    - 新增轻量 Markdown 块级解析：
+      - 标题
+      - 段落
+      - 引用
+      - 有序/无序列表
+    - 新增轻量行内解析：
+      - 粗体
+      - 斜体
+      - 删除线
+      - 行内代码
+      - Markdown 链接
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+    - `TranscriptPart.Text` 改为走 `MarkdownTextBlock`
+    - 每条消息气泡头部增加“复制消息”
+    - 每个代码块增加“复制代码”
+    - 执行过程分组和执行步骤条目也共享同一套复制入口
+  - `android/app/src/main/java/com/openai/codexmobile/ui/TestTags.kt`
+    - 补充消息复制与代码块复制的测试标签
+- 当前用户可见行为：
+  - 助手正文里的常见 Markdown 现在会直接按格式显示，而不是全部裸文本输出。
+  - 单条消息可以一键复制原始正文。
+  - 代码块可以单独复制代码内容，不需要手动选中。
+
 ## 验证结果
 
 - 已执行：
@@ -264,6 +305,12 @@
   - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
   - `.\gradlew.bat testDebugUnitTest`
   - 结果：`BUILD SUCCESSFUL`
+- 已新增并通过的 Android Markdown 回归验证：
+  - `android/app/src/test/java/com/openai/codexmobile/ui/screen/TranscriptBubbleTest.kt`
+    - 验证同一条消息里的 Markdown 空行段落不会被 transcript 外层切碎
+  - `android/app/src/test/java/com/openai/codexmobile/ui/screen/TranscriptMarkdownTest.kt`
+    - 验证标题、列表、引用的块级解析
+    - 验证粗体、行内代码、链接的行内解析结果
 - 最新 debug APK 产物：
   - `android/app/build/outputs/apk/debug/app-debug.apk`
 - 已新增并通过的回归验证：
