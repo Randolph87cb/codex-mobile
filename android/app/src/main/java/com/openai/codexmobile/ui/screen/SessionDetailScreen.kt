@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
@@ -311,7 +312,10 @@ fun SessionDetailScreen(
                     if (isLoading) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
                     } else {
-                        Text(if (draftSession != null) "开始" else "发送")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = if (draftSession != null) "开始" else "发送",
+                        )
                     }
                 }
             }

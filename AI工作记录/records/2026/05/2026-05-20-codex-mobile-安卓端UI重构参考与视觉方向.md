@@ -236,3 +236,29 @@
 - 已确认 APK 产物更新：
   - `android/app/build/outputs/apk/debug/app-debug.apk`
   - 最新修改时间：`2026-05-20 14:44:44`
+
+## 小改动：发送按钮图标化
+
+- 用户明确要求把会话详情页底部发送按钮改成纯图标，只保留一个小飞机，不显示文字。
+- 已修改：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 具体实现：
+  - 保留原有 `onSend` 行为、启用/禁用条件和 `TestTags.SessionDetailSendButton`
+  - 发送按钮文案从“开始 / 发送”改为 `Icons.AutoMirrored.Filled.Send` 图标
+  - 仍保留无障碍 `contentDescription`，草稿态为“开始”，普通会话为“发送”
+
+## 小改动验证结果
+
+- 已执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：命令返回成功；本次终端未回显完整 Gradle 输出，但 APK 时间戳已更新
+- 已执行：
+  - `cd android`
+  - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
+  - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
+  - `$env:GRADLE_OPTS = "-Dkotlin.incremental=false -Dkotlin.compiler.execution.strategy=in-process"`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：`BUILD SUCCESSFUL`
+- 已确认 APK 产物再次更新：
+  - `android/app/build/outputs/apk/debug/app-debug.apk`
+  - 最新修改时间：`2026-05-20 15:38:14`
