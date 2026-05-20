@@ -153,6 +153,36 @@
 - [x] 修正自动批准后被滞后快照刷回“待审批”的状态回退问题。
 - [x] 重新构建最新 debug APK，确保不再携带旧的权限配置 UI。
 
+## 补充说明：不同机器打包 APK 需要卸载的原因
+
+- 用户后续反馈：之前在另一台电脑打过 APK，安装时已经卸载过一次；这次重新安装当前机器打出的包时，又被系统提示“与已安装应用签名不同”，必须再次卸载。
+- 已确认当前工程 `android/app/build.gradle.kts` 没有自定义 `signingConfig`，`scripts/build-android-debug.ps1` 也只是执行 `assembleDebug`。
+- 这意味着项目当前使用的是 Android 默认 debug 签名，而默认 debug keystore 通常保存在各自机器的用户目录下，属于“每台机器一把”。
+- 只要两次安装的 APK 使用了不同的签名证书，即使 `applicationId` 和 `versionName` 都一样，Android 也不会允许覆盖安装，只能先卸载旧包。
+- 因此“换机器打包后需要再次卸载”不是代码差异本身导致的，更直接的原因是两台机器生成/持有的 debug keystore 不一致。
+- 如果后续希望避免重复卸载，应该改成固定签名来源，例如：
+  - 在仓库/CI 中使用统一的 debug keystore；
+  - 或者为可分发安装包配置固定 release keystore，并始终由同一套密钥签名。
+
+## 补充进展：固定 debug 签名
+
+- 用户随后确认：把项目改成固定签名，避免后续在不同机器打包时再次因为签名不一致而必须卸载。
+- 已完成实现：
+  - 新增仓库内固定 debug keystore：`android/signing/debug.keystore`
+  - 修改 `android/app/build.gradle.kts`
+    - 为 `debug` signing config 显式指定：
+      - `storeFile = rootProject.file("signing/debug.keystore")`
+      - `storePassword = "android"`
+      - `keyAlias = "codexmobiledebug"`
+      - `keyPassword = "android"`
+    - `debug` buildType 明确使用上述固定 signing config
+  - 修改 `README.md`
+    - 补充当前 debug 包使用仓库固定签名的说明
+    - 明确指出：从旧的“每机默认 debug keystore”切换到这套固定签名时，仍需要最后再卸载一次；之后跨机器更新即可直接覆盖安装
+- 当前行为：
+  - 以后从本仓库任意机器执行 `scripts/build-android-debug.ps1`，只要代码相同，产出的 debug APK 都会使用同一套签名证书。
+  - 手机上如果已经装的是这套固定签名的版本，后续来自其他机器的同仓库 debug 包可直接覆盖安装，不再因为签名不同被拦截。
+
 ## 验证结果
 
 - 已执行：
@@ -173,4 +203,11 @@
   - 结果：`BUILD SUCCESSFUL`
 - 最新 debug APK 产物：
   - `android/app/build/outputs/apk/debug/app-debug.apk`
+- 已执行：
+  - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
+  - `keytool -list -v -keystore android/signing/debug.keystore -storepass android`
+  - 结果：固定 keystore SHA-256 指纹为 `DE:96:CE:BC:5E:CE:A6:8E:F1:7E:51:D3:F8:4D:FD:E3:55:31:ED:0F:EE:0E:F0:A0:49:B8:A9:ED:2F:B9:F0:70`
+- 已执行：
+  - `apksigner verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk`
+  - 结果：APK 签名 SHA-256 指纹为 `de96cebc5ecea68ef17e51d3f84dfde35531ed0fee0ef0a049b8a9ed2fb9f070`，与仓库固定 keystore 一致
 - 排查过程中曾把构建脚本和单测并发触发，导致 Gradle/Kotlin daemon 产生一轮不可信的级联 `Unresolved reference`；停止 daemon 后串行重跑，编译与测试均恢复正常，本次以串行验证结果为准。

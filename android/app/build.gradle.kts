@@ -4,6 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val fixedDebugKeystore = rootProject.file("signing/debug.keystore")
+
 android {
     namespace = "com.openai.codexmobile"
     compileSdk = 35
@@ -21,7 +23,20 @@ android {
         }
     }
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = fixedDebugKeystore
+            storePassword = "android"
+            keyAlias = "codexmobiledebug"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+
         release {
             isMinifyEnabled = false
             proguardFiles(

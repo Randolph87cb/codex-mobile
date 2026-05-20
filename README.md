@@ -170,6 +170,12 @@ powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\build
 D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
+调试包签名说明：
+
+- 仓库现在内置固定的 debug keystore：`android/signing/debug.keystore`
+- 不同电脑执行同一份 `debug` 构建时，会得到同一套签名，可直接覆盖安装到手机
+- 如果手机里之前装的是“旧机器默认 debug keystore”签出来的版本，首次切换到当前固定签名时仍需要先卸载一次；切换完成后，后续跨机器更新就不需要再卸载
+
 ## 本地 Android 模拟器测试
 
 如果不想每次都手工把 APK 装到真机，可以直接使用仓库内的本地模拟器环境。
