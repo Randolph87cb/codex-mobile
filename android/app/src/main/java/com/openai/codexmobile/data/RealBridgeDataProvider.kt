@@ -28,6 +28,7 @@ import java.net.SocketException
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class RealBridgeDataProvider(
     private val appLogger: AppLogger,
@@ -286,6 +287,7 @@ class RealBridgeDataProvider(
             .url(toWebSocketUrl("${requireBaseUrl()}/api/session/$sessionId/ws"))
         authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
         val request = requestBuilder.build()
+        val closedByClient = AtomicBoolean(false)
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 appLogger.info("BridgeApi", "实时流已连接：sessionId=$sessionId")
@@ -331,6 +333,14 @@ class RealBridgeDataProvider(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (shouldSuppressStreamFailure(t.message, closedByClient.get())) {
+                    appLogger.info(
+                        "BridgeApi",
+                        "实时流已按客户端请求结束：sessionId=$sessionId, message=${t.message ?: "none"}",
+                    )
+                    this@callbackFlow.close()
+                    return
+                }
                 appLogger.error(
                     "BridgeApi",
                     "实时流失败：sessionId=$sessionId, code=${response?.code ?: "n/a"}",
@@ -350,6 +360,7 @@ class RealBridgeDataProvider(
         val webSocket = webSocketClient.newWebSocket(request, listener)
         awaitClose {
             appLogger.info("BridgeApi", "结束实时流订阅：sessionId=$sessionId")
+            closedByClient.set(true)
             webSocket.cancel()
         }
     }
@@ -464,13 +475,13 @@ class RealBridgeDataProvider(
     }
 }
 
-private fun parseSessionStreamEvent(
+internal fun parseSessionStreamEvent(
     sessionId: String,
     payload: String,
 ): SessionStreamEvent? {
     val json = JSONObject(payload)
     if (!json.has("type")) {
-        val message = json.optString("error").ifBlank { "收到无法识别的实时流消息。" }
+        val message = extractEventError(json.opt("error")) ?: "收到无法识别的实时流消息。"
         return SessionStreamEvent.Error(
             sessionId = sessionId,
             message = message,
@@ -562,15 +573,24 @@ private fun parseSessionStreamEvent(
             timestamp = timestamp,
         )
 
-        "error" -> SessionStreamEvent.Error(
-            sessionId = eventSessionId,
-            message = extractEventError(data.opt("error")) ?: "bridge 返回错误事件。",
-            timestamp = timestamp,
-        )
+        "error" -> {
+            val parsedError = parseBridgeStreamError(data.opt("error"))
+            SessionStreamEvent.Error(
+                sessionId = eventSessionId,
+                message = parsedError?.message ?: "bridge 返回错误事件。",
+                isRetryable = parsedError?.willRetry == true,
+                timestamp = timestamp,
+            )
+        }
 
         else -> null
     }
 }
+
+private data class ParsedBridgeStreamError(
+    val message: String?,
+    val willRetry: Boolean,
+)
 
 private fun parseRequestId(value: Any?): BridgeRequestId? {
     return when (value) {
@@ -711,15 +731,44 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
     )
 }
 
+private fun parseBridgeStreamError(value: Any?): ParsedBridgeStreamError? {
+    return when (value) {
+        null, JSONObject.NULL -> null
+        is JSONObject -> ParsedBridgeStreamError(
+            message = extractEventError(value),
+            willRetry = value.optBoolean("willRetry", false),
+        )
+        else -> ParsedBridgeStreamError(
+            message = value.toString().takeIf { it.isNotBlank() },
+            willRetry = false,
+        )
+    }
+}
+
 private fun extractEventError(value: Any?): String? {
     return when (value) {
         null -> null
         JSONObject.NULL -> null
         is JSONObject -> {
-            value.optString("message").takeIf { it.isNotBlank() } ?: value.toString()
+            value.optString("message").takeIf { it.isNotBlank() }
+                ?: extractEventError(value.opt("error"))
+                ?: value.toString().takeIf { it.isNotBlank() }
         }
         else -> value.toString().takeIf { it.isNotBlank() }
     }
+}
+
+internal fun shouldSuppressStreamFailure(message: String?, closedByClient: Boolean): Boolean {
+    if (!closedByClient) {
+        return false
+    }
+
+    if (message.isNullOrBlank()) {
+        return true
+    }
+
+    return message.contains("closed", ignoreCase = true) ||
+        message.contains("canceled", ignoreCase = true)
 }
 
 private fun SessionStreamEvent.toLogSummary(): String {

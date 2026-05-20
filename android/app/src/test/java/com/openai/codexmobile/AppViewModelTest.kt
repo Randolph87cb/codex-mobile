@@ -326,6 +326,73 @@ class AppViewModelTest {
     }
 
     @Test
+    fun retryableStreamErrorKeepsRunningStateAndDoesNotShowUserError() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_retryable_error", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(status = "running"),
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_retryable_error")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.Error(
+                sessionId = "sess_retryable_error",
+                message = "Reconnecting... 2/5",
+                isRetryable = true,
+                timestamp = "2026-05-20T00:52:31.218933Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("running", viewModel.uiState.value.selectedSession?.status)
+        assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertEquals("上游响应流暂时中断，bridge 正在重试。", viewModel.uiState.value.sessionRealtimeState.lastEventText)
+        assertEquals(
+            "上游响应流暂时中断，bridge 正在重试：Reconnecting... 2/5",
+            viewModel.uiState.value.sessionRealtimeState.fallbackNotice,
+        )
+        assertNull(viewModel.uiState.value.message)
+    }
+
+    @Test
+    fun terminalStreamErrorStillShowsUserVisibleFailure() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_terminal_error", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(status = "error"),
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_terminal_error")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.Error(
+                sessionId = "sess_terminal_error",
+                message = "stream failed",
+                timestamp = "2026-05-20T00:52:31.218933Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("error", viewModel.uiState.value.selectedSession?.status)
+        assertEquals("出错", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertEquals("stream failed", viewModel.uiState.value.sessionRealtimeState.fallbackNotice)
+        assertEquals("实时流错误：stream failed", viewModel.uiState.value.message)
+    }
+
+    @Test
     fun streamClosedInBackgroundWaitsUntilForegroundToReconnect() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_resume", status = "running")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)

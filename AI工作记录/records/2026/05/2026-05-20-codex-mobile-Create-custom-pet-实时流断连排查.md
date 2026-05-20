@@ -34,6 +34,23 @@
   - 这次报错的真实断点最可能在 `codex app-server -> 上游模型响应 SSE 流`，对应上游错误类型 `responseStreamDisconnected`，并非 Android 到 bridge 的 WebSocket 自身断线。
   - 上游在响应流断开后进入重试，因此错误正文里出现 `Reconnecting... 2/5`、`willRetry=true` 和 Windows `os error 10053`；bridge 当前会把这类“仍会重试”的错误直接作为会话 `error` 事件转发给 Android。
   - Android 当前把所有 `SessionStreamEvent.Error` 一律视为用户可见错误，直接写入 snackbar 文案和详情页 `error` 状态，造成用户看到“实时流错误”，即使同一时间该线程其实仍在继续运行。
+- 已完成修复实现：
+  - `android/app/src/main/java/com/openai/codexmobile/data/SessionStreamEvent.kt`
+    - 为 `SessionStreamEvent.Error` 增加 `isRetryable` 字段，用于区分“可恢复错误”和“终态错误”。
+  - `android/app/src/main/java/com/openai/codexmobile/data/RealBridgeDataProvider.kt`
+    - 为 WebSocket 订阅增加 `closedByClient` 标记。
+    - `awaitClose { webSocket.cancel() }` 后如果走到 `onFailure()`，不再把本地主动停流的 `Socket closed` 当作用户错误上报。
+    - 解析 bridge `type=error` 事件时，不再把整个嵌套 JSON 当消息正文；会抽取真实错误消息，并识别 `willRetry=true`，映射为 `SessionStreamEvent.Error(isRetryable = true)`。
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+    - 对 `isRetryable=true` 的实时流错误，不再把会话状态打成 `error`，也不再弹 snackbar。
+    - 可重试错误会在实时状态卡片里显示“上游响应流暂时中断，bridge 正在重试”，并保留提示直到收到新的正向实时事件或终态刷新。
+    - 终态错误仍保留原有的用户可见错误提示。
+  - 测试：
+    - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+    - `android/app/src/test/java/com/openai/codexmobile/data/RealBridgeDataProviderTest.kt`
+- 当前用户可见行为：
+  - 上游 `Reconnecting... 2/5` 这类可重试错误会转成“正在重试”提示，不再误报成终态失败。
+  - 用户离开详情页或主动停止监听时，本地 `Socket closed` 不再额外弹出实时流错误。
 - 关键证据：
   - 用户日志中 `2026-05-20T00:52:31.218933Z` 收到 `responseStreamDisconnected`，并带 `willRetry=true`。
   - 同一线程在 `2026-05-20T00:52:35.316848Z` 通过 HTTP 刷新后仍返回“`gpt-5.4 • 进行中`”，与真正终态错误不一致。
@@ -60,4 +77,17 @@
 - [x] 结合代码与日志还原完整断链路径。
 - [x] 判断这次异常是否属于上游连接重试而非 Android 主 WebSocket 故障。
 - [x] 形成根因结论与修复建议。
-- [ ] 如果用户确认修复，再把“可重试错误”和“本地主动取消噪声”从用户可见终态错误里拆开处理。
+- [x] 如果用户确认修复，再把“可重试错误”和“本地主动取消噪声”从用户可见终态错误里拆开处理。
+- [x] 运行 Android 构建与单测验证修复。
+
+## 验证结果
+
+- 已执行 `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：`BUILD SUCCESSFUL`
+- 已执行：
+  - `cd android`
+  - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
+  - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：`BUILD SUCCESSFUL`
+- 排查过程中曾把构建脚本和单测并发触发，导致 Gradle/Kotlin daemon 产生一轮不可信的级联 `Unresolved reference`；停止 daemon 后串行重跑，编译与测试均恢复正常，本次以串行验证结果为准。

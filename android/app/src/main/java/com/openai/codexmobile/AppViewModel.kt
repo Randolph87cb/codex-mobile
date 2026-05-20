@@ -1413,27 +1413,54 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.Error -> {
-                appLogger.error("AppViewModel", "实时流错误事件：sessionId=$sessionId, message=${event.message}")
-                activeAssistantTurnId = null
+                if (event.isRetryable) {
+                    appLogger.warn(
+                        "AppViewModel",
+                        "实时流收到可重试错误：sessionId=$sessionId, message=${event.message}",
+                    )
+                } else {
+                    appLogger.error("AppViewModel", "实时流错误事件：sessionId=$sessionId, message=${event.message}")
+                    activeAssistantTurnId = null
+                }
                 _uiState.update {
                     it.copy(
-                        selectedSession = it.selectedSession
-                            ?.let { detail -> appendSystemMessage(detail, "系统：${event.message}", event.timestamp) }
-                            ?.copy(
-                                status = "error",
-                                subtitle = buildSessionSubtitle(
-                                    model = it.selectedSession.model,
-                                    approvalMode = it.selectedSession.approvalMode,
+                        selectedSession = if (event.isRetryable) {
+                            it.selectedSession
+                        } else {
+                            it.selectedSession
+                                ?.let { detail -> appendSystemMessage(detail, "系统：${event.message}", event.timestamp) }
+                                ?.copy(
                                     status = "error",
-                                ),
-                            ),
+                                    subtitle = buildSessionSubtitle(
+                                        model = it.selectedSession.model,
+                                        approvalMode = it.selectedSession.approvalMode,
+                                        status = "error",
+                                    ),
+                                )
+                        },
                         sessionRealtimeState = it.sessionRealtimeState.copy(
-                            statusText = localizedSessionStatus("error"),
-                            lastEventText = "实时流返回错误事件。",
-                            fallbackNotice = event.message,
+                            statusText = if (event.isRetryable) {
+                                localizedSessionStatus(it.selectedSession?.status ?: "running")
+                            } else {
+                                localizedSessionStatus("error")
+                            },
+                            lastEventText = if (event.isRetryable) {
+                                "上游响应流暂时中断，bridge 正在重试。"
+                            } else {
+                                "实时流返回错误事件。"
+                            },
+                            fallbackNotice = if (event.isRetryable) {
+                                buildRetryableStreamNotice(event.message)
+                            } else {
+                                event.message
+                            },
                             pendingApproval = null,
                         ),
-                        message = "实时流错误：${event.message}",
+                        message = if (event.isRetryable) {
+                            null
+                        } else {
+                            "实时流错误：${event.message}"
+                        },
                     )
                 }
                 refreshSessionSnapshot(sessionId)
@@ -1459,10 +1486,12 @@ class AppViewModel(
                     queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = it.sessionRealtimeState.copy(
                         statusText = localizedSessionStatus(merged.status),
-                        fallbackNotice = if (merged.status == "awaiting_approval" || merged.status == "error") {
-                            it.sessionRealtimeState.fallbackNotice
-                        } else {
-                            null
+                        fallbackNotice = when {
+                            merged.status == "awaiting_approval" || merged.status == "error" ->
+                                it.sessionRealtimeState.fallbackNotice
+                            merged.status == "running" && isRetryableStreamNotice(it.sessionRealtimeState.fallbackNotice) ->
+                                it.sessionRealtimeState.fallbackNotice
+                            else -> null
                         },
                         pendingApproval = if (merged.status == "awaiting_approval") {
                             it.sessionRealtimeState.pendingApproval
@@ -1582,6 +1611,14 @@ class AppViewModel(
         } else {
             reason
         }
+    }
+
+    private fun buildRetryableStreamNotice(message: String): String {
+        return "上游响应流暂时中断，bridge 正在重试：$message"
+    }
+
+    private fun isRetryableStreamNotice(message: String?): Boolean {
+        return message?.startsWith("上游响应流暂时中断，bridge 正在重试：") == true
     }
 
     private fun updateSettingsState(transform: (AppUiState) -> AppUiState) {

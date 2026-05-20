@@ -87,6 +87,7 @@ sealed interface SessionStreamEvent {
     data class Error(
         override val sessionId: String,
         val message: String,
+        val isRetryable: Boolean = false,
         override val timestamp: String?,
     ) : SessionStreamEvent
 }
