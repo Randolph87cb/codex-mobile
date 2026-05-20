@@ -356,3 +356,14 @@
   - `apksigner verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk`
   - 结果：APK 签名 SHA-256 指纹为 `de96cebc5ecea68ef17e51d3f84dfde35531ed0fee0ef0a049b8a9ed2fb9f070`，与仓库固定 keystore 一致
 - 排查过程中曾把构建脚本和单测并发触发，导致 Gradle/Kotlin daemon 产生一轮不可信的级联 `Unresolved reference`；停止 daemon 后串行重跑，编译与测试均恢复正常，本次以串行验证结果为准。
+
+## 补充进展：README 同步近期能力
+
+- 用户随后要求把近几轮已经落地的能力同步回项目文档，而不是只记录在线程摘要里。
+- 已更新 `README.md`，补充并对齐以下现状：
+  - Android 会话详情已支持 Markdown 展示、复制消息、复制代码、长按部分文本复制；
+  - 上游实时流 `Reconnecting...` 一类可重试错误会显示为“正在重试”，不再直接视为终态失败；
+  - 手机端当前会把所有会话统一同步为自动审批与完全权限，不再暴露这两个设置入口；
+  - bridge 后台重启脚本会先进入 `drain` 窗口，期间广播生命周期事件并拒绝新的写操作，Android 会自动重连和刷新快照；
+  - `README` 的“下一步”已同步去掉过时的“补齐审批链路”表述，改为聚焦恢复一致性与运行态外置方向。
+- 本次仅更新文档与记录，没有新增代码或协议变更。
