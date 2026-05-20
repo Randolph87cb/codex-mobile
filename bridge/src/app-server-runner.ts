@@ -866,7 +866,10 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   }
 
   private applyThreadSnapshot(session: SessionRecord, thread: AppServerThread): SessionRecord {
-    const status = mapThreadStatus(thread.status);
+    const status = this.normalizeThreadStatusForSession(
+      session.id,
+      mapThreadStatus(thread.status),
+    );
     const activeTurnId = findLatestActiveTurnId(thread);
     const lastError = extractLatestThreadError(thread);
     return (
@@ -932,6 +935,14 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       method: pending.method,
       paramsSummary: formatPendingApprovalSummary(pending.method, pending.params),
     };
+  }
+
+  private normalizeThreadStatusForSession(sessionId: string, status: SessionStatus): SessionStatus {
+    if (status !== "awaiting_approval") {
+      return status;
+    }
+
+    return this.getPendingApprovalView(sessionId) ? "awaiting_approval" : "running";
   }
 
   private addPendingApproval(pending: PendingApproval): void {

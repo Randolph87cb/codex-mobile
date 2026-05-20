@@ -318,6 +318,40 @@ class AppViewModelTest {
     }
 
     @Test
+    fun refreshSnapshotDoesNotRevertApprovedSessionBackToAwaitingApprovalWithoutPendingRequest() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(
+            id = "sess_stale_approval_status",
+            status = "awaiting_approval",
+        ).copy(
+            pendingApproval = PendingApprovalSnapshot(
+                requestId = BridgeRequestId.Text("req-stale"),
+                method = "item/permissions/requestApproval",
+                paramsSummary = "等待审批：item/permissions/requestApproval",
+            ),
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(
+                    status = "awaiting_approval",
+                    pendingApproval = null,
+                ),
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_stale_approval_status")
+        advanceUntilIdle()
+
+        assertEquals("running", viewModel.uiState.value.selectedSession?.status)
+        assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertNull(viewModel.uiState.value.selectedSession?.pendingApproval)
+        assertNull(viewModel.uiState.value.sessionRealtimeState.pendingApproval)
+    }
+
+    @Test
     fun connectSynchronizesExistingSessionsToManagedPolicy() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(
             id = "sess_managed_sync",

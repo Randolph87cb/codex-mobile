@@ -693,14 +693,15 @@ class AppViewModel(
             val managedDetail = ensureManagedSessionPolicy(detail)
 
             _uiState.update { state ->
+                val merged = mergeSessionDetail(state.selectedSession, managedDetail)
                 state.copy(
                     isLoading = false,
-                    selectedSession = mergeSessionDetail(state.selectedSession, managedDetail),
+                    selectedSession = merged,
                     queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = state.sessionRealtimeState.copy(
-                        statusText = localizedSessionStatus(managedDetail.status),
+                        statusText = localizedSessionStatus(merged.status),
                         fallbackNotice = null,
-                        pendingApproval = managedDetail.pendingApproval?.toUiState(),
+                        pendingApproval = merged.pendingApproval?.toUiState(),
                     ),
                 )
             }
@@ -1264,20 +1265,26 @@ class AppViewModel(
             is SessionStreamEvent.RunStatus -> {
                 appLogger.debug("AppViewModel", "运行状态变化：sessionId=$sessionId, status=${event.status}")
                 _uiState.update {
+                    val normalizedStatus = normalizeSessionStatus(
+                        status = event.status,
+                        incomingPendingApproval = null,
+                        currentPendingApproval = it.selectedSession?.pendingApproval,
+                        fallbackStatus = it.selectedSession?.status,
+                    )
                     it.copy(
                         selectedSession = it.selectedSession?.copy(
-                            status = event.status,
+                            status = normalizedStatus,
                             subtitle = buildSessionSubtitle(
                                 model = it.selectedSession.model,
                                 approvalMode = it.selectedSession.approvalMode,
-                                status = event.status,
+                                status = normalizedStatus,
                             ),
                             lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
                         ),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
-                            statusText = localizedSessionStatus(event.status),
-                            lastEventText = statusEventText(event.status),
-                            fallbackNotice = if (event.status == "awaiting_approval") {
+                            statusText = localizedSessionStatus(normalizedStatus),
+                            lastEventText = statusEventText(normalizedStatus),
+                            fallbackNotice = if (normalizedStatus == "awaiting_approval") {
                                 it.sessionRealtimeState.fallbackNotice
                             } else {
                                 null
@@ -2147,6 +2154,12 @@ private fun buildOrUpdateSessionFromStart(
     val serviceTier = event.serviceTier ?: current?.serviceTier ?: "default"
     val sandboxMode = ManagedSandboxMode
     val cwd = event.cwd ?: current?.cwd ?: ""
+    val normalizedStatus = normalizeSessionStatus(
+        status = event.status,
+        incomingPendingApproval = event.pendingApproval,
+        currentPendingApproval = current?.pendingApproval,
+        fallbackStatus = current?.status,
+    )
 
     if (current != null && current.id == event.sessionId) {
         return current.copy(
@@ -2156,8 +2169,8 @@ private fun buildOrUpdateSessionFromStart(
             reasoningEffort = reasoningEffort,
             serviceTier = serviceTier,
             sandboxMode = sandboxMode,
-            status = event.status,
-            pendingApproval = if (event.status == "awaiting_approval") {
+            status = normalizedStatus,
+            pendingApproval = if (normalizedStatus == "awaiting_approval") {
                 event.pendingApproval ?: current.pendingApproval
             } else {
                 null
@@ -2165,7 +2178,7 @@ private fun buildOrUpdateSessionFromStart(
             subtitle = buildSessionSubtitle(
                 model = model,
                 approvalMode = approvalMode,
-                status = event.status,
+                status = normalizedStatus,
             ),
             lastUpdated = event.timestamp ?: current.lastUpdated,
         )
@@ -2183,7 +2196,7 @@ private fun buildOrUpdateSessionFromStart(
         subtitle = buildSessionSubtitle(
             model = model,
             approvalMode = approvalMode,
-            status = event.status,
+            status = normalizedStatus,
         ),
         lastUpdated = event.timestamp ?: nowIsoString(),
         transcriptPreview = transcript,
@@ -2193,8 +2206,8 @@ private fun buildOrUpdateSessionFromStart(
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
-        status = event.status,
-        pendingApproval = event.pendingApproval.takeIf { event.status == "awaiting_approval" },
+        status = normalizedStatus,
+        pendingApproval = event.pendingApproval.takeIf { normalizedStatus == "awaiting_approval" },
     )
 }
 
@@ -2242,9 +2255,15 @@ private fun mergeSessionDetail(
     val cwd = incoming.cwd.takeUnless { it.isBlank() || it == "未提供工作目录" }
         ?: current?.cwd
         ?: ""
-    val status = incoming.status.takeUnless { it.isBlank() || it == "unknown" }
+    val rawStatus = incoming.status.takeUnless { it.isBlank() || it == "unknown" }
         ?: current?.status
         ?: "idle"
+    val status = normalizeSessionStatus(
+        status = rawStatus,
+        incomingPendingApproval = incoming.pendingApproval,
+        currentPendingApproval = current?.pendingApproval,
+        fallbackStatus = current?.status,
+    )
     val transcriptPreview = chooseMoreCompleteTranscript(
         current = current?.transcriptPreview,
         incoming = incoming.transcriptPreview,
@@ -2330,6 +2349,26 @@ private fun mergeSessionConfigUpdateResult(
             status = existing.status,
         ),
     )
+}
+
+private fun normalizeSessionStatus(
+    status: String,
+    incomingPendingApproval: PendingApprovalSnapshot?,
+    currentPendingApproval: PendingApprovalSnapshot?,
+    fallbackStatus: String?,
+): String {
+    if (status != "awaiting_approval") {
+        return status
+    }
+
+    if (incomingPendingApproval != null || currentPendingApproval != null) {
+        return status
+    }
+
+    return when (fallbackStatus) {
+        "running", "idle", "error" -> fallbackStatus
+        else -> "running"
+    }
 }
 
 private fun chooseMoreCompleteTranscript(

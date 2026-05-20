@@ -124,6 +124,19 @@
   - 手机端会把所有会话统一视为自动审批和完全权限，不再提供手工切换入口。
   - 如果某个会话在离开详情页前已经进入待审批，重新进入时不会再停留在“看得到待审批、但无法审批”的僵死状态；待审批上下文会恢复，并由手机端自动批准。
   - 已经在等待审批的旧会话也会在重新进入后自动尝试放行，不只影响新会话。
+- 后续补充修正：
+  - 用户在同步 `main` 后补充反馈：手机上仍能看到旧的“权限 工作区可写”配置项，且某些会话即使已经出现一条助手回复，状态仍会停留在“待审批”，之后没有继续流式更新。
+  - 已确认“权限”项残留不是当前 `main` 代码的问题，而是手机上安装的仍是旧 debug 包；当前代码里的详情配置区只保留目录、模型、推理、速度四项。
+  - 进一步定位到一个真实状态机缺口：自动批准成功后，如果 bridge 再从 `thread/read` 或实时流收到一个滞后的 `waitingOnApproval` 状态，但此时内存里的 pending approval 已经清空，Android/bridge 仍可能把会话重新刷回 `awaiting_approval`，表现为“看起来还在待审批，但实际上没有待审批请求，也没有后续输出”。
+  - 已完成二次修复：
+    - `bridge/src/app-server-runner.ts`
+      - 对本地会话新增 `normalizeThreadStatusForSession()`：如果线程快照仍是 `waitingOnApproval`，但 bridge 内存里已经没有 pending approval，则对外统一按 `running` 暴露，避免旧线程状态把会话重新打回待审批。
+    - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+      - 新增 `normalizeSessionStatus()`，在 `openSessionDetail`、`run.status`、`session.started`、HTTP 快照合并时统一过滤“没有 pending approval 的 awaiting_approval”。
+      - 如果自动批准已经成功、待审批上下文已清空，后续滞后的快照/实时事件不再把详情页状态写回“待审批”。
+    - 测试：
+      - `bridge/tests/app-server-runner.test.ts` 增加“无 pending approval 时 stale waitingOnApproval 视为 running”的回归用例。
+      - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt` 增加“批准后 stale snapshot 不会把会话刷回 awaiting_approval”的回归用例。
 
 ## 后续事项
 
@@ -137,6 +150,8 @@
 - [x] 把手机端所有会话统一收敛为自动审批与完全权限。
 - [x] 移除审批模式与文件权限的设置/编辑入口。
 - [x] 执行 bridge 与 Android 的全量验证。
+- [x] 修正自动批准后被滞后快照刷回“待审批”的状态回退问题。
+- [x] 重新构建最新 debug APK，确保不再携带旧的权限配置 UI。
 
 ## 验证结果
 
@@ -147,7 +162,7 @@
 - 已执行：
   - `cd bridge`
   - `npm test`
-  - 结果：`42 passed`
+  - 结果：`43 passed`
 - 已执行 `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
   - 结果：`BUILD SUCCESSFUL`
 - 已执行：
@@ -156,4 +171,6 @@
   - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
   - `.\gradlew.bat testDebugUnitTest`
   - 结果：`BUILD SUCCESSFUL`
+- 最新 debug APK 产物：
+  - `android/app/build/outputs/apk/debug/app-debug.apk`
 - 排查过程中曾把构建脚本和单测并发触发，导致 Gradle/Kotlin daemon 产生一轮不可信的级联 `Unresolved reference`；停止 daemon 后串行重跑，编译与测试均恢复正常，本次以串行验证结果为准。

@@ -577,6 +577,44 @@ describe("AppServerRunner", () => {
     expect(view?.pendingApproval?.paramsSummary).toContain("Copy-Item");
   });
 
+  test("treats stale waitingOnApproval thread status as running when no pending approval remains", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "active", activeFlags: ["waitingOnApproval"] },
+            turns: [
+              {
+                id: "turn-1",
+                status: "inProgress",
+              },
+            ],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+
+    const view = await runner.getSessionView("sess-1");
+
+    expect(view).toMatchObject({
+      id: "sess-1",
+      status: "running",
+      pendingApproval: null,
+    });
+    expect(store.get("sess-1")?.status).toBe("running");
+  });
+
   test("rejects unsupported non-approval server requests", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();
