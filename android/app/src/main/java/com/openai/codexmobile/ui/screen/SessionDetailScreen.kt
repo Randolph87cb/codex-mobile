@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
@@ -1205,12 +1206,14 @@ private fun CodeBlockCard(
                     )
                 }
             }
-            Text(
-                text = part.code,
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-            )
+            SelectionContainer {
+                Text(
+                    text = part.code,
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
     }
 }
@@ -1433,10 +1436,12 @@ private fun ApprovalActionCard(
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 approval.paramsSummary?.let { summary ->
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    SelectionContainer {
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
             Button(

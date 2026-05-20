@@ -1,13 +1,11 @@
 package com.openai.codexmobile.ui.screen
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -166,26 +163,19 @@ private fun MarkdownAnnotatedText(
     style: TextStyle,
     modifier: Modifier = Modifier,
 ) {
-    val uriHandler = LocalUriHandler.current
     val annotated = remember(text, style.color) {
         buildMarkdownAnnotatedString(
             text = text,
             linkColor = if (style.color == Color.Unspecified) Color.Unspecified else style.color,
         )
     }
-    ClickableText(
-        text = annotated,
-        modifier = modifier,
-        style = style,
-        onClick = { offset ->
-            annotated
-                .getStringAnnotations(tag = MarkdownLinkTag, start = offset, end = offset)
-                .firstOrNull()
-                ?.let { annotation ->
-                    runCatching { uriHandler.openUri(annotation.item) }
-                }
-        },
-    )
+    SelectionContainer {
+        Text(
+            text = annotated,
+            modifier = modifier,
+            style = style,
+        )
+    }
 }
 
 internal fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {

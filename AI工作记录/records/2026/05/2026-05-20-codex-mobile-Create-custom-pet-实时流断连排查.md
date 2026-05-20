@@ -286,6 +286,21 @@
   - 助手正文里的常见 Markdown 现在会直接按格式显示，而不是全部裸文本输出。
   - 单条消息可以一键复制原始正文。
   - 代码块可以单独复制代码内容，不需要手动选中。
+- 用户进一步补充：仅有“整条复制/复制代码”还不够，希望像正常阅读器一样，长按后能选中一部分文本再复制。
+- 已完成补充实现：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptMarkdown.kt`
+    - Markdown 正文从“点击优先”改为“文本选择优先”
+    - 正文使用 `SelectionContainer` 包裹，可长按选择部分文字
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+    - 代码块正文增加 `SelectionContainer`
+    - 审批摘要增加 `SelectionContainer`
+- 当前取舍：
+  - 为了优先满足“长按选择部分文本”，正文里的 Markdown 链接当前保留样式标注，但不再作为点击优先控件处理。
+  - 现阶段仍保留“复制消息”和“复制代码”按钮，作为长按选择之外的快捷入口。
+- 当前用户可见行为补充：
+  - 正文可以长按后只复制其中一部分。
+  - 代码块可以长按后只复制其中几行。
+  - 审批摘要也支持部分选中复制。
 
 ## 验证结果
 
@@ -311,6 +326,15 @@
   - `android/app/src/test/java/com/openai/codexmobile/ui/screen/TranscriptMarkdownTest.kt`
     - 验证标题、列表、引用的块级解析
     - 验证粗体、行内代码、链接的行内解析结果
+- 已重新执行：
+  - `cd android`
+  - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
+  - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：`BUILD SUCCESSFUL`
+- 已重新执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：`BUILD SUCCESSFUL`
 - 最新 debug APK 产物：
   - `android/app/build/outputs/apk/debug/app-debug.apk`
 - 已新增并通过的回归验证：
