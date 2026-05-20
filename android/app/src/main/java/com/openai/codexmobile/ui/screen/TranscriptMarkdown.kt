@@ -11,11 +11,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -26,7 +24,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 
 private const val MarkdownLinkTag = "markdown_link"
 
@@ -56,8 +53,8 @@ internal fun MarkdownTextBlock(
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyMedium,
     bridgeEndpoint: String = "",
-    bridgeAuthToken: String = "",
     onShowMessage: (String) -> Unit = {},
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit = {},
 ) {
     val blocks = remember(text) { parseMarkdownBlocks(text) }
     Column(
@@ -70,8 +67,8 @@ internal fun MarkdownTextBlock(
                     block = block,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                 )
 
                 is MarkdownBlock.Paragraph -> MarkdownAnnotatedText(
@@ -79,8 +76,8 @@ internal fun MarkdownTextBlock(
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                 )
 
                 is MarkdownBlock.Quote -> MarkdownQuote(
@@ -88,8 +85,8 @@ internal fun MarkdownTextBlock(
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                 )
 
                 is MarkdownBlock.ListBlock -> MarkdownList(
@@ -97,8 +94,8 @@ internal fun MarkdownTextBlock(
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                 )
             }
         }
@@ -110,8 +107,8 @@ private fun MarkdownHeading(
     block: MarkdownBlock.Heading,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
-    bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
     val style = when (block.level) {
         1 -> MaterialTheme.typography.headlineSmall
@@ -124,8 +121,8 @@ private fun MarkdownHeading(
         style = style,
         modifier = modifier,
         bridgeEndpoint = bridgeEndpoint,
-        bridgeAuthToken = bridgeAuthToken,
         onShowMessage = onShowMessage,
+        onFileDownloadRequest = onFileDownloadRequest,
     )
 }
 
@@ -135,8 +132,8 @@ private fun MarkdownQuote(
     style: TextStyle,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
-    bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
     Row(
         modifier = modifier,
@@ -153,8 +150,8 @@ private fun MarkdownQuote(
             style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
             modifier = Modifier.weight(1f),
             bridgeEndpoint = bridgeEndpoint,
-            bridgeAuthToken = bridgeAuthToken,
             onShowMessage = onShowMessage,
+            onFileDownloadRequest = onFileDownloadRequest,
         )
     }
 }
@@ -165,8 +162,8 @@ private fun MarkdownList(
     style: TextStyle,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
-    bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
     Column(
         modifier = modifier,
@@ -187,8 +184,8 @@ private fun MarkdownList(
                     style = style,
                     modifier = Modifier.weight(1f),
                     bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                 )
             }
         }
@@ -201,12 +198,10 @@ private fun MarkdownAnnotatedText(
     style: TextStyle,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
-    bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
-    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val coroutineScope = rememberCoroutineScope()
     val annotated = remember(text, style.color) {
         buildMarkdownAnnotatedString(
             text = text,
@@ -229,18 +224,7 @@ private fun MarkdownAnnotatedText(
                     bridgeEndpoint = bridgeEndpoint,
                 )
                 if (localDownloadRequest != null) {
-                    coroutineScope.launch {
-                        val message = runCatching {
-                            saveTranscriptFile(
-                                context = context,
-                                request = localDownloadRequest,
-                                bridgeAuthToken = bridgeAuthToken,
-                            )
-                        }.getOrElse { error ->
-                            error.message ?: "保存文件失败。"
-                        }
-                        onShowMessage(message)
-                    }
+                    onFileDownloadRequest(localDownloadRequest)
                     return@ClickableText
                 }
 

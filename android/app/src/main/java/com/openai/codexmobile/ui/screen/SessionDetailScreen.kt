@@ -100,6 +100,14 @@ private data class ImagePreviewState(
     val source: String,
 )
 
+private data class FileDownloadDialogState(
+    val request: TranscriptFileDownloadRequest,
+    val progress: TranscriptFileDownloadProgress,
+    val isRunning: Boolean = true,
+    val resultMessage: String? = null,
+    val errorMessage: String? = null,
+)
+
 @Composable
 fun SessionDetailScreen(
     paddingValues: PaddingValues,
@@ -127,7 +135,9 @@ fun SessionDetailScreen(
     onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
 ) {
+    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
     val detail = remember(sessionDetail, draftSession) {
         sessionDetail ?: draftSession?.toDraftDetail()
     }
@@ -136,6 +146,8 @@ fun SessionDetailScreen(
     var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
     var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
+    var pendingFileDownloadRequest by remember { mutableStateOf<TranscriptFileDownloadRequest?>(null) }
+    var fileDownloadDialogState by remember { mutableStateOf<FileDownloadDialogState?>(null) }
     val hasPendingUploadBlockers = pendingImageAttachments.any {
         it.uploadState == PendingImageUploadState.Uploading || it.uploadState == PendingImageUploadState.Failed
     }
@@ -177,6 +189,60 @@ fun SessionDetailScreen(
             bridgeAuthToken = bridgeAuthToken,
             onDismiss = { imagePreviewState = null },
             onShowMessage = onShowMessage,
+        )
+    }
+    pendingFileDownloadRequest?.let { request ->
+        FileDownloadConfirmDialog(
+            request = request,
+            onDismiss = { pendingFileDownloadRequest = null },
+            onConfirm = {
+                pendingFileDownloadRequest = null
+                fileDownloadDialogState = FileDownloadDialogState(
+                    request = request,
+                    progress = TranscriptFileDownloadProgress(
+                        displayName = request.displayName,
+                        stage = TranscriptFileDownloadStage.Preparing,
+                    ),
+                )
+                coroutineScope.launch {
+                    val result = runCatching {
+                        saveTranscriptFile(
+                            context = context,
+                            request = request,
+                            bridgeAuthToken = bridgeAuthToken,
+                            onProgress = { progress ->
+                                fileDownloadDialogState = fileDownloadDialogState?.copy(progress = progress)
+                            },
+                        )
+                    }
+                    result.onSuccess { message ->
+                        onShowMessage(message)
+                        fileDownloadDialogState = fileDownloadDialogState?.copy(
+                            progress = fileDownloadDialogState?.progress?.copy(
+                                stage = TranscriptFileDownloadStage.Saving,
+                            ) ?: TranscriptFileDownloadProgress(
+                                displayName = request.displayName,
+                                stage = TranscriptFileDownloadStage.Saving,
+                            ),
+                            isRunning = false,
+                            resultMessage = message,
+                            errorMessage = null,
+                        )
+                    }.onFailure { error ->
+                        fileDownloadDialogState = fileDownloadDialogState?.copy(
+                            isRunning = false,
+                            errorMessage = error.message ?: "下载失败。",
+                            resultMessage = null,
+                        )
+                    }
+                }
+            },
+        )
+    }
+    fileDownloadDialogState?.let { state ->
+        FileDownloadProgressDialog(
+            state = state,
+            onDismiss = { fileDownloadDialogState = null },
         )
     }
 
@@ -241,6 +307,9 @@ fun SessionDetailScreen(
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = { request ->
+                        pendingFileDownloadRequest = request
+                    },
                     onCopyText = { copyToClipboard(it, "内容已复制到剪贴板。") },
                     onCopyCode = { copyToClipboard(it, "代码已复制到剪贴板。") },
                     onOpenImagePreview = { title, source ->
@@ -862,6 +931,7 @@ private fun TranscriptBubbleList(
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     onCopyText: (String) -> Unit,
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
@@ -887,6 +957,7 @@ private fun TranscriptBubbleList(
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                     onCopyText = onCopyText,
                     onCopyCode = onCopyCode,
                     onOpenImagePreview = onOpenImagePreview,
@@ -898,6 +969,7 @@ private fun TranscriptBubbleList(
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                     onCopyText = onCopyText,
                     onCopyCode = onCopyCode,
                     onOpenImagePreview = onOpenImagePreview,
@@ -914,6 +986,7 @@ private fun TranscriptBubbleCard(
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     onCopyText: (String) -> Unit,
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
@@ -992,6 +1065,7 @@ private fun TranscriptBubbleCard(
                         bridgeEndpoint = bridgeEndpoint,
                         bridgeAuthToken = bridgeAuthToken,
                         onShowMessage = onShowMessage,
+                        onFileDownloadRequest = onFileDownloadRequest,
                         testTagPrefix = toggleTag,
                         onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
@@ -1009,6 +1083,7 @@ private fun ExecutionProcessCard(
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     onCopyText: (String) -> Unit,
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
@@ -1049,6 +1124,7 @@ private fun ExecutionProcessCard(
                                 bridgeEndpoint = bridgeEndpoint,
                                 bridgeAuthToken = bridgeAuthToken,
                                 onShowMessage = onShowMessage,
+                                onFileDownloadRequest = onFileDownloadRequest,
                                 onCopyText = onCopyText,
                                 onCopyCode = onCopyCode,
                                 onOpenImagePreview = onOpenImagePreview,
@@ -1068,6 +1144,7 @@ private fun ExecutionActivityCard(
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     onCopyText: (String) -> Unit,
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
@@ -1099,6 +1176,7 @@ private fun ExecutionActivityCard(
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                     testTagPrefix = toggleTag,
                     onCopyCode = onCopyCode,
                     onOpenImagePreview = onOpenImagePreview,
@@ -1216,6 +1294,7 @@ private fun TranscriptPartsColumn(
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     testTagPrefix: String,
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
@@ -1227,8 +1306,8 @@ private fun TranscriptPartsColumn(
                     text = part.text,
                     style = MaterialTheme.typography.bodyMedium,
                     bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
+                    onFileDownloadRequest = onFileDownloadRequest,
                 )
             }
 
@@ -1484,6 +1563,136 @@ private fun ImagePreviewDialog(
                         modifier = Modifier.testTag(TestTags.SessionDetailImagePreviewSaveButton),
                     ) {
                         Text(if (isSaving) "保存中" else "保存")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileDownloadConfirmDialog(
+    request: TranscriptFileDownloadRequest,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        modifier = Modifier.testTag(TestTags.SessionDetailFileDownloadConfirmDialog),
+        onDismissRequest = onDismiss,
+        title = { Text("下载文件") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("确认下载这个文件吗？")
+                Text(
+                    text = request.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                modifier = Modifier.testTag(TestTags.SessionDetailFileDownloadConfirmButton),
+            ) {
+                Text("下载")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
+private fun FileDownloadProgressDialog(
+    state: FileDownloadDialogState,
+    onDismiss: () -> Unit,
+) {
+    val progress = state.progress
+    val fraction = calculateTranscriptFileDownloadFraction(progress)
+    val title = when {
+        state.errorMessage != null -> "下载失败"
+        state.resultMessage != null -> "下载完成"
+        else -> "正在下载"
+    }
+    val statusText = when {
+        state.errorMessage != null -> state.errorMessage
+        state.resultMessage != null -> state.resultMessage
+        else -> when (progress.stage) {
+            TranscriptFileDownloadStage.Preparing -> "准备中"
+            TranscriptFileDownloadStage.Downloading -> "下载中"
+            TranscriptFileDownloadStage.Saving -> "保存中"
+        }
+    }
+
+    Dialog(
+        onDismissRequest = {
+            if (!state.isRunning) {
+                onDismiss()
+            }
+        },
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SessionDetailFileDownloadProgressDialog),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = state.request.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = statusText ?: "处理中",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.errorMessage != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                if (state.isRunning) {
+                    if (fraction != null) {
+                        CircularProgressIndicator(progress = { fraction })
+                    } else {
+                        CircularProgressIndicator()
+                    }
+                }
+                if (progress.stage == TranscriptFileDownloadStage.Downloading || progress.stage == TranscriptFileDownloadStage.Saving) {
+                    Text(
+                        text = buildString {
+                            append(formatTranscriptFileByteCount(progress.bytesDownloaded))
+                            progress.totalBytes?.let { totalBytes ->
+                                append(" / ")
+                                append(formatTranscriptFileByteCount(totalBytes))
+                                if (fraction != null) {
+                                    append("  (${(fraction * 100).toInt()}%)")
+                                }
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        enabled = !state.isRunning,
+                    ) {
+                        Text(if (state.isRunning) "下载中" else "关闭")
                     }
                 }
             }

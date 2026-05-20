@@ -44,4 +44,35 @@ class TranscriptFileSupportTest {
 
         assertNull(request)
     }
+
+    @Test
+    fun formatTranscriptFileByteCountUsesReadableUnits() {
+        assertEquals("512 B", formatTranscriptFileByteCount(512))
+        assertEquals("1.5 KB", formatTranscriptFileByteCount(1536))
+        assertEquals("2 MB", formatTranscriptFileByteCount(2 * 1024 * 1024L))
+    }
+
+    @Test
+    fun calculateTranscriptFileDownloadFractionReturnsNullWithoutKnownTotal() {
+        val progress = TranscriptFileDownloadProgress(
+            displayName = "report.md",
+            stage = TranscriptFileDownloadStage.Downloading,
+            bytesDownloaded = 1024,
+            totalBytes = null,
+        )
+
+        assertNull(calculateTranscriptFileDownloadFraction(progress))
+    }
+
+    @Test
+    fun calculateTranscriptFileDownloadFractionClampsToValidRange() {
+        val progress = TranscriptFileDownloadProgress(
+            displayName = "report.md",
+            stage = TranscriptFileDownloadStage.Downloading,
+            bytesDownloaded = 150,
+            totalBytes = 100,
+        )
+
+        assertEquals(1f, calculateTranscriptFileDownloadFraction(progress) ?: 0f, 0.0001f)
+    }
 }

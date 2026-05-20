@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -23,6 +24,19 @@ private val uncPathRegex = Regex("^\\\\\\\\[^\\\\]+\\\\[^\\\\].+")
 internal data class TranscriptFileDownloadRequest(
     val url: String,
     val displayName: String,
+)
+
+internal enum class TranscriptFileDownloadStage {
+    Preparing,
+    Downloading,
+    Saving,
+}
+
+internal data class TranscriptFileDownloadProgress(
+    val displayName: String,
+    val stage: TranscriptFileDownloadStage,
+    val bytesDownloaded: Long = 0,
+    val totalBytes: Long? = null,
 )
 
 private data class DownloadedTranscriptFile(
@@ -86,8 +100,23 @@ internal suspend fun saveTranscriptFile(
     context: Context,
     request: TranscriptFileDownloadRequest,
     bridgeAuthToken: String,
+    onProgress: (TranscriptFileDownloadProgress) -> Unit = {},
 ): String = withContext(Dispatchers.IO) {
-    val downloaded = downloadTranscriptFile(request, bridgeAuthToken)
+    onProgress(
+        TranscriptFileDownloadProgress(
+            displayName = request.displayName,
+            stage = TranscriptFileDownloadStage.Preparing,
+        ),
+    )
+    val downloaded = downloadTranscriptFile(request, bridgeAuthToken, onProgress)
+    onProgress(
+        TranscriptFileDownloadProgress(
+            displayName = downloaded.fileName,
+            stage = TranscriptFileDownloadStage.Saving,
+            bytesDownloaded = downloaded.bytes.size.toLong(),
+            totalBytes = downloaded.bytes.size.toLong(),
+        ),
+    )
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, downloaded.fileName)
@@ -158,6 +187,7 @@ private fun buildTranscriptFileDownloadUrl(
 private fun downloadTranscriptFile(
     request: TranscriptFileDownloadRequest,
     bridgeAuthToken: String,
+    onProgress: (TranscriptFileDownloadProgress) -> Unit,
 ): DownloadedTranscriptFile {
     val requestBuilder = Request.Builder().url(request.url)
     if (bridgeAuthToken.isNotBlank()) {
@@ -165,12 +195,35 @@ private fun downloadTranscriptFile(
     }
     transcriptFileHttpClient.newCall(requestBuilder.build()).execute().use { response ->
         require(response.isSuccessful) { "文件请求失败：HTTP ${response.code}" }
-        val bytes = response.body?.bytes() ?: throw IllegalStateException("文件内容为空。")
+        val responseBody = response.body ?: throw IllegalStateException("文件内容为空。")
         val mimeType = response.body?.contentType()?.toString()?.substringBefore(';') ?: "application/octet-stream"
         val fileName = response.header("Content-Disposition")
             ?.let(::parseDispositionFileName)
             ?.ifBlank { null }
             ?: ensureTranscriptFileName(request.displayName, mimeType)
+        val totalBytes = responseBody.contentLength().takeIf { it >= 0 }
+        val bytes = responseBody.byteStream().use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            var downloadedBytes = 0L
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) {
+                    break
+                }
+                output.write(buffer, 0, read)
+                downloadedBytes += read
+                onProgress(
+                    TranscriptFileDownloadProgress(
+                        displayName = fileName,
+                        stage = TranscriptFileDownloadStage.Downloading,
+                        bytesDownloaded = downloadedBytes,
+                        totalBytes = totalBytes,
+                    ),
+                )
+            }
+            output.toByteArray()
+        }
         return DownloadedTranscriptFile(
             bytes = bytes,
             mimeType = mimeType,
@@ -238,4 +291,35 @@ private fun uniqueTranscriptFile(
         }
         index += 1
     }
+}
+
+internal fun formatTranscriptFileByteCount(byteCount: Long): String {
+    if (byteCount < 1024) {
+        return "${byteCount} B"
+    }
+
+    val units = arrayOf("KB", "MB", "GB", "TB")
+    var value = byteCount.toDouble()
+    var unitIndex = -1
+    while (value >= 1024 && unitIndex < units.lastIndex) {
+        value /= 1024
+        unitIndex += 1
+    }
+
+    val formatted = if (value >= 100 || value % 1.0 == 0.0) {
+        value.toInt().toString()
+    } else {
+        String.format(Locale.US, "%.1f", value)
+    }
+    return "$formatted ${units[unitIndex.coerceAtLeast(0)]}"
+}
+
+internal fun calculateTranscriptFileDownloadFraction(progress: TranscriptFileDownloadProgress): Float? {
+    val totalBytes = progress.totalBytes ?: return null
+    if (totalBytes <= 0L) {
+        return null
+    }
+    return (progress.bytesDownloaded.toDouble() / totalBytes.toDouble())
+        .coerceIn(0.0, 1.0)
+        .toFloat()
 }
