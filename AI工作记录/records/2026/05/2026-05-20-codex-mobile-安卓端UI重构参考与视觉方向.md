@@ -262,3 +262,37 @@
 - 已确认 APK 产物再次更新：
   - `android/app/build/outputs/apk/debug/app-debug.apk`
   - 最新修改时间：`2026-05-20 15:38:14`
+
+## 协作文档更新
+
+- 用户要求更新说明文档，范围限定为：
+  - `README.md`
+  - `docs/`
+- 目标是让后续协作开发者或 agent 更快接手当前 Android UI 基线，而不是只记录一次性的设计结论。
+
+## 协作文档改动
+
+- 已更新：
+  - `README.md`
+- 已新增：
+  - `docs/android-ui-collaboration.md`
+- 本次文档更新内容包括：
+  - README 增加 `.codex/skills/` 目录说明
+  - README 增加 Android UI 协作入口与当前 UI 状态摘要
+  - README 修正文档中关于设置页 `approvalMode` / `sandboxMode` 编辑入口的过时描述
+  - docs 新增面向协作开发的 Android UI 说明文档，集中说明：
+    - 当前 UI 基线
+    - 项目级 UI skill 位置
+    - 协作边界
+    - 重点文件
+    - 图标化边界
+    - Android 验证命令
+    - Kotlin daemon / incremental cache 异常的当前处理方式
+
+## 协作文档验证
+
+- 本次仅修改文档，不改源码逻辑，因此未额外运行代码测试。
+- 已人工检查文档与当前仓库状态的一致性，重点覆盖：
+  - 发送按钮已改为小飞机图标
+  - 项目级 UI skill 已存在于 `.codex/skills/codex-mobile-android-ui/`
+  - 设置页当前保留 `approvalMode` 与 `sandboxMode` 配置入口
