@@ -150,6 +150,7 @@ class AppViewModel(
     private var sessionStreamReconnectJob: Job? = null
     private var pendingReconnectSessionId: String? = null
     private var sessionStreamReconnectAttempt: Int = 0
+    private var bridgeRestartExpectedSessionId: String? = null
     private var isAppInForeground: Boolean = true
     private val queuedInputsBySession = mutableMapOf<String, ArrayDeque<String>>()
     private val flushingQueuedSessions = mutableSetOf<String>()
@@ -1032,6 +1033,7 @@ class AppViewModel(
         stopSessionStream(
             resetRealtimeState = false,
             resetReconnectState = false,
+            clearBridgeRestartState = false,
         )
         activeStreamSessionId = sessionId
         sessionStreamJob = viewModelScope.launch {
@@ -1044,9 +1046,11 @@ class AppViewModel(
             } catch (error: Exception) {
                 if (activeStreamSessionId == sessionId) {
                     appLogger.error("AppViewModel", "实时流监听失败：sessionId=$sessionId", error)
+                    val bridgeRestartExpected = bridgeRestartExpectedSessionId == sessionId
                     val reconnectScheduled = scheduleSessionStreamReconnect(
                         sessionId = sessionId,
-                        reason = error.message ?: "实时流连接失败。",
+                        reason = error.message ?: if (bridgeRestartExpected) "bridge 正在重启。" else "实时流连接失败。",
+                        immediate = bridgeRestartExpected,
                     )
                     _uiState.update {
                         it.copy(
@@ -1054,21 +1058,44 @@ class AppViewModel(
                                 isActive = true,
                                 isConnected = false,
                                 connectionText = if (reconnectScheduled) {
-                                    "实时流连接失败，准备重连"
+                                    if (bridgeRestartExpected) {
+                                        "bridge 重启中，准备恢复"
+                                    } else {
+                                        "实时流连接失败，准备重连"
+                                    }
                                 } else {
-                                    "实时流连接失败"
+                                    if (bridgeRestartExpected) {
+                                        "bridge 重启中"
+                                    } else {
+                                        "实时流连接失败"
+                                    }
                                 },
                                 lastEventText = if (reconnectScheduled) {
-                                    "连接已中断，正在尝试重新建立实时流。"
+                                    if (bridgeRestartExpected) {
+                                        "bridge 连接已切换，正在恢复实时流。"
+                                    } else {
+                                        "连接已中断，正在尝试重新建立实时流。"
+                                    }
                                 } else {
                                     "无法继续接收实时事件。"
                                 },
-                                fallbackNotice = buildStreamReconnectNotice(
-                                    reconnectScheduled = reconnectScheduled,
-                                    reason = error.message ?: "当前回退到 HTTP 快照。",
-                                ),
+                                fallbackNotice = if (bridgeRestartExpected) {
+                                    buildBridgeRestartNotice(
+                                        reconnectScheduled = reconnectScheduled,
+                                        reason = error.message,
+                                    )
+                                } else {
+                                    buildStreamReconnectNotice(
+                                        reconnectScheduled = reconnectScheduled,
+                                        reason = error.message ?: "当前回退到 HTTP 快照。",
+                                    )
+                                },
                             ),
-                            message = if (reconnectScheduled) null else error.message ?: "实时流连接失败。",
+                            message = if (reconnectScheduled || bridgeRestartExpected) {
+                                null
+                            } else {
+                                error.message ?: "实时流连接失败。"
+                            },
                         )
                     }
                     refreshSessionSnapshot(sessionId)
@@ -1081,12 +1108,16 @@ class AppViewModel(
     private fun stopSessionStream(
         resetRealtimeState: Boolean = true,
         resetReconnectState: Boolean = true,
+        clearBridgeRestartState: Boolean = true,
     ) {
         activeStreamSessionId?.let { appLogger.info("AppViewModel", "停止实时流监听：sessionId=$it") }
         sessionStreamJob?.cancel()
         sessionStreamJob = null
         activeStreamSessionId = null
         activeAssistantTurnId = null
+        if (clearBridgeRestartState) {
+            bridgeRestartExpectedSessionId = null
+        }
         cancelPendingSessionStreamReconnect(resetAttempt = resetReconnectState)
         if (resetRealtimeState) {
             _uiState.update {
@@ -1106,6 +1137,7 @@ class AppViewModel(
         when (event) {
             is SessionStreamEvent.StreamOpened -> {
                 appLogger.info("AppViewModel", "实时流已连接：sessionId=$sessionId")
+                bridgeRestartExpectedSessionId = null
                 resetSessionStreamReconnectState()
                 _uiState.update {
                     it.copy(
@@ -1125,9 +1157,11 @@ class AppViewModel(
                     "AppViewModel",
                     "实时流关闭：sessionId=$sessionId, reason=${event.reason ?: "none"}",
                 )
+                val bridgeRestartExpected = bridgeRestartExpectedSessionId == sessionId
                 val reconnectScheduled = scheduleSessionStreamReconnect(
                     sessionId = sessionId,
-                    reason = event.reason ?: "实时流连接已关闭。",
+                    reason = event.reason ?: if (bridgeRestartExpected) "bridge 正在重启。" else "实时流连接已关闭。",
+                    immediate = bridgeRestartExpected,
                 )
                 _uiState.update {
                     it.copy(
@@ -1135,15 +1169,34 @@ class AppViewModel(
                             isActive = true,
                             isConnected = false,
                             connectionText = if (reconnectScheduled) {
-                                "实时流已断开，准备重连"
+                                if (bridgeRestartExpected) {
+                                    "bridge 重启中，准备恢复"
+                                } else {
+                                    "实时流已断开，准备重连"
+                                }
                             } else {
-                                "实时流已断开"
+                                if (bridgeRestartExpected) {
+                                    "bridge 重启中"
+                                } else {
+                                    "实时流已断开"
+                                }
                             },
-                            lastEventText = event.reason ?: "实时流连接已关闭。",
-                            fallbackNotice = buildStreamReconnectNotice(
-                                reconnectScheduled = reconnectScheduled,
-                                reason = "当前停留在最后一次收到的内容快照。",
-                            ),
+                            lastEventText = if (bridgeRestartExpected) {
+                                "bridge 正在重启，等待自动恢复当前会话。"
+                            } else {
+                                event.reason ?: "实时流连接已关闭。"
+                            },
+                            fallbackNotice = if (bridgeRestartExpected) {
+                                buildBridgeRestartNotice(
+                                    reconnectScheduled = reconnectScheduled,
+                                    reason = event.reason,
+                                )
+                            } else {
+                                buildStreamReconnectNotice(
+                                    reconnectScheduled = reconnectScheduled,
+                                    reason = "当前停留在最后一次收到的内容快照。",
+                                )
+                            },
                             pendingApproval = it.selectedSession?.pendingApproval?.toUiState()
                                 ?: it.sessionRealtimeState.pendingApproval,
                         ),
@@ -1159,6 +1212,7 @@ class AppViewModel(
                     "AppViewModel",
                     "会话实时流就绪：sessionId=$sessionId, status=${event.status}, threadId=${event.threadId ?: "none"}",
                 )
+                bridgeRestartExpectedSessionId = null
                 resetSessionStreamReconnectState()
                 val nextDetail = buildOrUpdateSessionFromStart(
                     current = uiState.value.selectedSession,
@@ -1171,7 +1225,7 @@ class AppViewModel(
                             isActive = true,
                             isConnected = true,
                             connectionText = "已连接实时流",
-                            statusText = localizedSessionStatus(event.status),
+                            statusText = localizedSessionStatus(nextDetail.status),
                             lastEventText = "会话实时流已就绪。",
                             fallbackNotice = null,
                             pendingApproval = event.pendingApproval?.toUiState()
@@ -1186,6 +1240,39 @@ class AppViewModel(
                     )
                 }
                 maybeAutoApprovePending(sessionId)
+            }
+
+            is SessionStreamEvent.BridgeLifecycle -> {
+                appLogger.info(
+                    "AppViewModel",
+                    "bridge 生命周期事件：sessionId=$sessionId, phase=${event.phase}, reason=${event.reason ?: "none"}",
+                )
+                if (event.phase == "restarting") {
+                    bridgeRestartExpectedSessionId = sessionId
+                }
+                _uiState.update {
+                    it.copy(
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            isActive = true,
+                            isConnected = true,
+                            connectionText = if (event.phase == "restarting") {
+                                "bridge 即将重启"
+                            } else {
+                                it.sessionRealtimeState.connectionText
+                            },
+                            lastEventText = if (event.phase == "restarting") {
+                                "bridge 正在进入平滑重启窗口。"
+                            } else {
+                                it.sessionRealtimeState.lastEventText
+                            },
+                            fallbackNotice = if (event.phase == "restarting") {
+                                buildBridgeLifecycleNotice(event)
+                            } else {
+                                it.sessionRealtimeState.fallbackNotice
+                            },
+                        ),
+                    )
+                }
             }
 
             is SessionStreamEvent.AssistantDelta -> {
@@ -1614,6 +1701,30 @@ class AppViewModel(
 
     private fun buildRetryableStreamNotice(message: String): String {
         return "上游响应流暂时中断，bridge 正在重试：$message"
+    }
+
+    private fun buildBridgeLifecycleNotice(event: SessionStreamEvent.BridgeLifecycle): String {
+        val base = "bridge 正在平滑重启，旧连接关闭后会自动恢复当前会话。"
+        val delayNotice = event.graceMs?.takeIf { it > 0 }?.let { "预计 ${it} ms 后进入切换。" }.orEmpty()
+        val reasonNotice = event.reason?.takeIf { it.isNotBlank() }?.let { "原因：$it" }.orEmpty()
+        return listOf(base, delayNotice, reasonNotice)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    private fun buildBridgeRestartNotice(
+        reconnectScheduled: Boolean,
+        reason: String?,
+    ): String {
+        val base = if (reconnectScheduled) {
+            "bridge 正在重启，客户端会自动重连并刷新会话快照。"
+        } else {
+            "bridge 重启后未能继续自动重连，请稍后手动同步。"
+        }
+        val reasonNotice = reason?.takeIf { it.isNotBlank() }?.let { "原因：$it" }.orEmpty()
+        return listOf(base, reasonNotice)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
     }
 
     private fun isRetryableStreamNotice(message: String?): Boolean {

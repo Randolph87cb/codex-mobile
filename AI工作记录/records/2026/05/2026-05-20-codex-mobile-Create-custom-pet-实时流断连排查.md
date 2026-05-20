@@ -183,6 +183,69 @@
   - 以后从本仓库任意机器执行 `scripts/build-android-debug.ps1`，只要代码相同，产出的 debug APK 都会使用同一套签名证书。
   - 手机上如果已经装的是这套固定签名的版本，后续来自其他机器的同仓库 debug 包可直接覆盖安装，不再因为签名不同被拦截。
 
+## 补充判断：bridge 平滑更新方向
+
+- 用户进一步提出：能否把 bridge 做成“热更新”，避免每次重启影响现有连接。
+- 已结合当前实现判断：
+  - 当前后台 bridge 通过 `scripts/restart-bridge-background.ps1` 直接停旧进程、重新 `npm run build` 并启动新的 `dist/index.js`，不具备热替换或双实例切换能力。
+  - `bridge` 当前既负责 HTTP/API，也持有运行时内存状态，包括会话映射、pending approval、实时流订阅与上游 `app-server` 交互，因此单进程内的“无感热更新”不现实。
+  - Android 端已经具备实时流自动重连和会话快照刷新能力，更适合沿着“平滑重启 + 自动恢复”演进，而不是强行做真正热更新。
+- 当前建议方向：
+  - 不做“源码热更新 / 进程内热替换”
+  - 优先做“bridge 平滑重启”，目标是：
+    - 短时间内切换新版本
+    - Android 自动感知断流并重连
+    - 通过 `/api/session/:id` 快照与 `session.started` 重建详情页状态
+    - 避免用户手工回退、重进、重发
+- 初步落地重点：
+  - bridge 增加版本与维护状态暴露
+  - bridge 增加“drain”模式，停止接收新输入但保留短暂存活窗口
+  - Android 区分“bridge 正在重启”与“普通实时流失败”
+  - Android 在重连成功后主动刷新当前会话与列表快照
+  - 中长期再考虑把关键会话运行态外置，减少重启丢失面
+
+## 补充进展：bridge 平滑重启与 Android 自动恢复
+
+- 用户确认继续，不做“真正热更新”，先实现第一阶段的“平滑重启 + 自动恢复”。
+- 已完成实现：
+  - bridge：
+    - `bridge/src/types.ts`
+      - 新增 `BridgeLifecycleState`
+      - 为实时流事件类型增加 `bridge.lifecycle`
+    - `bridge/src/app.ts`
+      - `/health` 新增 `bridgeVersion`、`startedAt`、`lifecycle`
+      - 新增仅允许 loopback 调用的 `POST /internal/lifecycle/drain`
+      - bridge 进入 drain 后，会向当前会话 WebSocket 订阅广播 `bridge.lifecycle`
+      - drain 期间拒绝新的变更类请求：
+        - 创建会话
+        - 上传附件
+        - 更新配置
+        - 发送输入
+        - 中断
+        - 审批
+      - 新进入的详情页实时流如果恰逢 drain，也会在 `session.started` 后立即收到 `bridge.lifecycle`
+    - `scripts/restart-bridge-background.ps1`
+      - 后台重启前先请求旧 bridge 进入 drain 窗口
+      - 默认等待 `2000 ms` 给移动端收到生命周期事件，再停旧进程、起新进程
+  - Android：
+    - `android/app/src/main/java/com/openai/codexmobile/data/SessionStreamEvent.kt`
+      - 新增 `BridgeLifecycle`
+    - `android/app/src/main/java/com/openai/codexmobile/data/RealBridgeDataProvider.kt`
+      - 解析 `bridge.lifecycle`
+      - 日志摘要里区分 bridge 生命周期事件
+    - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+      - 识别 `bridge.lifecycle(restarting)`
+      - 在旧连接关闭前显示“bridge 即将重启 / bridge 正在进入平滑重启窗口”
+      - 旧连接断开后，对这类事件触发的断流走“bridge 重启恢复”路径，优先立即重连
+      - 重连失败时再回退到原有指数退避
+      - 重连成功后通过现有实时流 + 快照刷新恢复状态
+    - `README.md`
+      - 补充后台重启脚本会先 drain，再切换新 bridge 的说明
+- 当前用户可见行为：
+  - bridge 重启前，详情页会先收到一条“bridge 即将重启”的生命周期提示，而不是直接表现成普通错误。
+  - 旧连接关闭后，手机端会优先立即重连；若新 bridge 尚未完全就绪，再自动退回现有重连退避。
+  - bridge drain 期间不会再接受新的写操作，避免在切换窗口接受请求后又因为进程退出而丢失。
+
 ## 验证结果
 
 - 已执行：
@@ -192,7 +255,7 @@
 - 已执行：
   - `cd bridge`
   - `npm test`
-  - 结果：`43 passed`
+  - 结果：`44 passed`
 - 已执行 `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
   - 结果：`BUILD SUCCESSFUL`
 - 已执行：
@@ -203,6 +266,17 @@
   - 结果：`BUILD SUCCESSFUL`
 - 最新 debug APK 产物：
   - `android/app/build/outputs/apk/debug/app-debug.apk`
+- 已新增并通过的回归验证：
+  - bridge：
+    - `bridge/tests/app.test.ts`
+      - 验证 `/health` 返回生命周期状态
+      - 验证 `POST /internal/lifecycle/drain` 会广播 `bridge.lifecycle`
+      - 验证 drain 期间写请求返回 `503 bridge-restarting`
+  - Android：
+    - `android/app/src/test/java/com/openai/codexmobile/data/RealBridgeDataProviderTest.kt`
+      - 验证 `bridge.lifecycle` 事件解析
+    - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+      - 验证 bridge 生命周期事件后，旧连接关闭会立即触发重连恢复
 - 已执行：
   - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
   - `keytool -list -v -keystore android/signing/debug.keystore -storepass android`

@@ -157,6 +157,11 @@ describe("buildBridgeApp", () => {
     expect(health.json()).toMatchObject({
       ok: true,
       runnerMode: "mock",
+      bridgeVersion: "0.1.0",
+      lifecycle: {
+        phase: "running",
+        draining: false,
+      },
       security: {
         tokenAuthEnabled: false,
         cwdWhitelistEnabled: false,
@@ -199,6 +204,11 @@ describe("buildBridgeApp", () => {
     const health = await app.inject({ method: "GET", url: "/health" });
     expect(health.statusCode).toBe(200);
     expect(health.json()).toMatchObject({
+      bridgeVersion: "0.1.0",
+      lifecycle: {
+        phase: "running",
+        draining: false,
+      },
       security: {
         tokenAuthEnabled: true,
         cwdWhitelistEnabled: false,
@@ -849,6 +859,87 @@ describe("buildBridgeApp", () => {
           requestId: "req-history",
           method: "item/permissions/requestApproval",
         },
+      },
+    });
+
+    await app.close();
+  });
+
+  test("broadcasts bridge lifecycle events during drain and rejects mutating requests", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const address = app.server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("unexpected-server-address");
+    }
+
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+
+    const lifecyclePayload = await new Promise<string>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/session/${session.id}/ws`);
+      socket.addEventListener("message", async (event) => {
+        const payload = JSON.parse(String(event.data));
+        if (payload.type !== "session.started") {
+          resolve(JSON.stringify(payload));
+          socket.close();
+          return;
+        }
+
+        const drain = await app.inject({
+          method: "POST",
+          url: "/internal/lifecycle/drain",
+          payload: {
+            reason: "bridge restart requested",
+            graceMs: 2500,
+          },
+        });
+        expect(drain.statusCode).toBe(200);
+      });
+      socket.addEventListener("error", () => {
+        reject(new Error("websocket-connect-failed"));
+      });
+    });
+
+    expect(JSON.parse(lifecyclePayload)).toMatchObject({
+      type: "bridge.lifecycle",
+      sessionId: session.id,
+      data: {
+        phase: "restarting",
+        reason: "bridge restart requested",
+        graceMs: 2500,
+        bridgeVersion: "0.1.0",
+      },
+    });
+
+    const whileDraining = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        text: "继续",
+      },
+    });
+    expect(whileDraining.statusCode).toBe(503);
+    expect(whileDraining.json()).toMatchObject({
+      error: "bridge-restarting",
+      action: "session-input",
+    });
+
+    const health = await app.inject({ method: "GET", url: "/health" });
+    expect(health.json()).toMatchObject({
+      lifecycle: {
+        phase: "restarting",
+        draining: true,
+        reason: "bridge restart requested",
+        drainGraceMs: 2500,
       },
     });
 

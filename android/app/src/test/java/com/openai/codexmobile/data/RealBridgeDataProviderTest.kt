@@ -25,4 +25,19 @@ class RealBridgeDataProviderTest {
         assertTrue(event?.pendingApproval?.method == "item/permissions/requestApproval")
         assertTrue(event?.pendingApproval?.paramsSummary == "等待审批：item/permissions/requestApproval")
     }
+
+    @Test
+    fun parseBridgeLifecycleEvent() {
+        val event = parseSessionStreamEvent(
+            sessionId = "sess-restart",
+            payload = """{"type":"bridge.lifecycle","sessionId":"sess-restart","timestamp":"2026-05-20T12:00:00Z","data":{"phase":"restarting","reason":"bridge restart requested","graceMs":2000,"bridgeVersion":"0.1.0","bridgeStartedAt":"2026-05-20T11:59:00Z"}}""",
+        ) as? SessionStreamEvent.BridgeLifecycle
+
+        assertNotNull(event)
+        assertTrue(event?.phase == "restarting")
+        assertTrue(event?.reason == "bridge restart requested")
+        assertTrue(event?.graceMs == 2000)
+        assertTrue(event?.bridgeVersion == "0.1.0")
+        assertTrue(event?.bridgeStartedAt == "2026-05-20T11:59:00Z")
+    }
 }

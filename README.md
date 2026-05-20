@@ -118,6 +118,11 @@ powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\stop-
 powershell -ExecutionPolicy Bypass -File D:\workspace\codex-mobile\scripts\restart-bridge-background.ps1
 ```
 
+说明：
+
+- 当前后台重启脚本会先请求旧 bridge 进入短暂 `drain` 窗口，再停止旧进程并拉起新进程。
+- Android 端收到这段窗口内的生命周期事件后，会把它识别为“bridge 正在重启”，并在旧连接断开后自动重连和刷新快照。
+
 如果 bridge 配置了 `CODEX_MOBILE_AUTH_TOKEN`，Android 端需要先进入“设置”页填写 token，再发起连接并进入会话详情页实时流。
 
 bridge 后台模式会在需要时直接拉起 `codex.exe app-server`，不依赖桌面版 Codex UI 先手动打开；但它依赖当前用户环境里能找到 `codex.exe`，并且该用户下的 Codex 本地登录态可用。

@@ -106,6 +106,7 @@ export interface SessionApprovalResult {
 export interface BridgeEvent {
   type:
     | "session.started"
+    | "bridge.lifecycle"
     | "assistant.delta"
     | "assistant.done"
     | "activity"
@@ -117,6 +118,16 @@ export interface BridgeEvent {
   sessionId: string;
   timestamp: string;
   data: Record<string, unknown>;
+}
+
+export interface BridgeLifecycleState {
+  phase: "running" | "restarting";
+  draining: boolean;
+  reason: string | null;
+  startedAt: string;
+  drainStartedAt: string | null;
+  drainGraceMs: number | null;
+  bridgeVersion: string;
 }
 
 export interface BridgeSecurityConfig {

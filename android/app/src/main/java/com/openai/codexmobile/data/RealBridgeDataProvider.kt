@@ -510,6 +510,16 @@ internal fun parseSessionStreamEvent(
             timestamp = timestamp,
         )
 
+        "bridge.lifecycle" -> SessionStreamEvent.BridgeLifecycle(
+            sessionId = eventSessionId,
+            phase = data.optString("phase").ifBlank { "running" },
+            reason = data.optString("reason").takeIf { it.isNotBlank() },
+            graceMs = data.takeIf { it.has("graceMs") && !it.isNull("graceMs") }?.optInt("graceMs"),
+            bridgeVersion = data.optString("bridgeVersion").takeIf { it.isNotBlank() },
+            bridgeStartedAt = data.optString("bridgeStartedAt").takeIf { it.isNotBlank() },
+            timestamp = timestamp,
+        )
+
         "assistant.delta" -> SessionStreamEvent.AssistantDelta(
             sessionId = eventSessionId,
             text = data.optString("text"),
@@ -791,6 +801,7 @@ private fun SessionStreamEvent.toLogSummary(): String {
         is SessionStreamEvent.StreamOpened -> "stream.opened sessionId=$sessionId"
         is SessionStreamEvent.StreamClosed -> "stream.closed sessionId=$sessionId reason=${reason ?: "none"}"
         is SessionStreamEvent.SessionStarted -> "session.started sessionId=$sessionId status=$status"
+        is SessionStreamEvent.BridgeLifecycle -> "bridge.lifecycle sessionId=$sessionId phase=$phase"
         is SessionStreamEvent.AssistantDelta -> "assistant.delta sessionId=$sessionId chars=${text.length}"
         is SessionStreamEvent.AssistantDone -> "assistant.done sessionId=$sessionId status=${turnStatus ?: "unknown"}"
         is SessionStreamEvent.Activity -> "activity sessionId=$sessionId itemType=${itemType ?: "unknown"}"

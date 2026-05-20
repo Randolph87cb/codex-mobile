@@ -31,6 +31,16 @@ sealed interface SessionStreamEvent {
         override val timestamp: String?,
     ) : SessionStreamEvent
 
+    data class BridgeLifecycle(
+        override val sessionId: String,
+        val phase: String,
+        val reason: String?,
+        val graceMs: Int?,
+        val bridgeVersion: String?,
+        val bridgeStartedAt: String?,
+        override val timestamp: String?,
+    ) : SessionStreamEvent
+
     data class AssistantDelta(
         override val sessionId: String,
         val text: String,

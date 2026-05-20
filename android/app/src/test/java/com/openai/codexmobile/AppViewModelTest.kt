@@ -444,6 +444,50 @@ class AppViewModelTest {
     }
 
     @Test
+    fun bridgeLifecycleRestartReconnectsImmediatelyAfterStreamClose() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_bridge_restart", status = "running")
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail("sess_bridge_restart")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.BridgeLifecycle(
+                sessionId = "sess_bridge_restart",
+                phase = "restarting",
+                reason = "bridge restart requested",
+                graceMs = 2000,
+                bridgeVersion = "0.1.0",
+                bridgeStartedAt = "2026-05-20T11:59:00Z",
+                timestamp = "2026-05-20T12:00:00Z",
+            ),
+        )
+        runCurrent()
+
+        assertEquals("bridge 即将重启", viewModel.uiState.value.sessionRealtimeState.connectionText)
+        assertTrue(viewModel.uiState.value.sessionRealtimeState.fallbackNotice?.contains("平滑重启") == true)
+
+        bridgeApi.emit(
+            SessionStreamEvent.StreamClosed(
+                sessionId = "sess_bridge_restart",
+                reason = "bridge restarting",
+                timestamp = "2026-05-20T12:00:02Z",
+            ),
+        )
+        runCurrent()
+
+        assertEquals("bridge 重启中，准备恢复", viewModel.uiState.value.sessionRealtimeState.connectionText)
+        assertEquals(2, bridgeApi.observeSessionEventsCallCount)
+    }
+
+    @Test
     fun retryableStreamErrorKeepsRunningStateAndDoesNotShowUserError() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_retryable_error", status = "running")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)

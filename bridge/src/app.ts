@@ -11,7 +11,7 @@ import { AppServerRunner } from "./app-server-runner.js";
 import { MockRunner } from "./mock-runner.js";
 import { authorizeApiRequest, buildBridgeSecurityState, resolveBridgeSecurityConfig, validateSessionCwd } from "./security.js";
 import { SessionStore } from "./session-store.js";
-import type { BridgeSecurityConfig } from "./types.js";
+import type { BridgeLifecycleState, BridgeSecurityConfig } from "./types.js";
 
 const createSessionSchema = z.object({
   cwd: z.string().trim().min(1),
@@ -78,10 +78,21 @@ const approveSchema = z.object({
   decision: z.enum(["approve", "approve_for_session", "reject", "reject_and_interrupt"]).default("approve"),
 });
 
+const drainBridgeSchema = z.object({
+  reason: z.string().trim().min(1).max(200).optional(),
+  graceMs: z.number().int().min(0).max(15_000).optional(),
+});
+
 interface BuildBridgeAppOptions {
   runner?: BridgeRunner;
   store?: SessionStore;
   security?: BridgeSecurityConfig;
+}
+
+interface SessionSocket {
+  send(payload: string): void;
+  close(code?: number, data?: string): void;
+  on(event: "close", listener: () => void): void;
 }
 
 export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promise<FastifyInstance> {
@@ -95,6 +106,12 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   const historyRunner = isHistoryCapableRunner(runner) ? runner : null;
   const security = options.security ?? resolveBridgeSecurityConfig();
   const securityState = buildBridgeSecurityState(security);
+  const bridgeVersion = process.env.CODEX_MOBILE_BRIDGE_VERSION ?? "0.1.0";
+  const bridgeStartedAt = new Date().toISOString();
+  const sessionSockets = new Map<string, Set<SessionSocket>>();
+  let drainStartedAt: string | null = null;
+  let drainReason: string | null = null;
+  let drainGraceMs: number | null = null;
 
   await app.register(websocket);
   await app.register(multipart, {
@@ -128,14 +145,47 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     ok: true,
     service: "codex-mobile-bridge",
     runnerMode: runner.mode,
+    bridgeVersion,
+    startedAt: bridgeStartedAt,
+    lifecycle: buildLifecycleState(),
     security: securityState,
   }));
+
+  app.post("/internal/lifecycle/drain", async (request, reply) => {
+    if (!isLoopbackRequest(request)) {
+      return reply.status(403).send({
+        error: "forbidden",
+        message: "bridge drain is only allowed from loopback clients",
+      });
+    }
+
+    const body = drainBridgeSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: body.error.flatten(),
+      });
+    }
+
+    drainStartedAt = new Date().toISOString();
+    drainReason = body.data.reason ?? "bridge restart requested";
+    drainGraceMs = normalizeDrainGraceMs(body.data.graceMs);
+    broadcastBridgeLifecycle("restarting", drainReason, drainGraceMs);
+
+    return {
+      ok: true,
+      lifecycle: buildLifecycleState(),
+    };
+  });
 
   app.get("/api/sessions", async () => ({
     items: historyRunner ? await historyRunner.listSessionViews() : store.list(),
   }));
 
   app.post("/api/attachment/image", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("attachment-upload"));
+    }
     try {
       const attachment = request.isMultipart()
         ? await parseMultipartImageUpload(request, attachmentStore)
@@ -186,6 +236,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   app.post("/api/session", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-create"));
+    }
     const parsed = createSessionSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -220,6 +273,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   app.patch("/api/session/:id/config", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-config-update"));
+    }
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const body = updateSessionConfigSchema.safeParse(request.body ?? {});
     if (!body.success) {
@@ -278,6 +334,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   app.post("/api/session/:id/input", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-input"));
+    }
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const body = inputSchema.safeParse(request.body);
     if (!body.success) {
@@ -344,6 +403,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   app.post("/api/session/:id/interrupt", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-interrupt"));
+    }
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const session = await resolveSessionRecord(params.id, store, historyRunner);
     if (!session) {
@@ -355,6 +417,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   app.post("/api/session/:id/approve", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-approve"));
+    }
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const session = await resolveSessionRecord(params.id, store, historyRunner);
     if (!session) {
@@ -425,6 +490,14 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
         },
       }),
     );
+    if (isDraining()) {
+      socket.send(JSON.stringify(buildBridgeLifecycleEvent(session.id, "restarting", drainReason, drainGraceMs)));
+    }
+
+    const trackedSocket = socket as unknown as SessionSocket;
+    const socketSet = sessionSockets.get(session.id) ?? new Set<SessionSocket>();
+    socketSet.add(trackedSocket);
+    sessionSockets.set(session.id, socketSet);
 
     const unsubscribe = runner.subscribe(session.id, (event) => {
       socket.send(JSON.stringify(event));
@@ -432,10 +505,68 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
 
     socket.on("close", () => {
       unsubscribe();
+      const currentSet = sessionSockets.get(session.id);
+      currentSet?.delete(trackedSocket);
+      if (currentSet && currentSet.size === 0) {
+        sessionSockets.delete(session.id);
+      }
     });
   });
 
   return app;
+
+  function isDraining(): boolean {
+    return drainStartedAt != null;
+  }
+
+  function buildLifecycleState(): BridgeLifecycleState {
+    return {
+      phase: isDraining() ? "restarting" : "running",
+      draining: isDraining(),
+      reason: drainReason,
+      startedAt: bridgeStartedAt,
+      drainStartedAt,
+      drainGraceMs,
+      bridgeVersion,
+    };
+  }
+
+  function broadcastBridgeLifecycle(
+    phase: BridgeLifecycleState["phase"],
+    reason: string | null,
+    graceMs: number | null,
+  ): void {
+    for (const [sessionId, sockets] of sessionSockets.entries()) {
+      const payload = JSON.stringify(buildBridgeLifecycleEvent(sessionId, phase, reason, graceMs));
+      for (const socket of sockets) {
+        try {
+          socket.send(payload);
+        } catch {
+          socket.close();
+        }
+      }
+    }
+  }
+
+  function buildBridgeLifecycleEvent(
+    sessionId: string,
+    phase: BridgeLifecycleState["phase"],
+    reason: string | null,
+    graceMs: number | null,
+  ) {
+    return {
+      type: "bridge.lifecycle",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        phase,
+        reason,
+        graceMs,
+        bridgeVersion,
+        bridgeStartedAt,
+      },
+    };
+  }
 }
 
 async function parseMultipartImageUpload(
@@ -505,6 +636,14 @@ function resolveBridgeBodyLimitBytes(): number {
   return limitMb * 1024 * 1024;
 }
 
+function buildBridgeRestartingError(action: string) {
+  return {
+    error: "bridge-restarting",
+    action,
+    message: "bridge is restarting and temporarily not accepting new mutating requests",
+  };
+}
+
 async function sendImageFile(
   reply: FastifyReply,
   filePath: string,
@@ -561,6 +700,32 @@ function normalizePathForComparison(value: string): string {
   const root = path.parse(resolved).root;
   const trimmed = resolved === root ? resolved : resolved.replace(/[\\/]+$/, "");
   return process.platform === "win32" ? trimmed.toLowerCase() : trimmed;
+}
+
+function normalizeDrainGraceMs(value: number | undefined): number {
+  if (!Number.isFinite(value)) {
+    return 2_000;
+  }
+
+  const normalized = value ?? 2_000;
+  return Math.max(0, Math.min(15_000, normalized));
+}
+
+function isLoopbackRequest(request: FastifyRequest): boolean {
+  const candidates = [
+    request.ip,
+    request.socket.remoteAddress,
+  ];
+  return candidates.some((candidate) => isLoopbackAddress(candidate));
+}
+
+function isLoopbackAddress(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/^::ffff:/, "");
+  return normalized === "127.0.0.1" || normalized === "::1" || normalized === "localhost";
 }
 
 function isSameOrChildPath(candidate: string, allowedRoot: string): boolean {

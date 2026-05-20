@@ -16,11 +16,29 @@ $statePath = Join-Path $runtimeDir "bridge-process.json"
 $stdoutLog = Join-Path $logsDir "bridge-stdout.log"
 $stderrLog = Join-Path $logsDir "bridge-stderr.log"
 $stopScript = Join-Path $PSScriptRoot "stop-bridge-background.ps1"
+$drainGraceMs = 2000
 
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 
 if (Test-Path $statePath) {
+    try {
+        $drainUri = "http://127.0.0.1:$Port/internal/lifecycle/drain"
+        $drainBody = @{
+            reason = "bridge restart requested"
+            graceMs = $drainGraceMs
+        } | ConvertTo-Json
+        Write-Host "Requesting bridge drain: $drainUri"
+        Invoke-RestMethod `
+            -Uri $drainUri `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $drainBody `
+            -TimeoutSec 2 | Out-Null
+        Start-Sleep -Milliseconds $drainGraceMs
+    } catch {
+        Write-Warning "Bridge drain request failed, continuing with stop: $($_.Exception.Message)"
+    }
     & $stopScript
 }
 
