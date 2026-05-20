@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -796,18 +797,32 @@ private fun QueuedInputCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailQueuedInputsCard),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "排队中的消息（${messages.size}）",
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TranscriptLabelChip(
+                    text = "排队",
+                    icon = Icons.Filled.Schedule,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Text(
+                    text = "排队中的消息（${messages.size}）",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
             Text(
                 text = "当前轮结束后会按顺序自动发送。",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(
                 modifier = Modifier
@@ -818,6 +833,7 @@ private fun QueuedInputCard(
             ) {
                 messages.forEachIndexed { index, message ->
                     Card(
+                        shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         ),
@@ -901,27 +917,48 @@ private fun TranscriptBubbleCard(
         }
         val backgroundColor = when (bubble.speaker) {
             TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
-            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
+            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.surfaceVariant
             TranscriptSpeaker.System -> when (bubble.kind) {
                 TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
-                TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.surfaceVariant
+                TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.secondaryContainer
                 TranscriptBubbleKind.Status,
                 TranscriptBubbleKind.Message,
                 -> MaterialTheme.colorScheme.surfaceVariant
             }
         }
+        val contentColor = when (bubble.speaker) {
+            TranscriptSpeaker.User -> MaterialTheme.colorScheme.onPrimaryContainer
+            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onSurfaceVariant
+            TranscriptSpeaker.System -> when (bubble.kind) {
+                TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.onTertiaryContainer
+                TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.onSecondaryContainer
+                TranscriptBubbleKind.Status,
+                TranscriptBubbleKind.Message,
+                -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        }
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(0.92f),
-            colors = CardDefaults.cardColors(containerColor = backgroundColor),
+                .fillMaxWidth(if (isUser) 0.9f else 0.95f),
+            shape = RoundedCornerShape(
+                topStart = 22.dp,
+                topEnd = 22.dp,
+                bottomStart = if (isUser) 22.dp else 10.dp,
+                bottomEnd = if (isUser) 10.dp else 22.dp,
+            ),
+            colors = CardDefaults.cardColors(
+                containerColor = backgroundColor,
+                contentColor = contentColor,
+            ),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (isCollapsible) {
                     TranscriptToggleHeader(
+                        bubble = bubble,
                         label = bubble.label,
                         title = bubble.summaryLine,
                         expanded = expanded,
@@ -932,6 +969,7 @@ private fun TranscriptBubbleCard(
                     )
                 } else {
                     TranscriptStaticHeader(
+                        bubble = bubble,
                         label = bubble.label,
                         title = bubble.title,
                         copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
@@ -970,14 +1008,16 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.92f),
+                .fillMaxWidth(0.95f),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 TranscriptToggleHeader(
+                    bubble = null,
                     label = "执行过程",
                     title = group.summaryLine,
                     expanded = expanded,
@@ -1023,13 +1063,14 @@ private fun ExecutionActivityCard(
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TranscriptToggleHeader(
+                bubble = bubble,
                 label = bubble.label,
                 title = bubble.summaryLine,
                 expanded = expanded,
@@ -1055,6 +1096,7 @@ private fun ExecutionActivityCard(
 
 @Composable
 private fun TranscriptToggleHeader(
+    bubble: TranscriptBubble?,
     label: String,
     title: String,
     expanded: Boolean,
@@ -1073,11 +1115,15 @@ private fun TranscriptToggleHeader(
                 .weight(1f)
                 .testTag(toggleTag)
                 .clickable(onClick = onToggle),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
+            TranscriptLabelChip(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                icon = bubble?.headerIcon(),
+                containerColor = bubble?.headerContainerColor()
+                    ?: MaterialTheme.colorScheme.primaryContainer,
+                contentColor = bubble?.headerContentColor()
+                    ?: MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Text(
                 text = title,
@@ -1086,7 +1132,7 @@ private fun TranscriptToggleHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(
+        FilledTonalIconButton(
             onClick = onCopy,
             modifier = Modifier.testTag(copyTag),
         ) {
@@ -1108,6 +1154,7 @@ private fun TranscriptToggleHeader(
 
 @Composable
 private fun TranscriptStaticHeader(
+    bubble: TranscriptBubble,
     label: String,
     title: String?,
     copyTag: String,
@@ -1120,9 +1167,14 @@ private fun TranscriptStaticHeader(
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(text = label, style = MaterialTheme.typography.labelLarge)
+            TranscriptLabelChip(
+                text = label,
+                icon = bubble.headerIcon(),
+                containerColor = bubble.headerContainerColor(),
+                contentColor = bubble.headerContentColor(),
+            )
             title?.let {
                 Text(
                     text = it,
@@ -1132,7 +1184,7 @@ private fun TranscriptStaticHeader(
                 )
             }
         }
-        IconButton(
+        FilledTonalIconButton(
             onClick = onCopy,
             modifier = Modifier.testTag(copyTag),
         ) {
@@ -1432,15 +1484,28 @@ private fun ApprovalActionCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailApprovalCard),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "待审批操作",
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TranscriptLabelChip(
+                    text = "审批",
+                    icon = Icons.Filled.HourglassTop,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    text = "待审批操作",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1454,11 +1519,19 @@ private fun ApprovalActionCard(
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 approval.paramsSummary?.let { summary ->
-                    SelectionContainer {
-                        Text(
-                            text = summary,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                    ) {
+                        SelectionContainer {
+                            Text(
+                                text = summary,
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                 }
             }
@@ -1474,13 +1547,17 @@ private fun ApprovalActionCard(
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.ApproveForSession) },
                 enabled = !approval.isSubmitting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(TestTags.SessionDetailApproveForSessionButton),
             ) {
                 Text("本会话都批准")
             }
-            Button(
+            OutlinedButton(
                 onClick = { onApprovalDecision(ApprovalDecision.Reject) },
                 enabled = !approval.isSubmitting,
                 modifier = Modifier
@@ -1492,6 +1569,10 @@ private fun ApprovalActionCard(
             Button(
                 onClick = { onApprovalDecision(ApprovalDecision.RejectAndInterrupt) },
                 enabled = !approval.isSubmitting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(TestTags.SessionDetailRejectAndInterruptButton),
@@ -1499,6 +1580,78 @@ private fun ApprovalActionCard(
                 Text("拒绝并中断")
             }
         }
+    }
+}
+
+@Composable
+private fun TranscriptLabelChip(
+    text: String,
+    icon: ImageVector? = null,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
+private fun TranscriptBubble.headerIcon(): ImageVector {
+    return when (speaker) {
+        TranscriptSpeaker.User -> Icons.Filled.Work
+        TranscriptSpeaker.Assistant -> Icons.Filled.Bolt
+        TranscriptSpeaker.System -> when (kind) {
+            TranscriptBubbleKind.ToolRequest -> Icons.Filled.HourglassTop
+            TranscriptBubbleKind.ToolResult -> Icons.Filled.CheckCircle
+            TranscriptBubbleKind.Status,
+            TranscriptBubbleKind.Message,
+            -> Icons.Filled.Schedule
+        }
+    }
+}
+
+@Composable
+private fun TranscriptBubble.headerContainerColor() = when (speaker) {
+    TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
+    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
+    TranscriptSpeaker.System -> when (kind) {
+        TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
+        TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.secondaryContainer
+        TranscriptBubbleKind.Status,
+        TranscriptBubbleKind.Message,
+        -> MaterialTheme.colorScheme.surface
+    }
+}
+
+@Composable
+private fun TranscriptBubble.headerContentColor() = when (speaker) {
+    TranscriptSpeaker.User -> MaterialTheme.colorScheme.onPrimaryContainer
+    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onSecondaryContainer
+    TranscriptSpeaker.System -> when (kind) {
+        TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.onTertiaryContainer
+        TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.onSecondaryContainer
+        TranscriptBubbleKind.Status,
+        TranscriptBubbleKind.Message,
+        -> MaterialTheme.colorScheme.onSurface
     }
 }
 

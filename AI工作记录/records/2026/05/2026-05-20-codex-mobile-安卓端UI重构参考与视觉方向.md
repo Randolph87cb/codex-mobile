@@ -193,3 +193,46 @@
 
 - 本轮没有实际启用 subagent。
 - 原因：虽然项目全局规则默认按委派模式组织工作，但当前环境的高优先级工具规则要求只有在用户显式要求 subagent/并行代理时才真正调用；因此本轮只沿用了委派拆分框架，没有实际派生代理。
+
+## 第二轮细化
+
+- 用户在第一轮交付后要求“继续”，本轮聚焦 `SessionDetail` 页的内部一致性，不再扩散到其他页面。
+- 本轮目标：
+  - 统一消息气泡、执行过程分组和审批卡片的视觉语言
+  - 保留现有折叠/展开行为与 `TestTags`
+  - 不改桥接协议、状态流和数据层
+
+## 第二轮代码改动
+
+- 已继续修改：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 具体变化包括：
+  - 排队消息卡片加入更清楚的标签胶囊和更稳的卡片层次
+  - 普通消息、系统状态、工具请求/结果气泡统一成“标签胶囊 + 标题 + 内容”的结构
+  - 执行过程分组卡片和子步骤卡片统一圆角、间距和头部样式
+  - 复制按钮统一改成更轻的 tonal icon button 表达
+  - 审批卡片增加标签胶囊和参数摘要容器，并把“批准 / 本会话都批准 / 拒绝 / 拒绝并中断”做出更清楚的层级区分
+
+## 第二轮验证结果
+
+- 已执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 首次结果：失败，原因不是代码语法，而是 Kotlin daemon / incremental cache 在 `android/app/build/kotlin/compileDebugKotlin/...` 下出现本地缓存关闭异常
+- 已处理：
+  - 停止 Gradle daemon
+  - 清理工作区内 `android/app/build/kotlin` 编译缓存
+  - 使用以下环境变量重新执行项目要求的打包脚本：
+    - `GRADLE_OPTS=-Dkotlin.incremental=false -Dkotlin.compiler.execution.strategy=in-process`
+- 重新执行后结果：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - `BUILD SUCCESSFUL`
+- 已执行：
+  - `cd android`
+  - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
+  - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
+  - `$env:GRADLE_OPTS = "-Dkotlin.incremental=false -Dkotlin.compiler.execution.strategy=in-process"`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：`BUILD SUCCESSFUL`
+- 已确认 APK 产物更新：
+  - `android/app/build/outputs/apk/debug/app-debug.apk`
+  - 最新修改时间：`2026-05-20 14:44:44`
