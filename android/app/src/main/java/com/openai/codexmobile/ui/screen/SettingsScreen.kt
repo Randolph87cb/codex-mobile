@@ -224,25 +224,6 @@ fun SettingsScreen(
                     ),
                     onValueChange = onServiceTierChange,
                 )
-                SettingButtonRow(
-                    title = "文件权限",
-                    currentValue = sandboxModeInput,
-                    options = listOf(
-                        SettingOption("只读", "read-only", TestTags.SettingsSandboxReadOnlyButton),
-                        SettingOption("工作区可写", "workspace-write", TestTags.SettingsSandboxWorkspaceWriteButton),
-                        SettingOption("完全访问", "danger-full-access", TestTags.SettingsSandboxDangerButton),
-                    ),
-                    onValueChange = onSandboxModeChange,
-                )
-                SettingButtonRow(
-                    title = "审批模式",
-                    currentValue = approvalModeInput,
-                    options = listOf(
-                        SettingOption("手动审批", "manual", TestTags.SettingsApprovalManualButton),
-                        SettingOption("自动审批", "auto", TestTags.SettingsApprovalAutoButton),
-                    ),
-                    onValueChange = onApprovalModeChange,
-                )
             }
         }
         Card(modifier = Modifier.fillMaxWidth()) {

@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { SessionRecord, SessionStatus, SessionView } from "./types.js";
+import type { PendingApprovalView, SessionRecord, SessionStatus, SessionView } from "./types.js";
 
 interface AppServerThreadStatus {
   type?: string;
@@ -75,7 +75,10 @@ export interface AppServerThread {
   turns?: AppServerTurn[];
 }
 
-export function buildSessionViewFromRecord(session: SessionRecord): SessionView {
+export function buildSessionViewFromRecord(
+  session: SessionRecord,
+  pendingApproval: PendingApprovalView | null = null,
+): SessionView {
   return {
     id: session.id,
     title: "新会话",
@@ -93,6 +96,7 @@ export function buildSessionViewFromRecord(session: SessionRecord): SessionView 
     threadId: session.threadId,
     activeTurnId: session.activeTurnId,
     lastError: session.lastError,
+    pendingApproval,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -101,6 +105,7 @@ export function buildSessionViewFromRecord(session: SessionRecord): SessionView 
 export function buildSessionViewFromThread(
   thread: AppServerThread,
   session?: SessionRecord,
+  pendingApproval: PendingApprovalView | null = null,
 ): SessionView {
   const fallbackStatus = mapThreadStatus(thread.status);
   const status = resolveThreadBackedStatus(thread, session, fallbackStatus);
@@ -136,6 +141,7 @@ export function buildSessionViewFromThread(
     threadId: session?.threadId ?? thread.id,
     activeTurnId: session?.activeTurnId ?? null,
     lastError,
+    pendingApproval,
     createdAt,
     updatedAt,
   };

@@ -16,6 +16,7 @@ import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
+import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.Dispatchers
@@ -77,10 +78,10 @@ class AppViewModelTest {
             CreateSessionRequest(
                 cwd = "D:\\workspace\\project-a",
                 model = "gpt-5.5",
-                approvalMode = "manual",
+                approvalMode = "auto",
                 reasoningEffort = "medium",
                 serviceTier = "default",
-                sandboxMode = "workspace-write",
+                sandboxMode = "danger-full-access",
             ),
             bridgeApi.lastCreateSessionRequest,
         )
@@ -98,7 +99,10 @@ class AppViewModelTest {
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
             sessionSummaries = listOf(detail.toSummary()),
-            detailsById = mapOf(detail.id to detail),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(status = "running"),
+            ),
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
@@ -116,6 +120,7 @@ class AppViewModelTest {
                 serviceTier = "fast",
                 sandboxMode = "danger-full-access",
                 threadId = "thread-1",
+                pendingApproval = null,
                 timestamp = "2026-05-19T10:00:01Z",
             ),
         )
@@ -137,7 +142,10 @@ class AppViewModelTest {
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
             sessionSummaries = listOf(detail.toSummary()),
-            detailsById = mapOf(detail.id to detail),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(status = "running"),
+            ),
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
@@ -173,7 +181,10 @@ class AppViewModelTest {
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
             sessionSummaries = listOf(detail.toSummary()),
-            detailsById = mapOf(detail.id to detail),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(status = "running"),
+            ),
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
@@ -222,7 +233,10 @@ class AppViewModelTest {
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val repository = FakeSessionRepository(
             sessionSummaries = listOf(detail.toSummary()),
-            detailsById = mapOf(detail.id to detail),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to detail.copy(status = "running"),
+            ),
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
@@ -258,6 +272,76 @@ class AppViewModelTest {
 
         assertEquals(listOf("这条消息应该排队"), bridgeApi.sentInputs)
         assertTrue(viewModel.uiState.value.queuedInputs.isEmpty())
+    }
+
+    @Test
+    fun reopenAwaitingApprovalSessionRestoresAndAutoApprovesPendingRequest() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(
+            id = "sess_restore_approval",
+            approvalMode = "manual",
+            sandboxMode = "workspace-write",
+            status = "awaiting_approval",
+        ).copy(
+            pendingApproval = PendingApprovalSnapshot(
+                requestId = BridgeRequestId.Text("req-restore"),
+                method = "item/permissions/requestApproval",
+                paramsSummary = "等待审批：item/permissions/requestApproval",
+            ),
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_restore_approval")
+        advanceUntilIdle()
+        viewModel.closeSessionDetail("sess_restore_approval")
+        viewModel.openSessionDetail("sess_restore_approval")
+        advanceUntilIdle()
+
+        assertTrue(
+            bridgeApi.sessionConfigUpdates.any {
+                it.approvalMode == "auto" && it.sandboxMode == "danger-full-access"
+            },
+        )
+        assertTrue(
+            bridgeApi.approvalCalls.any {
+                it.sessionId == "sess_restore_approval" &&
+                    it.requestId == BridgeRequestId.Text("req-restore") &&
+                    it.decision == ApprovalDecision.ApproveForSession
+            },
+        )
+        assertEquals("running", viewModel.uiState.value.selectedSession?.status)
+        assertNull(viewModel.uiState.value.sessionRealtimeState.pendingApproval)
+    }
+
+    @Test
+    fun connectSynchronizesExistingSessionsToManagedPolicy() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(
+            id = "sess_managed_sync",
+            approvalMode = "manual",
+            sandboxMode = "workspace-write",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+
+        assertTrue(
+            bridgeApi.sessionConfigUpdates.any {
+                it.approvalMode == "auto" && it.sandboxMode == "danger-full-access"
+            },
+        )
+        assertEquals("auto", viewModel.uiState.value.selectedSession?.approvalMode)
+        assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
     }
 
     @Test
@@ -440,10 +524,10 @@ class AppViewModelTest {
             authToken = "",
             cwd = "D:\\workspace\\global-default",
             model = "gpt-5.4",
-            approvalMode = "manual",
+            approvalMode = "auto",
             reasoningEffort = "low",
             serviceTier = "default",
-            sandboxMode = "workspace-write",
+            sandboxMode = "danger-full-access",
         )
         val settingsStore = FakeAppSettingsStore(globalSettings)
         val viewModel = AppViewModel(bridgeApi, repository, settingsStore, FakeAppLogger())
@@ -458,12 +542,18 @@ class AppViewModelTest {
         advanceUntilIdle()
 
         assertEquals(4, bridgeApi.sessionConfigUpdates.size)
-        assertEquals(globalSettings, settingsStore.saved)
+        assertEquals(globalSettings.endpoint, settingsStore.saved.endpoint)
+        assertEquals(globalSettings.cwd, settingsStore.saved.cwd)
+        assertEquals(globalSettings.model, settingsStore.saved.model)
+        assertEquals(globalSettings.approvalMode, settingsStore.saved.approvalMode)
+        assertEquals(globalSettings.reasoningEffort, settingsStore.saved.reasoningEffort)
+        assertEquals(globalSettings.serviceTier, settingsStore.saved.serviceTier)
+        assertEquals(globalSettings.sandboxMode, settingsStore.saved.sandboxMode)
         assertEquals("D:\\workspace\\global-default", viewModel.uiState.value.cwdInput)
         assertEquals("gpt-5.4", viewModel.uiState.value.modelInput)
         assertEquals("low", viewModel.uiState.value.reasoningEffortInput)
         assertEquals("default", viewModel.uiState.value.serviceTierInput)
-        assertEquals("workspace-write", viewModel.uiState.value.sandboxModeInput)
+        assertEquals("danger-full-access", viewModel.uiState.value.sandboxModeInput)
         assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedSession?.model)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
@@ -498,7 +588,7 @@ class AppViewModelTest {
         viewModel.updateSelectedSessionSandboxMode("danger-full-access")
         advanceUntilIdle()
 
-        assertEquals("awaiting_approval", viewModel.uiState.value.selectedSession?.status)
+        assertEquals("running", viewModel.uiState.value.selectedSession?.status)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
     }
@@ -513,10 +603,10 @@ class AppViewModelTest {
             authToken = "",
             cwd = "D:\\workspace\\global-default",
             model = "gpt-5.4",
-            approvalMode = "manual",
+            approvalMode = "auto",
             reasoningEffort = "low",
             serviceTier = "default",
-            sandboxMode = "workspace-write",
+            sandboxMode = "danger-full-access",
         )
         val settingsStore = FakeAppSettingsStore(globalSettings)
         val viewModel = AppViewModel(bridgeApi, repository, settingsStore, FakeAppLogger())
@@ -531,12 +621,18 @@ class AppViewModelTest {
         viewModel.updateSelectedSessionSandboxMode("danger-full-access")
         advanceUntilIdle()
 
-        assertEquals(globalSettings, settingsStore.saved)
+        assertEquals(globalSettings.endpoint, settingsStore.saved.endpoint)
+        assertEquals(globalSettings.cwd, settingsStore.saved.cwd)
+        assertEquals(globalSettings.model, settingsStore.saved.model)
+        assertEquals(globalSettings.approvalMode, settingsStore.saved.approvalMode)
+        assertEquals(globalSettings.reasoningEffort, settingsStore.saved.reasoningEffort)
+        assertEquals(globalSettings.serviceTier, settingsStore.saved.serviceTier)
+        assertEquals(globalSettings.sandboxMode, settingsStore.saved.sandboxMode)
         assertEquals("D:\\workspace\\global-default", viewModel.uiState.value.cwdInput)
         assertEquals("gpt-5.4", viewModel.uiState.value.modelInput)
         assertEquals("low", viewModel.uiState.value.reasoningEffortInput)
         assertEquals("default", viewModel.uiState.value.serviceTierInput)
-        assertEquals("workspace-write", viewModel.uiState.value.sandboxModeInput)
+        assertEquals("danger-full-access", viewModel.uiState.value.sandboxModeInput)
         assertEquals("D:\\workspace\\draft-specific", viewModel.uiState.value.selectedDraftSession?.cwd)
         assertEquals("gpt-5.5-coder", viewModel.uiState.value.selectedDraftSession?.model)
         assertEquals("high", viewModel.uiState.value.selectedDraftSession?.reasoningEffort)
@@ -551,14 +647,20 @@ class AppViewModelTest {
             CreateSessionRequest(
                 cwd = "D:\\workspace\\draft-specific",
                 model = "gpt-5.5-coder",
-                approvalMode = "manual",
+                approvalMode = "auto",
                 reasoningEffort = "high",
                 serviceTier = "fast",
                 sandboxMode = "danger-full-access",
             ),
             bridgeApi.lastCreateSessionRequest,
         )
-        assertEquals(globalSettings, settingsStore.saved)
+        assertEquals(globalSettings.endpoint, settingsStore.saved.endpoint)
+        assertEquals(globalSettings.cwd, settingsStore.saved.cwd)
+        assertEquals(globalSettings.model, settingsStore.saved.model)
+        assertEquals(globalSettings.approvalMode, settingsStore.saved.approvalMode)
+        assertEquals(globalSettings.reasoningEffort, settingsStore.saved.reasoningEffort)
+        assertEquals(globalSettings.serviceTier, settingsStore.saved.serviceTier)
+        assertEquals(globalSettings.sandboxMode, settingsStore.saved.sandboxMode)
     }
 
     @Test
@@ -678,7 +780,7 @@ class AppViewModelTest {
         advanceUntilIdle()
 
         assertEquals("gpt-5.4", viewModel.uiState.value.selectedSession?.model)
-        assertEquals("manual", viewModel.uiState.value.selectedSession?.approvalMode)
+        assertEquals("auto", viewModel.uiState.value.selectedSession?.approvalMode)
         assertEquals("high", viewModel.uiState.value.selectedSession?.reasoningEffort)
         assertEquals("fast", viewModel.uiState.value.selectedSession?.serviceTier)
         assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
@@ -1131,10 +1233,10 @@ private class FakeAppSettingsStore(
         authToken = "",
         cwd = "D:\\workspace\\codex-mobile",
         model = "gpt-5.5",
-        approvalMode = "manual",
+        approvalMode = "auto",
         reasoningEffort = "medium",
         serviceTier = "default",
-        sandboxMode = "workspace-write",
+        sandboxMode = "danger-full-access",
     ),
 ) : AppSettingsStore {
     var saved: AppSettings = initial
@@ -1189,16 +1291,16 @@ private fun sampleDetail(
     id: String,
     cwd: String = "D:\\workspace\\codex-mobile",
     model: String = "gpt-5.5",
-    approvalMode: String = "manual",
+    approvalMode: String = "auto",
     reasoningEffort: String = "medium",
     serviceTier: String = "default",
-    sandboxMode: String = "workspace-write",
+    sandboxMode: String = "danger-full-access",
     status: String,
 ): SessionDetail {
     return SessionDetail(
         id = id,
         title = "测试会话",
-        subtitle = "$model • 手动 • 空闲",
+        subtitle = "$model • ${if (approvalMode == "auto") "自动" else "手动"} • 空闲",
         lastUpdated = "2026-05-19T10:00:00.000Z",
         transcriptPreview = "工作目录：$cwd",
         cwd = cwd,

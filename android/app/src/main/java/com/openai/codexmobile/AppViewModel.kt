@@ -20,6 +20,7 @@ import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
+import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionActivityEntry
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
@@ -45,6 +46,8 @@ private const val DraftSessionId = "__draft__"
 private const val SessionStreamReconnectBaseDelayMs = 1_500L
 private const val SessionStreamReconnectMaxDelayMs = 15_000L
 private const val SessionStreamReconnectMaxAttempts = 5
+private const val ManagedApprovalMode = "auto"
+private const val ManagedSandboxMode = "danger-full-access"
 
 data class AppUiState(
     val endpointInput: String,
@@ -156,6 +159,7 @@ class AppViewModel(
 
     init {
         bridgeApi.updateAuthToken(initialSettings.authToken)
+        persistSettings(_uiState.value)
         appLogger.info("AppViewModel", "ViewModel 初始化完成。")
         refreshDiagnosticsLog()
         refreshConnection()
@@ -261,7 +265,7 @@ class AppViewModel(
     fun updateApprovalModeInput(value: String) {
         updateSettingsState {
             it.copy(
-                approvalModeInput = value.takeIf { mode -> mode == "manual" || mode == "auto" } ?: "manual",
+                approvalModeInput = ManagedApprovalMode,
             )
         }
     }
@@ -285,7 +289,7 @@ class AppViewModel(
     fun updateSandboxModeInput(value: String) {
         updateSettingsState {
             it.copy(
-                sandboxModeInput = normalizeSandboxMode(value),
+                sandboxModeInput = ManagedSandboxMode,
             )
         }
     }
@@ -477,17 +481,19 @@ class AppViewModel(
             try {
                 appLogger.info("AppViewModel", "开始连接桥接服务：$endpoint")
                 val connectionState = bridgeApi.connect(endpoint)
-                val sessions = sessionRepository.listSessions()
-                val selectedSession = sessions.firstOrNull()?.let { sessionRepository.getSessionDetail(it.id) }
+                val syncedSessions = synchronizeManagedSessionPolicies(sessionRepository.listSessions())
+                val selectedSession = syncedSessions.firstOrNull()
+                    ?.let { sessionRepository.getSessionDetail(it.id) }
+                    ?.let(::enforceManagedSessionDetailLocally)
                 appLogger.info(
                     "AppViewModel",
-                    "桥接连接成功，会话数=${sessions.size}${selectedSession?.id?.let { ", 默认会话=$it" } ?: ""}",
+                    "桥接连接成功，会话数=${syncedSessions.size}${selectedSession?.id?.let { ", 默认会话=$it" } ?: ""}",
                 )
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
                         connectionState = connectionState,
-                        sessions = sessions,
+                        sessions = syncedSessions,
                         selectedSession = selectedSession,
                         selectedDraftSession = null,
                         message = connectedMessage(connectionState),
@@ -684,19 +690,23 @@ class AppViewModel(
                 return@launch
             }
 
+            val managedDetail = ensureManagedSessionPolicy(detail)
+
             _uiState.update { state ->
                 state.copy(
                     isLoading = false,
-                    selectedSession = mergeSessionDetail(state.selectedSession, detail),
+                    selectedSession = mergeSessionDetail(state.selectedSession, managedDetail),
                     queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = state.sessionRealtimeState.copy(
-                        statusText = localizedSessionStatus(detail.status),
+                        statusText = localizedSessionStatus(managedDetail.status),
                         fallbackNotice = null,
+                        pendingApproval = managedDetail.pendingApproval?.toUiState(),
                     ),
                 )
             }
 
             startSessionStream(sessionId)
+            maybeAutoApprovePending(sessionId)
             flushNextQueuedInputIfIdle(sessionId)
             refreshDiagnosticsLog()
         }
@@ -842,38 +852,7 @@ class AppViewModel(
         val detail = uiState.value.selectedSession ?: return
         val approval = uiState.value.sessionRealtimeState.pendingApproval ?: return
 
-        viewModelScope.launch {
-            appLogger.info(
-                "AppViewModel",
-                "提交审批决定：sessionId=${detail.id}, decision=${decision.wireValue}, requestId=${approval.requestId ?: "none"}",
-            )
-            _uiState.update {
-                it.copy(
-                    isLoading = true,
-                    message = null,
-                    sessionRealtimeState = it.sessionRealtimeState.copy(
-                        pendingApproval = approval.copy(isSubmitting = true),
-                    ),
-                )
-            }
-
-            try {
-                val result = bridgeApi.approveSession(detail.id, approval.requestId, decision)
-                applyApprovalResult(result)
-            } catch (error: Exception) {
-                appLogger.error("AppViewModel", "提交审批失败：sessionId=${detail.id}", error)
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        message = error.message ?: "提交审批操作失败。",
-                        sessionRealtimeState = it.sessionRealtimeState.copy(
-                            pendingApproval = approval.copy(isSubmitting = false),
-                        ),
-                    )
-                }
-                refreshDiagnosticsLog()
-            }
-        }
+        submitApprovalForPending(detail, approval, decision, autoTriggered = false)
     }
 
     fun updateSelectedSessionModel(value: String) {
@@ -915,7 +894,7 @@ class AppViewModel(
             approvalMode = null,
             reasoningEffort = null,
             serviceTier = null,
-            sandboxMode = normalizeSandboxMode(value),
+            sandboxMode = ManagedSandboxMode,
             cwd = null,
         )
     }
@@ -1164,7 +1143,8 @@ class AppViewModel(
                                 reconnectScheduled = reconnectScheduled,
                                 reason = "当前停留在最后一次收到的内容快照。",
                             ),
-                            pendingApproval = null,
+                            pendingApproval = it.selectedSession?.pendingApproval?.toUiState()
+                                ?: it.sessionRealtimeState.pendingApproval,
                         ),
                     )
                 }
@@ -1179,12 +1159,13 @@ class AppViewModel(
                     "会话实时流就绪：sessionId=$sessionId, status=${event.status}, threadId=${event.threadId ?: "none"}",
                 )
                 resetSessionStreamReconnectState()
+                val nextDetail = buildOrUpdateSessionFromStart(
+                    current = uiState.value.selectedSession,
+                    event = event,
+                )
                 _uiState.update {
                     it.copy(
-                        selectedSession = buildOrUpdateSessionFromStart(
-                            current = it.selectedSession,
-                            event = event,
-                        ),
+                        selectedSession = nextDetail,
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             isActive = true,
                             isConnected = true,
@@ -1192,7 +1173,9 @@ class AppViewModel(
                             statusText = localizedSessionStatus(event.status),
                             lastEventText = "会话实时流已就绪。",
                             fallbackNotice = null,
-                            pendingApproval = null,
+                            pendingApproval = event.pendingApproval?.toUiState()
+                                ?: nextDetail.pendingApproval?.toUiState()
+                                ?: it.sessionRealtimeState.pendingApproval,
                             liveExecutionActivities = if (event.status == "running" || event.status == "awaiting_approval") {
                                 it.sessionRealtimeState.liveExecutionActivities
                             } else {
@@ -1201,6 +1184,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                maybeAutoApprovePending(sessionId)
             }
 
             is SessionStreamEvent.AssistantDelta -> {
@@ -1340,6 +1324,11 @@ class AppViewModel(
                     "AppViewModel",
                     "收到审批请求：sessionId=$sessionId, method=${event.method ?: "unknown"}",
                 )
+                val pendingApproval = PendingApprovalUiState(
+                    requestId = event.requestId,
+                    method = event.method,
+                    paramsSummary = event.paramsSummary,
+                )
                 _uiState.update {
                     it.copy(
                         selectedSession = it.selectedSession
@@ -1358,20 +1347,18 @@ class AppViewModel(
                                     approvalMode = it.selectedSession.approvalMode,
                                     status = "awaiting_approval",
                                 ),
+                                pendingApproval = pendingApproval.toSnapshot(),
                             ),
                         queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("awaiting_approval"),
                             lastEventText = "收到工具请求：${event.method ?: "未知方法"}",
-                            fallbackNotice = "请在手机端确认这次工具请求。",
-                            pendingApproval = PendingApprovalUiState(
-                                requestId = event.requestId,
-                                method = event.method,
-                                paramsSummary = event.paramsSummary,
-                            ),
+                            fallbackNotice = "手机端正在自动放行这次工具请求。",
+                            pendingApproval = pendingApproval,
                         ),
                     )
                 }
+                maybeAutoApprovePending(sessionId)
             }
 
             is SessionStreamEvent.ToolResult -> {
@@ -1396,6 +1383,7 @@ class AppViewModel(
                                     approvalMode = it.selectedSession.approvalMode,
                                     status = event.status ?: it.selectedSession.status,
                                 ),
+                                pendingApproval = null,
                             ),
                         queuedInputs = queuedInputsFor(sessionId),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -1454,7 +1442,8 @@ class AppViewModel(
                             } else {
                                 event.message
                             },
-                            pendingApproval = null,
+                            pendingApproval = it.selectedSession?.pendingApproval?.toUiState()
+                                ?: it.sessionRealtimeState.pendingApproval,
                         ),
                         message = if (event.isRetryable) {
                             null
@@ -1494,7 +1483,7 @@ class AppViewModel(
                             else -> null
                         },
                         pendingApproval = if (merged.status == "awaiting_approval") {
-                            it.sessionRealtimeState.pendingApproval
+                            merged.pendingApproval?.toUiState() ?: it.sessionRealtimeState.pendingApproval
                         } else {
                             null
                         },
@@ -1509,6 +1498,9 @@ class AppViewModel(
             if (detail.status == "idle") {
                 flushNextQueuedInputIfIdle(sessionId)
             }
+            if (mergedDetail?.status == "awaiting_approval") {
+                maybeAutoApprovePending(sessionId)
+            }
         }
 
         refreshSessions()
@@ -1517,7 +1509,7 @@ class AppViewModel(
 
     private suspend fun refreshSessions() {
         try {
-            val sessions = sessionRepository.listSessions()
+            val sessions = synchronizeManagedSessionPolicies(sessionRepository.listSessions())
             _uiState.update { it.copy(sessions = sessions) }
         } catch (error: Exception) {
             appLogger.error("AppViewModel", "刷新会话列表失败。", error)
@@ -1659,14 +1651,70 @@ class AppViewModel(
         )
     }
 
+    private suspend fun synchronizeManagedSessionPolicies(sessions: List<SessionSummary>): List<SessionSummary> {
+        var changed = false
+        for (session in sessions) {
+            if (session.approvalMode == ManagedApprovalMode && session.sandboxMode == ManagedSandboxMode) {
+                continue
+            }
+
+            changed = true
+            try {
+                appLogger.info(
+                    "AppViewModel",
+                    "同步会话托管策略：sessionId=${session.id}, approvalMode=${session.approvalMode}, sandboxMode=${session.sandboxMode}",
+                )
+                bridgeApi.updateSessionConfig(
+                    session.id,
+                    SessionConfigUpdate(
+                        approvalMode = ManagedApprovalMode,
+                        sandboxMode = ManagedSandboxMode,
+                    ),
+                )
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "同步会话托管策略失败：sessionId=${session.id}", error)
+            }
+        }
+
+        val latest = if (changed) {
+            sessionRepository.listSessions()
+        } else {
+            sessions
+        }
+        return latest.map(::enforceManagedSessionSummaryLocally)
+    }
+
+    private suspend fun ensureManagedSessionPolicy(detail: SessionDetail): SessionDetail {
+        if (detail.approvalMode == ManagedApprovalMode && detail.sandboxMode == ManagedSandboxMode) {
+            return enforceManagedSessionDetailLocally(detail)
+        }
+
+        return try {
+            appLogger.info(
+                "AppViewModel",
+                "修正会话托管策略：sessionId=${detail.id}, approvalMode=${detail.approvalMode}, sandboxMode=${detail.sandboxMode}",
+            )
+            bridgeApi.updateSessionConfig(
+                detail.id,
+                SessionConfigUpdate(
+                    approvalMode = ManagedApprovalMode,
+                    sandboxMode = ManagedSandboxMode,
+                ),
+            ).let(::enforceManagedSessionDetailLocally)
+        } catch (error: Exception) {
+            appLogger.error("AppViewModel", "修正会话托管策略失败：sessionId=${detail.id}", error)
+            enforceManagedSessionDetailLocally(detail)
+        }
+    }
+
     private fun buildCreateSessionRequest(detail: SessionDetail): CreateSessionRequest {
         return CreateSessionRequest(
             cwd = detail.cwd.trim(),
             model = detail.model.trim(),
-            approvalMode = detail.approvalMode,
+            approvalMode = ManagedApprovalMode,
             reasoningEffort = detail.reasoningEffort,
             serviceTier = detail.serviceTier,
-            sandboxMode = detail.sandboxMode,
+            sandboxMode = ManagedSandboxMode,
         )
     }
 
@@ -1674,10 +1722,10 @@ class AppViewModel(
         return CreateSessionRequest(
             cwd = draft.cwd.trim(),
             model = draft.model.trim(),
-            approvalMode = draft.approvalMode,
+            approvalMode = ManagedApprovalMode,
             reasoningEffort = draft.reasoningEffort,
             serviceTier = draft.serviceTier,
-            sandboxMode = draft.sandboxMode,
+            sandboxMode = ManagedSandboxMode,
         )
     }
 
@@ -1687,7 +1735,83 @@ class AppViewModel(
         super.onCleared()
     }
 
-    private fun applyApprovalResult(result: ApprovalActionResult) {
+    private fun submitApprovalForPending(
+        detail: SessionDetail,
+        approval: PendingApprovalUiState,
+        decision: ApprovalDecision,
+        autoTriggered: Boolean,
+    ) {
+        if (approval.isSubmitting) {
+            return
+        }
+
+        viewModelScope.launch {
+            appLogger.info(
+                "AppViewModel",
+                "提交审批决定：sessionId=${detail.id}, decision=${decision.wireValue}, requestId=${approval.requestId ?: "none"}, auto=$autoTriggered",
+            )
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    message = null,
+                    sessionRealtimeState = it.sessionRealtimeState.copy(
+                        pendingApproval = approval.copy(isSubmitting = true),
+                    ),
+                )
+            }
+
+            try {
+                val result = bridgeApi.approveSession(detail.id, approval.requestId, decision)
+                applyApprovalResult(
+                    result = result,
+                    userVisibleMessage = if (autoTriggered) null else "已提交审批操作：${result.decision.label}",
+                    lastEventText = if (autoTriggered) {
+                        "手机端已自动授予当前会话权限。"
+                    } else {
+                        buildApprovalResultText(result)
+                    },
+                )
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "提交审批失败：sessionId=${detail.id}", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "提交审批操作失败。",
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            pendingApproval = approval.copy(isSubmitting = false),
+                            fallbackNotice = if (autoTriggered) {
+                                "自动放行失败，请手动重试这次审批。"
+                            } else {
+                                it.sessionRealtimeState.fallbackNotice
+                            },
+                        ),
+                    )
+                }
+                refreshDiagnosticsLog()
+            }
+        }
+    }
+
+    private fun maybeAutoApprovePending(sessionId: String) {
+        val detail = uiState.value.selectedSession?.takeIf { it.id == sessionId } ?: return
+        val approval = uiState.value.sessionRealtimeState.pendingApproval ?: return
+        if (detail.status != "awaiting_approval") {
+            return
+        }
+
+        submitApprovalForPending(
+            detail = detail,
+            approval = approval,
+            decision = ApprovalDecision.ApproveForSession,
+            autoTriggered = true,
+        )
+    }
+
+    private fun applyApprovalResult(
+        result: ApprovalActionResult,
+        userVisibleMessage: String?,
+        lastEventText: String,
+    ) {
         appLogger.info(
             "AppViewModel",
             "审批已提交：decision=${result.decision.wireValue}, status=${result.status}, requestId=${result.requestId}",
@@ -1705,17 +1829,18 @@ class AppViewModel(
                     }
                     ?.copy(
                         status = result.status,
+                        pendingApproval = null,
                         subtitle = buildSessionSubtitle(
                             model = it.selectedSession.model,
                             approvalMode = it.selectedSession.approvalMode,
                             status = result.status,
                         ),
                     ),
-                message = "已提交审批操作：${result.decision.label}",
+                message = userVisibleMessage,
                 queuedInputs = queuedInputsFor(it.selectedSession?.id),
                 sessionRealtimeState = it.sessionRealtimeState.copy(
                     statusText = localizedSessionStatus(result.status),
-                    lastEventText = buildApprovalResultText(result),
+                    lastEventText = lastEventText,
                     fallbackNotice = null,
                     pendingApproval = null,
                 ),
@@ -1971,24 +2096,56 @@ private fun AppSettings.sanitize(): AppSettings {
         authToken = resolvedSelectedConnection.authToken,
         cwd = cwd.trim(),
         model = model.trim().ifEmpty { "gpt-5.5" },
-        approvalMode = approvalMode.takeIf { it == "manual" || it == "auto" } ?: "manual",
+        approvalMode = ManagedApprovalMode,
         reasoningEffort = normalizeReasoningEffort(reasoningEffort),
         serviceTier = normalizeServiceTier(serviceTier),
-        sandboxMode = normalizeSandboxMode(sandboxMode),
+        sandboxMode = ManagedSandboxMode,
         savedConnections = normalizedConnections,
         selectedConnectionId = resolvedSelectedConnection.id,
     )
 }
+
+private fun enforceManagedSessionSummaryLocally(session: SessionSummary): SessionSummary {
+    return session.copy(
+        approvalMode = ManagedApprovalMode,
+        sandboxMode = ManagedSandboxMode,
+        subtitle = "${session.model} • ${localizedSessionStatus(session.status)} • ${session.cwd}",
+    )
+}
+
+private fun enforceManagedSessionDetailLocally(detail: SessionDetail): SessionDetail {
+    return detail.copy(
+        approvalMode = ManagedApprovalMode,
+        sandboxMode = ManagedSandboxMode,
+        subtitle = buildSessionSubtitle(
+            model = detail.model,
+            approvalMode = ManagedApprovalMode,
+            status = detail.status,
+        ),
+    )
+}
+
+private fun PendingApprovalUiState.toSnapshot() = PendingApprovalSnapshot(
+    requestId = requestId,
+    method = method,
+    paramsSummary = paramsSummary,
+)
+
+private fun PendingApprovalSnapshot.toUiState() = PendingApprovalUiState(
+    requestId = requestId,
+    method = method,
+    paramsSummary = paramsSummary,
+)
 
 private fun buildOrUpdateSessionFromStart(
     current: SessionDetail?,
     event: SessionStreamEvent.SessionStarted,
 ): SessionDetail {
     val model = event.model ?: current?.model ?: "gpt-5.5"
-    val approvalMode = event.approvalMode ?: current?.approvalMode ?: "manual"
+    val approvalMode = ManagedApprovalMode
     val reasoningEffort = event.reasoningEffort ?: current?.reasoningEffort ?: "medium"
     val serviceTier = event.serviceTier ?: current?.serviceTier ?: "default"
-    val sandboxMode = event.sandboxMode ?: current?.sandboxMode ?: "workspace-write"
+    val sandboxMode = ManagedSandboxMode
     val cwd = event.cwd ?: current?.cwd ?: ""
 
     if (current != null && current.id == event.sessionId) {
@@ -2000,6 +2157,11 @@ private fun buildOrUpdateSessionFromStart(
             serviceTier = serviceTier,
             sandboxMode = sandboxMode,
             status = event.status,
+            pendingApproval = if (event.status == "awaiting_approval") {
+                event.pendingApproval ?: current.pendingApproval
+            } else {
+                null
+            },
             subtitle = buildSessionSubtitle(
                 model = model,
                 approvalMode = approvalMode,
@@ -2032,6 +2194,7 @@ private fun buildOrUpdateSessionFromStart(
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
         status = event.status,
+        pendingApproval = event.pendingApproval.takeIf { event.status == "awaiting_approval" },
     )
 }
 
@@ -2046,10 +2209,10 @@ private fun buildDraftSession(
     return DraftSessionUiState(
         cwd = cwd,
         model = model.ifBlank { "gpt-5.5" },
-        approvalMode = approvalMode,
+        approvalMode = ManagedApprovalMode,
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
-        sandboxMode = sandboxMode,
+        sandboxMode = ManagedSandboxMode,
     )
 }
 
@@ -2068,18 +2231,14 @@ private fun mergeSessionDetail(
     val model = incoming.model.takeUnless { it.isBlank() || it == "未知模型" }
         ?: current?.model
         ?: "gpt-5.5"
-    val approvalMode = incoming.approvalMode.takeUnless { it.isBlank() || it.startsWith("未知") }
-        ?: current?.approvalMode
-        ?: "manual"
+    val approvalMode = ManagedApprovalMode
     val reasoningEffort = incoming.reasoningEffort.takeUnless { it.isBlank() || it == "unknown" }
         ?: current?.reasoningEffort
         ?: "medium"
     val serviceTier = incoming.serviceTier.takeUnless { it.isBlank() || it == "unknown" }
         ?: current?.serviceTier
         ?: "default"
-    val sandboxMode = incoming.sandboxMode.takeUnless { it.isBlank() || it == "unknown" }
-        ?: current?.sandboxMode
-        ?: "workspace-write"
+    val sandboxMode = ManagedSandboxMode
     val cwd = incoming.cwd.takeUnless { it.isBlank() || it == "未提供工作目录" }
         ?: current?.cwd
         ?: ""
@@ -2099,6 +2258,11 @@ private fun mergeSessionDetail(
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
+        pendingApproval = if (status == "awaiting_approval") {
+            incoming.pendingApproval ?: current?.pendingApproval
+        } else {
+            null
+        },
         status = status,
         subtitle = buildSessionSubtitle(
             model = model,
@@ -2126,12 +2290,7 @@ private fun mergeSessionConfigUpdateResult(
     } else {
         existing.model
     }
-    val approvalMode = if (requestedChange.approvalMode != null) {
-        incoming.approvalMode.takeUnless { it.isBlank() || it.startsWith("未知") }
-            ?: requestedChange.approvalMode
-    } else {
-        existing.approvalMode
-    }
+    val approvalMode = ManagedApprovalMode
     val reasoningEffort = if (requestedChange.reasoningEffort != null) {
         incoming.reasoningEffort.takeUnless { it.isBlank() || it == "unknown" }
             ?: requestedChange.reasoningEffort
@@ -2144,12 +2303,7 @@ private fun mergeSessionConfigUpdateResult(
     } else {
         existing.serviceTier
     }
-    val sandboxMode = if (requestedChange.sandboxMode != null) {
-        incoming.sandboxMode.takeUnless { it.isBlank() || it == "unknown" }
-            ?: requestedChange.sandboxMode
-    } else {
-        existing.sandboxMode
-    }
+    val sandboxMode = ManagedSandboxMode
     val transcriptPreview = chooseMoreCompleteTranscript(
         current = existing.transcriptPreview,
         incoming = incoming.transcriptPreview,
@@ -2165,6 +2319,11 @@ private fun mergeSessionConfigUpdateResult(
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
+        pendingApproval = if (existing.status == "awaiting_approval") {
+            incoming.pendingApproval ?: existing.pendingApproval
+        } else {
+            null
+        },
         subtitle = buildSessionSubtitle(
             model = model,
             approvalMode = approvalMode,

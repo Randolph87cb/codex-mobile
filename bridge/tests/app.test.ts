@@ -80,6 +80,11 @@ class TestRunner implements HistoryCapableBridgeRunner {
       threadId: "thread-history",
       activeTurnId: null,
       lastError: null,
+      pendingApproval: {
+        requestId: "req-history",
+        method: "item/permissions/requestApproval",
+        paramsSummary: "等待审批：item/permissions/requestApproval\n{\"scope\":\"session\"}",
+      },
       createdAt: "2026-05-19T01:00:00.000Z",
       updatedAt: "2026-05-19T01:00:00.000Z",
     };
@@ -330,6 +335,10 @@ describe("buildBridgeApp", () => {
     expect(detail.json()).toMatchObject({
       id: "thread-history",
       transcriptPreview: "你：之前说过什么？\n\nCodex：这里是历史回复。",
+      pendingApproval: {
+        requestId: "req-history",
+        method: "item/permissions/requestApproval",
+      },
     });
 
     const input = await app.inject({
@@ -836,6 +845,10 @@ describe("buildBridgeApp", () => {
       data: {
         threadId: "thread-history",
         sandboxMode: "workspace-write",
+        pendingApproval: {
+          requestId: "req-history",
+          method: "item/permissions/requestApproval",
+        },
       },
     });
 

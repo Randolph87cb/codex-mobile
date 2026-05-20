@@ -11,6 +11,7 @@ import { SessionStore } from "./session-store.js";
 import type {
   ApprovalDecision,
   JsonRpcRequestId,
+  PendingApprovalView,
   ReasoningEffort,
   ResolvedSessionInput,
   SandboxMode,
@@ -285,7 +286,11 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
 
     const views = result.data.map((thread) => {
       const session = this.store.findByThreadId(thread.id);
-      return buildSessionViewFromThread(thread, session);
+      return buildSessionViewFromThread(
+        thread,
+        session,
+        session ? this.getPendingApprovalView(session.id) : null,
+      );
     });
     const threadIds = new Set(result.data.map((thread) => thread.id));
 
@@ -293,7 +298,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       if (session.threadId && threadIds.has(session.threadId)) {
         continue;
       }
-      views.push(buildSessionViewFromRecord(session));
+      views.push(buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id)));
     }
 
     return views.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -304,26 +309,26 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     if (session?.threadId) {
       const thread = await this.tryReadThread(session.threadId);
       if (!thread) {
-        return buildSessionViewFromRecord(session);
+        return buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id));
       }
 
       const synced = this.applyThreadSnapshot(session, thread);
-      return buildSessionViewFromThread(thread, synced);
+      return buildSessionViewFromThread(thread, synced, this.getPendingApprovalView(synced.id));
     }
 
     if (session) {
-      return buildSessionViewFromRecord(session);
+      return buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id));
     }
 
     const attachedSession = this.store.findByThreadId(sessionId);
     if (attachedSession?.threadId) {
       const thread = await this.tryReadThread(attachedSession.threadId);
       if (!thread) {
-        return buildSessionViewFromRecord(attachedSession);
+        return buildSessionViewFromRecord(attachedSession, this.getPendingApprovalView(attachedSession.id));
       }
 
       const synced = this.applyThreadSnapshot(attachedSession, thread);
-      return buildSessionViewFromThread(thread, synced);
+      return buildSessionViewFromThread(thread, synced, this.getPendingApprovalView(synced.id));
     }
 
     const thread = await this.tryReadThread(sessionId);
@@ -911,6 +916,24 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     });
   }
 
+  private getPendingApprovalView(sessionId: string): PendingApprovalView | null {
+    const requestKey = this.sessionApprovalKeys.get(sessionId)?.at(-1);
+    if (!requestKey) {
+      return null;
+    }
+
+    const pending = this.pendingApprovals.get(requestKey);
+    if (!pending) {
+      return null;
+    }
+
+    return {
+      requestId: pending.requestId,
+      method: pending.method,
+      paramsSummary: formatPendingApprovalSummary(pending.method, pending.params),
+    };
+  }
+
   private addPendingApproval(pending: PendingApproval): void {
     const requestKey = this.toRequestKey(pending.requestId);
     this.pendingApprovals.set(requestKey, pending);
@@ -1029,6 +1052,22 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function formatPendingApprovalSummary(method: string, params: Record<string, unknown>): string {
+  return `等待审批：${method}\n${stringifyApprovalParams(params)}`;
+}
+
+function stringifyApprovalParams(params: Record<string, unknown>): string {
+  if (Object.keys(params).length === 0) {
+    return "无附加参数";
+  }
+
+  try {
+    return JSON.stringify(params, null, 2) ?? "无附加参数";
+  } catch {
+    return "[参数无法序列化]";
+  }
 }
 
 function isApprovalRequestMethod(method: string): method is ApprovalRequestMethod {

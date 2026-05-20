@@ -72,6 +72,59 @@
 - 是否应该优化已有 skill：暂无，本次更像 Android/bridge 实时流错误分层问题。
 - 触发条件或典型用户说法：`实时流错误为什么会弹出来`、`Reconnecting... 2/5 是哪里断了`、`Socket closed 是不是桥挂了`。
 
+## 补充进展：待审批恢复与强制权限策略
+
+- 新增问题：
+  - 用户补充反馈：如果某个会话已经进入“待审批”，先退出会话详情页再重新进入，页面会保持“待审批”状态，但手机端无法继续审批，形成卡死。
+  - 用户进一步要求：不是只改“默认值”，而是让手机端把所有会话都统一收敛为 `approvalMode=auto` 和 `sandboxMode=danger-full-access`，同时不再保留这两个设置的可编辑入口。
+- 根因排查：
+  - Android 端在原实现里只会在实时流收到 `tool.request` 时，把待审批请求的 `requestId / method / paramsSummary` 保存在内存中的 `sessionRealtimeState.pendingApproval`。
+  - 用户离开详情页后，这部分内存状态被清空；重新进入时，HTTP `/api/session/:id` 只会返回 `status=awaiting_approval`，却不会附带对应的 pending approval 元数据，所以详情页虽然知道“在等审批”，但不知道该审批哪一条请求。
+  - bridge 端其实在 `AppServerRunner` 内存里保留了 `pendingApprovals` 和 `sessionApprovalKeys`，只是之前 `/api/session/:id` 和实时流初始 `session.started` 都没有把这份上下文回传给 Android。
+- 已完成修复实现：
+  - bridge：
+    - `bridge/src/types.ts`
+      - 新增 `PendingApprovalView`，并为 `SessionView` 增加 `pendingApproval` 字段。
+    - `bridge/src/session-view.ts`
+      - `buildSessionViewFromRecord()`、`buildSessionViewFromThread()` 增加 `pendingApproval` 透传。
+    - `bridge/src/app-server-runner.ts`
+      - `listSessionViews()`、`getSessionView()` 会把当前会话的最新 pending approval 元数据带回。
+      - 新增 pending approval 摘要格式化逻辑，统一输出 `requestId / method / paramsSummary`。
+    - `bridge/src/app.ts`
+      - `/api/session/:id/ws` 初始 `session.started` 事件会补发 `pendingApproval`，保证重新订阅实时流时也能恢复待审批上下文。
+    - 测试：
+      - `bridge/tests/app-server-runner.test.ts`
+      - `bridge/tests/app.test.ts`
+  - Android：
+    - `android/app/src/main/java/com/openai/codexmobile/model/SessionDetail.kt`
+      - 新增 `PendingApprovalSnapshot`，并把 `pendingApproval` 纳入 `SessionDetail`。
+    - `android/app/src/main/java/com/openai/codexmobile/data/SessionStreamEvent.kt`
+      - `SessionStarted` 增加 `pendingApproval` 字段，用于实时流恢复。
+    - `android/app/src/main/java/com/openai/codexmobile/data/RealBridgeDataProvider.kt`
+      - HTTP 会话详情和 `session.started` 实时事件都会解析 `pendingApproval`。
+      - 为 JVM 单测补充兼容性，避免 `JSONObject` 的 Android stub 影响解析测试。
+    - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+      - 重新进入详情页时，会先从 `SessionDetail.pendingApproval` 恢复待审批上下文，再根据当前会话状态自动尝试审批。
+      - 收到 `tool.request` 时，待审批状态会同步写入 `selectedSession.pendingApproval` 和 `sessionRealtimeState.pendingApproval`，避免只存在于瞬时 UI 状态。
+      - 对所有会话强制施加手机端托管策略：
+        - `approvalMode=auto`
+        - `sandboxMode=danger-full-access`
+      - 连接会话列表、打开会话详情、创建会话、刷新快照时，都会同步把现有会话修正到这组托管策略。
+      - 已处于 `awaiting_approval` 的旧会话，在恢复到待审批上下文后也会自动调用审批接口，避免继续卡死。
+    - `android/app/src/main/java/com/openai/codexmobile/data/BridgeApi.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/data/AppSettingsStore.kt`
+      - 新建会话与持久化设置的默认审批/沙箱值同步改为 `auto` 与 `danger-full-access`。
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+    - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+      - 移除“审批模式 / 文件权限”在详情页和设置页的可编辑入口，避免 UI 与强制策略冲突。
+    - 测试：
+      - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+      - `android/app/src/test/java/com/openai/codexmobile/data/RealBridgeDataProviderTest.kt`
+- 当前用户可见行为：
+  - 手机端会把所有会话统一视为自动审批和完全权限，不再提供手工切换入口。
+  - 如果某个会话在离开详情页前已经进入待审批，重新进入时不会再停留在“看得到待审批、但无法审批”的僵死状态；待审批上下文会恢复，并由手机端自动批准。
+  - 已经在等待审批的旧会话也会在重新进入后自动尝试放行，不只影响新会话。
+
 ## 后续事项
 
 - [x] 结合代码与日志还原完整断链路径。
@@ -79,9 +132,22 @@
 - [x] 形成根因结论与修复建议。
 - [x] 如果用户确认修复，再把“可重试错误”和“本地主动取消噪声”从用户可见终态错误里拆开处理。
 - [x] 运行 Android 构建与单测验证修复。
+- [x] 排查“退出详情后重进，待审批但无法审批”的根因。
+- [x] 实现待审批上下文恢复，避免重进详情后无法审批。
+- [x] 把手机端所有会话统一收敛为自动审批与完全权限。
+- [x] 移除审批模式与文件权限的设置/编辑入口。
+- [x] 执行 bridge 与 Android 的全量验证。
 
 ## 验证结果
 
+- 已执行：
+  - `cd bridge`
+  - `npm run check`
+  - 结果：`通过`
+- 已执行：
+  - `cd bridge`
+  - `npm test`
+  - 结果：`42 passed`
 - 已执行 `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
   - 结果：`BUILD SUCCESSFUL`
 - 已执行：

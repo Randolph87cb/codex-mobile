@@ -618,16 +618,6 @@ private fun SessionConfigRow(
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.SandboxMode) },
-            modifier = Modifier.testTag(TestTags.SessionDetailConfigSandboxButton),
-        ) {
-            Icon(imageVector = Icons.Filled.Tune, contentDescription = null)
-            Text(
-                text = "权限 ${localizedSandbox(detail.sandboxMode)}",
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
     }
 }
 
@@ -696,20 +686,7 @@ private fun ConfigEditorDialogs(
             },
         )
 
-        SessionConfigEditor.SandboxMode -> ChoiceConfigDialog(
-            title = "选择文件权限",
-            options = listOf(
-                "read-only" to "只读",
-                "workspace-write" to "工作区可写",
-                "danger-full-access" to "完全访问",
-            ),
-            onDismiss = onDismiss,
-            onChoose = {
-                onUpdateSandboxMode(it)
-                onDismiss()
-            },
-        )
-
+        SessionConfigEditor.SandboxMode -> Unit
         null -> Unit
     }
 }

@@ -2,6 +2,7 @@ package com.openai.codexmobile.data
 
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
+import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.channels.awaitClose
@@ -480,7 +481,8 @@ internal fun parseSessionStreamEvent(
     payload: String,
 ): SessionStreamEvent? {
     val json = JSONObject(payload)
-    if (!json.has("type")) {
+    val eventType = json.optString("type").takeIf { it.isNotBlank() }
+    if (eventType == null) {
         val message = extractEventError(json.opt("error")) ?: "收到无法识别的实时流消息。"
         return SessionStreamEvent.Error(
             sessionId = sessionId,
@@ -493,7 +495,7 @@ internal fun parseSessionStreamEvent(
     val timestamp = json.optString("timestamp").takeIf { it.isNotBlank() }
     val data = json.optJSONObject("data") ?: JSONObject()
 
-    return when (json.getString("type")) {
+    return when (eventType) {
         "session.started" -> SessionStreamEvent.SessionStarted(
             sessionId = eventSessionId,
             status = data.optString("status").ifBlank { "idle" },
@@ -504,6 +506,7 @@ internal fun parseSessionStreamEvent(
             serviceTier = data.optString("serviceTier").takeIf { it.isNotBlank() },
             sandboxMode = data.optString("sandboxMode").takeIf { it.isNotBlank() },
             threadId = data.optString("threadId").takeIf { it.isNotBlank() },
+            pendingApproval = parsePendingApprovalSnapshot(data.opt("pendingApproval")),
             timestamp = timestamp,
         )
 
@@ -728,7 +731,19 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
         status = status,
+        pendingApproval = parsePendingApprovalSnapshot(opt("pendingApproval")),
     )
+}
+
+private fun parsePendingApprovalSnapshot(value: Any?): PendingApprovalSnapshot? {
+    val json = value as? JSONObject ?: return null
+    return PendingApprovalSnapshot(
+        requestId = parseRequestId(json.opt("requestId")),
+        method = json.optString("method").takeIf { it.isNotBlank() },
+        paramsSummary = json.optString("paramsSummary").takeIf { it.isNotBlank() },
+    ).takeIf {
+        it.requestId != null || it.method != null || it.paramsSummary != null
+    }
 }
 
 private fun parseBridgeStreamError(value: Any?): ParsedBridgeStreamError? {

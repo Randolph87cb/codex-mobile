@@ -1,5 +1,7 @@
 package com.openai.codexmobile.data
 
+import com.openai.codexmobile.model.PendingApprovalSnapshot
+
 sealed interface SessionStreamEvent {
     val sessionId: String
     val timestamp: String?
@@ -25,6 +27,7 @@ sealed interface SessionStreamEvent {
         val serviceTier: String?,
         val sandboxMode: String?,
         val threadId: String?,
+        val pendingApproval: PendingApprovalSnapshot?,
         override val timestamp: String?,
     ) : SessionStreamEvent
 

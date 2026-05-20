@@ -532,6 +532,51 @@ describe("AppServerRunner", () => {
     ]);
   });
 
+  test("includes pending approval metadata in session detail views", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "active", activeFlags: ["waitingOnApproval"] },
+            turns: [],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    client.emitServerRequest({
+      id: "req-view",
+      method: "item/commandExecution/requestApproval",
+      params: {
+        threadId: "thread-1",
+        command: "Copy-Item D:\\tmp\\pet D:\\workspace\\pet",
+      },
+    });
+
+    const view = await runner.getSessionView("sess-1");
+
+    expect(view).toMatchObject({
+      id: "sess-1",
+      status: "awaiting_approval",
+      pendingApproval: {
+        requestId: "req-view",
+        method: "item/commandExecution/requestApproval",
+      },
+    });
+    expect(view?.pendingApproval?.paramsSummary).toContain("等待审批：item/commandExecution/requestApproval");
+    expect(view?.pendingApproval?.paramsSummary).toContain("Copy-Item");
+  });
+
   test("rejects unsupported non-approval server requests", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();

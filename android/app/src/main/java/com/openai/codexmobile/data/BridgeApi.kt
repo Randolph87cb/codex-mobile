@@ -7,10 +7,10 @@ import kotlinx.coroutines.flow.Flow
 data class CreateSessionRequest(
     val cwd: String = ".",
     val model: String = "gpt-5.5",
-    val approvalMode: String = "manual",
+    val approvalMode: String = "auto",
     val reasoningEffort: String = "medium",
     val serviceTier: String = "default",
-    val sandboxMode: String = "workspace-write",
+    val sandboxMode: String = "danger-full-access",
 )
 
 data class SessionConfigUpdate(

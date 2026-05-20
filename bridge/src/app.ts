@@ -421,6 +421,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
           sandboxMode: view?.sandboxMode ?? session.sandboxMode,
           status: view?.status ?? session.status,
           threadId: view?.threadId ?? session.threadId,
+          pendingApproval: view?.pendingApproval ?? null,
         },
       }),
     );

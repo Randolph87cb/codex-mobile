@@ -48,8 +48,15 @@ export interface SessionView {
   threadId: string | null;
   activeTurnId: string | null;
   lastError: string | null;
+  pendingApproval?: PendingApprovalView | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PendingApprovalView {
+  requestId: JsonRpcRequestId;
+  method: string;
+  paramsSummary: string;
 }
 
 export interface SessionInput {
