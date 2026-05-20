@@ -8,14 +8,28 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -110,54 +124,80 @@ fun SessionListScreen(
             .testTag(TestTags.SessionListScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "会话列表",
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        Text(
-            text = when (connectionState) {
-                is BridgeConnectionState.Connected -> "桥接地址：${connectionState.endpoint}"
-                BridgeConnectionState.Disconnected -> "桥接服务未连接"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Button(
-                onClick = {
-                    draftDirectory = currentCwd
-                    showCreateDialog = true
-                },
-                enabled = !isLoading,
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag(TestTags.SessionListCreateDraftButton),
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(strokeWidth = 2.dp)
-                } else {
-                    Text("新建草稿线程")
+                Text(
+                    text = "会话",
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (connectionState is BridgeConnectionState.Connected) {
+                                Icons.Filled.CloudDone
+                            } else {
+                                Icons.Filled.CloudOff
+                            },
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = when (connectionState) {
+                                is BridgeConnectionState.Connected -> "桥接地址：${connectionState.endpoint}"
+                                BridgeConnectionState.Disconnected -> "桥接服务未连接"
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
                 }
             }
-            Button(
+            FilledTonalIconButton(
                 onClick = onOpenSettings,
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag(TestTags.SessionListOpenSettingsButton),
+                modifier = Modifier.testTag(TestTags.SessionListOpenSettingsButton),
             ) {
-                Text("设置")
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "设置",
+                )
+            }
+        }
+        Button(
+            onClick = {
+                draftDirectory = currentCwd
+                showCreateDialog = true
+            },
+            enabled = !isLoading,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.SessionListCreateDraftButton),
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(strokeWidth = 2.dp)
+            } else {
+                Icon(imageVector = Icons.Filled.Add, contentDescription = null)
+                Text("新建草稿线程", modifier = Modifier.padding(start = 8.dp))
             }
         }
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (groups.isEmpty()) {
                 item {
@@ -173,13 +213,14 @@ fun SessionListScreen(
                 )
             }
         }
-        Button(
+        OutlinedButton(
             onClick = onDisconnect,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(TestTags.SessionListDisconnectButton),
         ) {
-            Text("断开连接")
+            Icon(imageVector = Icons.Filled.PowerSettingsNew, contentDescription = null)
+            Text("断开连接", modifier = Modifier.padding(start = 8.dp))
         }
     }
 }
@@ -188,10 +229,14 @@ fun SessionListScreen(
 private fun EmptySessionState(
     currentCwd: String,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
                 text = "还没有会话",
@@ -215,18 +260,31 @@ private fun SessionDirectoryCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionListFolderPrefix + group.cwd),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.padding(10.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     Text(
                         text = buildFolderLabel(group.cwd),
@@ -245,7 +303,8 @@ private fun SessionDirectoryCard(
                     onClick = { onCreateDraft(group.cwd) },
                     modifier = Modifier.testTag(TestTags.SessionListFolderCreatePrefix + group.cwd),
                 ) {
-                    Text("在此新建")
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
+                    Text("新建", modifier = Modifier.padding(start = 4.dp))
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -255,28 +314,43 @@ private fun SessionDirectoryCard(
                             .fillMaxWidth()
                             .testTag(TestTags.SessionListItemPrefix + session.id)
                             .clickable { onOpenSession(session.id) },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(
-                                text = session.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = buildCompactSessionSubtitle(session, group.cwd),
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = session.lastUpdated,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = session.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = buildCompactSessionSubtitle(session, group.cwd),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = session.lastUpdated,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }

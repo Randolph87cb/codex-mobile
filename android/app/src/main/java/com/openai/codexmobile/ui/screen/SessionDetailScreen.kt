@@ -45,6 +45,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -182,8 +183,8 @@ fun SessionDetailScreen(
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         StatusStrip(
             detail = detail,
@@ -209,14 +210,20 @@ fun SessionDetailScreen(
                 .testTag(TestTags.SessionDetailTranscript)
                 .fillMaxWidth()
                 .weight(1f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                Text(
+                    text = detail?.title ?: "等待会话",
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 Text(
                     text = detail?.subtitle ?: "请先从会话列表中选择一个会话。",
                     style = MaterialTheme.typography.bodyMedium,
@@ -224,6 +231,7 @@ fun SessionDetailScreen(
                 Text(
                     text = detail?.lastUpdated ?: "等待会话元数据",
                     style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
@@ -256,51 +264,54 @@ fun SessionDetailScreen(
                 onRetryAttachment = onRetryPendingImageAttachment,
             )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
         ) {
-            OutlinedTextField(
-                value = draftMessage,
-                onValueChange = onDraftMessageChange,
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .testTag(TestTags.SessionDetailDraftField),
-                label = {
-                    Text(
-                        if (draftSession != null) {
-                            "首条消息发送后才真正创建线程"
-                        } else {
-                            "发送给 Codex"
-                        },
-                    )
-                },
-                maxLines = 4,
-            )
-            OutlinedButton(
-                onClick = onPickImage,
-                enabled = !isLoading && detail != null,
-                modifier = Modifier.testTag(TestTags.SessionDetailAttachImageButton),
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(imageVector = Icons.Filled.Image, contentDescription = null)
-                Text(
-                    text = "图片",
-                    modifier = Modifier.padding(start = 6.dp),
+                FilledTonalIconButton(
+                    onClick = onPickImage,
+                    enabled = !isLoading && detail != null,
+                    modifier = Modifier.testTag(TestTags.SessionDetailAttachImageButton),
+                ) {
+                    Icon(imageVector = Icons.Filled.Image, contentDescription = "添加图片")
+                }
+                OutlinedTextField(
+                    value = draftMessage,
+                    onValueChange = onDraftMessageChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(TestTags.SessionDetailDraftField),
+                    label = {
+                        Text(
+                            if (draftSession != null) {
+                                "首条消息发送后才真正创建线程"
+                            } else {
+                                "发送给 Codex"
+                            },
+                        )
+                    },
+                    maxLines = 4,
                 )
-            }
-            Button(
-                onClick = onSend,
-                enabled = !isLoading &&
-                    detail != null &&
-                    (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
-                    !hasPendingUploadBlockers,
-                modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(strokeWidth = 2.dp)
-                } else {
-                    Text(if (draftSession != null) "开始" else "发送")
+                Button(
+                    onClick = onSend,
+                    enabled = !isLoading &&
+                        detail != null &&
+                        (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
+                        !hasPendingUploadBlockers,
+                    modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(strokeWidth = 2.dp)
+                    } else {
+                        Text(if (draftSession != null) "开始" else "发送")
+                    }
                 }
             }
         }
@@ -487,8 +498,8 @@ private fun StatusStrip(
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -520,7 +531,7 @@ private fun StatusStrip(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(TestTags.SessionDetailStatusDetails),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(text = "连接：${sessionRealtimeState.connectionText}", style = MaterialTheme.typography.bodyMedium)
                     Text(text = "状态：${sessionRealtimeState.statusText}", style = MaterialTheme.typography.bodyMedium)
@@ -536,17 +547,13 @@ private fun StatusStrip(
                         )
                     }
                     if (!isDraft) {
-                        OutlinedButton(
+                        FilledTonalIconButton(
                             onClick = onRefreshSession,
                             modifier = Modifier.testTag(TestTags.SessionDetailStatusRefreshButton),
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
-                                contentDescription = null,
-                            )
-                            Text(
-                                text = "立即同步",
-                                modifier = Modifier.padding(start = 8.dp),
+                                contentDescription = "立即同步",
                             )
                         }
                     }
@@ -565,12 +572,23 @@ private fun StatusGlyph(
     icon: ImageVector,
     label: String,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
-        Icon(imageVector = icon, contentDescription = null)
-        Text(text = label, style = MaterialTheme.typography.labelSmall)
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Text(text = label, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 

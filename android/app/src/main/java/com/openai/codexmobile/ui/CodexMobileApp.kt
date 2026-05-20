@@ -5,15 +5,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -131,6 +132,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             AppTopBar(
                 currentRoute = currentRoute,
@@ -310,8 +312,8 @@ private fun AppTopBar(
         currentRoute == Routes.SessionDetail ||
         currentRoute?.startsWith("session/") == true
     val title = when (currentRoute) {
-        Routes.Connection -> "连接"
-        Routes.Sessions -> "会话"
+        Routes.Connection -> "Codex Mobile"
+        Routes.Sessions -> "Codex Mobile"
         Routes.DraftSession -> "草稿线程"
         Routes.Settings -> "设置"
         else -> "Codex 移动端"
@@ -319,6 +321,11 @@ private fun AppTopBar(
     val resolvedTitle = if (currentRoute?.startsWith("session/") == true) "会话详情" else title
 
     TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onBackground,
+            navigationIconContentColor = MaterialTheme.colorScheme.primary,
+        ),
         title = { Text(text = resolvedTitle) },
         navigationIcon = {
             if (isSessionDetailRoute || currentRoute == Routes.Settings) {
@@ -326,16 +333,6 @@ private fun AppTopBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
-                    )
-                }
-            }
-        },
-        actions = {
-            if (currentRoute != Routes.Settings) {
-                IconButton(onClick = { navController.navigate(Routes.Settings) }) {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = "设置",
                     )
                 }
             }

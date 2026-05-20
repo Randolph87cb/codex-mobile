@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Mobile Android UI"
+  short_description: "Guide Android UI refactors for this Codex mobile app"
+  default_prompt: "Use $codex-mobile-android-ui to redesign this Compose screen while preserving performance and the current bridge-driven flow."

@@ -129,3 +129,67 @@
   - 低保守版：仅换主题、间距、按钮和图标
   - 中等重构版：重做列表卡片、状态条、输入区
   - 强风格版：连同品牌色、字体、页面节奏一起重塑
+
+## 本次实际交付
+
+- 已新增项目级 skill：
+  - `.codex/skills/codex-mobile-android-ui/SKILL.md`
+  - `.codex/skills/codex-mobile-android-ui/agents/openai.yaml`
+  - `.codex/skills/codex-mobile-android-ui/references/ui-rules.md`
+- 新 skill 的目标是约束本仓库的 Android UI 重构方式，聚焦：
+  - Compose 屏幕重构顺序
+  - 轻客户端定位
+  - 按钮图标化边界
+  - 主题与页面层次优先级
+  - Android 验证命令
+- 已完成第一轮 Android UI 重构，范围限定在视觉层和交互表达，不改数据流与桥接协议。
+
+## 本次代码改动
+
+- 已调整主题层：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Color.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Theme.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Type.kt`
+- 已调整页面与顶层容器：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+- 具体变化包括：
+  - 主题颜色从基础双色改为更完整的浅色/深色工作台配色
+  - Typography 不再使用默认 `Typography()`，改为更紧凑的标题和正文层级
+  - 连接页改为状态胶囊 + 主卡片 + 单一主按钮结构
+  - 会话列表改为标题状态区 + 主 CTA + 更紧凑的目录卡片和会话卡片
+  - 会话详情页优化为更轻的状态条、更清晰的消息容器和底部工具栏式输入区
+  - 设置页拆分为“已保存连接 / 默认参数 / 应用日志”三块，并补齐审批模式、文件权限设置项
+  - 辅助类操作有选择地改成图标优先：
+    - 设置
+    - 刷新日志
+    - 清空日志
+    - 复制日志
+    - 图片附件
+    - 状态刷新
+
+## 验证结果
+
+- 已执行：
+  - `python "C:\Users\Administrator\.codex\skills\.system\skill-creator\scripts\quick_validate.py" ".\.codex\skills\codex-mobile-android-ui"`
+  - 结果：`Skill is valid!`
+- 已执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：构建成功，生成最新调试 APK
+- 已执行：
+  - `cd android`
+  - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
+  - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：`BUILD SUCCESSFUL`
+- 已确认 APK 产物：
+  - `android/app/build/outputs/apk/debug/app-debug.apk`
+  - 最新修改时间：`2026-05-20 14:33:38`
+
+## 协作说明
+
+- 本轮没有实际启用 subagent。
+- 原因：虽然项目全局规则默认按委派模式组织工作，但当前环境的高优先级工具规则要求只有在用户显式要求 subagent/并行代理时才真正调用；因此本轮只沿用了委派拆分框架，没有实际派生代理。
