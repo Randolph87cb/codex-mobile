@@ -31,13 +31,16 @@ export interface LineTransport {
   sendLine(line: string): void;
   close(): void;
   onLine(listener: (line: string) => void): void;
+  onStderrLine(listener: (line: string) => void): void;
   onExit(listener: (code: number | null) => void): void;
 }
 
 export class ChildProcessLineTransport implements LineTransport {
   private child?: ChildProcessWithoutNullStreams;
   private rl?: Interface;
+  private stderrRl?: Interface;
   private readonly lineListeners = new Set<(line: string) => void>();
+  private readonly stderrLineListeners = new Set<(line: string) => void>();
   private readonly exitListeners = new Set<(code: number | null) => void>();
 
   constructor(
@@ -63,6 +66,12 @@ export class ChildProcessLineTransport implements LineTransport {
         listener(line);
       }
     });
+    this.stderrRl = createInterface({ input: this.child.stderr });
+    this.stderrRl.on("line", (line) => {
+      for (const listener of this.stderrLineListeners) {
+        listener(line);
+      }
+    });
 
     this.child.on("exit", (code) => {
       for (const listener of this.exitListeners) {
@@ -81,13 +90,19 @@ export class ChildProcessLineTransport implements LineTransport {
 
   close(): void {
     this.rl?.close();
+    this.stderrRl?.close();
     this.child?.kill();
     this.rl = undefined;
+    this.stderrRl = undefined;
     this.child = undefined;
   }
 
   onLine(listener: (line: string) => void): void {
     this.lineListeners.add(listener);
+  }
+
+  onStderrLine(listener: (line: string) => void): void {
+    this.stderrLineListeners.add(listener);
   }
 
   onExit(listener: (code: number | null) => void): void {
@@ -102,10 +117,16 @@ interface AppServerClientOptions {
     version: string;
   };
   transport?: LineTransport;
+  logger?: AppServerClientLogger;
+}
+
+export interface AppServerClientLogger {
+  warn(message: string): void;
 }
 
 export class AppServerClient {
   private readonly transport: LineTransport;
+  private readonly logger: AppServerClientLogger;
   private readonly notifications = new Set<(message: JsonRpcNotification) => void>();
   private readonly serverRequests = new Set<(message: JsonRpcServerRequest) => void>();
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
@@ -116,6 +137,11 @@ export class AppServerClient {
     this.transport =
       options.transport ??
       new ChildProcessLineTransport(resolveCodexExecutable(), ["app-server"], options.cwd);
+    this.logger = options.logger ?? {
+      warn: (message: string) => {
+        console.warn(message);
+      },
+    };
   }
 
   async start(): Promise<void> {
@@ -125,6 +151,13 @@ export class AppServerClient {
 
     this.transport.onLine((line) => {
       this.handleLine(line);
+    });
+    this.transport.onStderrLine((line) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        return;
+      }
+      this.logger.warn(`app-server stderr: ${truncateTransportLine(trimmedLine)}`);
     });
     this.transport.onExit((code) => {
       const error = new Error(`app-server exited with code ${code ?? "unknown"}`);
@@ -196,10 +229,29 @@ export class AppServerClient {
   }
 
   private handleLine(line: string): void {
-    const parsed = JSON.parse(line) as
-      | JsonRpcResponse<unknown>
-      | JsonRpcNotification
-      | JsonRpcServerRequest;
+    const trimmedLine = line.trim();
+    if (!trimmedLine) {
+      return;
+    }
+
+    if (!trimmedLine.startsWith("{")) {
+      this.logger.warn(`app-server stdout non-json line ignored: ${truncateTransportLine(trimmedLine)}`);
+      return;
+    }
+
+    let parsed: JsonRpcResponse<unknown> | JsonRpcNotification | JsonRpcServerRequest;
+    try {
+      parsed = JSON.parse(trimmedLine) as
+        | JsonRpcResponse<unknown>
+        | JsonRpcNotification
+        | JsonRpcServerRequest;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `app-server stdout malformed json ignored: ${truncateTransportLine(trimmedLine)} (${message})`,
+      );
+      return;
+    }
 
     if ("id" in parsed && "method" in parsed) {
       for (const listener of this.serverRequests) {
@@ -244,5 +296,9 @@ function resolveCodexExecutable(): string {
   }
 
   return "codex.exe";
+}
+
+function truncateTransportLine(line: string, maxLength = 400): string {
+  return line.length <= maxLength ? line : `${line.slice(0, maxLength)}...`;
 }
 

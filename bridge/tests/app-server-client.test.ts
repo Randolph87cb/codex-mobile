@@ -8,6 +8,7 @@ import {
 class FakeLineTransport implements LineTransport {
   readonly sent: string[] = [];
   private lineListener?: (line: string) => void;
+  private stderrLineListener?: (line: string) => void;
   private exitListener?: (code: number | null) => void;
 
   start(): void {
@@ -26,12 +27,20 @@ class FakeLineTransport implements LineTransport {
     this.lineListener = listener;
   }
 
+  onStderrLine(listener: (line: string) => void): void {
+    this.stderrLineListener = listener;
+  }
+
   onExit(listener: (code: number | null) => void): void {
     this.exitListener = listener;
   }
 
   emitLine(line: string): void {
     this.lineListener?.(line);
+  }
+
+  emitStderrLine(line: string): void {
+    this.stderrLineListener?.(line);
   }
 }
 
@@ -115,5 +124,66 @@ describe("AppServerClient", () => {
       method: "request_user_input",
       params: { threadId: "t1" },
     });
+  });
+
+  test("ignores non-json stdout lines and keeps processing later json-rpc messages", async () => {
+    const transport = new FakeLineTransport();
+    const logger = { warn: vi.fn() };
+    const client = new AppServerClient({
+      clientInfo: { name: "test", version: "0.1.0" },
+      transport,
+      logger,
+    });
+
+    const startPromise = client.start();
+    transport.emitLine("成功: 已终止 PID 1996 (父进程 PID 23768 子进程)的进程。");
+    transport.emitLine(
+      JSON.stringify({
+        id: 1,
+        result: {
+          userAgent: "ua",
+          codexHome: "C:\\Users\\Administrator\\.codex",
+          platformFamily: "windows",
+          platformOs: "windows",
+        },
+      }),
+    );
+    await startPromise;
+
+    const requestPromise = client.request<{ ok: boolean }>("thread/list", {});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    transport.emitLine(JSON.stringify({ id: 2, result: { ok: true } }));
+
+    await expect(requestPromise).resolves.toEqual({ ok: true });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("app-server stdout non-json line ignored"),
+    );
+  });
+
+  test("logs app-server stderr lines for later diagnosis", async () => {
+    const transport = new FakeLineTransport();
+    const logger = { warn: vi.fn() };
+    const client = new AppServerClient({
+      clientInfo: { name: "test", version: "0.1.0" },
+      transport,
+      logger,
+    });
+
+    const startPromise = client.start();
+    transport.emitStderrLine("unexpected stderr line");
+    transport.emitLine(
+      JSON.stringify({
+        id: 1,
+        result: {
+          userAgent: "ua",
+          codexHome: "C:\\Users\\Administrator\\.codex",
+          platformFamily: "windows",
+          platformOs: "windows",
+        },
+      }),
+    );
+    await startPromise;
+
+    expect(logger.warn).toHaveBeenCalledWith("app-server stderr: unexpected stderr line");
   });
 });
