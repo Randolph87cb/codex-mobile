@@ -769,6 +769,49 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("serves whitelisted local file downloads with attachment disposition", async () => {
+    const allowedRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-download-file-"));
+    tempDirs.push(allowedRoot);
+    const filePath = path.join(allowedRoot, "session report.md");
+    await writeFile(filePath, "# report");
+
+    const blockedRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-download-file-blocked-"));
+    tempDirs.push(blockedRoot);
+    const blockedFilePath = path.join(blockedRoot, "outside.txt");
+    await writeFile(blockedFilePath, "outside");
+
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({
+      store,
+      runner,
+      security: createSecurityConfig({
+        allowedCwds: [allowedRoot.toLowerCase()],
+      }),
+    });
+
+    const allowedResponse = await app.inject({
+      method: "GET",
+      url: `/api/file/download?path=${encodeURIComponent(filePath)}`,
+    });
+    expect(allowedResponse.statusCode).toBe(200);
+    expect(allowedResponse.headers["content-type"]).toContain("text/markdown");
+    expect(allowedResponse.headers["content-disposition"]).toContain("attachment;");
+    expect(allowedResponse.headers["content-disposition"]).toContain("session report.md");
+    expect(allowedResponse.body).toBe("# report");
+
+    const forbiddenResponse = await app.inject({
+      method: "GET",
+      url: `/api/file/download?path=${encodeURIComponent(blockedFilePath)}`,
+    });
+    expect(forbiddenResponse.statusCode).toBe(403);
+    expect(forbiddenResponse.json()).toMatchObject({
+      error: "file-path-not-allowed",
+    });
+
+    await app.close();
+  });
+
   test("returns 409 when thread is already active in another client", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);

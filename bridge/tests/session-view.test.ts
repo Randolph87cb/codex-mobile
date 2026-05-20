@@ -248,7 +248,9 @@ describe("session view mapping", () => {
 
     expect(view.transcriptPreview).toContain("系统：图片生成");
     expect(view.transcriptPreview).toContain("图片内容已生成。");
-    expect(view.transcriptPreview).toContain(`已保存：${savedPath}`);
+    expect(view.transcriptPreview).toContain(
+      `已保存：[image.png](bridge-file://${encodeURIComponent(savedPath)})`,
+    );
     expect(view.transcriptPreview).toContain(
       `![image.png](/api/image/file?path=${encodeURIComponent(savedPath)})`,
     );

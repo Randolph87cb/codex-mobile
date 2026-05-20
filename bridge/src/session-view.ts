@@ -252,12 +252,13 @@ export function formatThreadItemAsTranscriptBlock(item: AppServerThreadItem): st
     case "imageView":
       return buildSystemBlock("查看图片", [
         normalizeText(String(item.path ?? "")),
+        buildBridgeFileMarkdown("下载原图", normalizeText(String(item.path ?? ""))),
         buildBridgeFileImageMarkdown(normalizeText(String(item.path ?? ""))),
       ]);
     case "imageGeneration":
       return buildSystemBlock("图片生成", [
         summarizeImageGenerationResult(item.result),
-        normalizeText(String(item.savedPath ?? item.path ?? "")) ? `已保存：${normalizeText(String(item.savedPath ?? item.path ?? ""))}` : null,
+        buildSavedFileLine(normalizeText(String(item.savedPath ?? item.path ?? ""))),
         buildBridgeFileImageMarkdown(normalizeText(String(item.savedPath ?? item.path ?? ""))),
       ]);
     case "enteredReviewMode":
@@ -446,6 +447,25 @@ function buildBridgeFileImageMarkdown(rawPath: string | null | undefined): strin
     path.basename(normalizedPath),
     `/api/image/file?path=${encodeURIComponent(normalizedPath)}`,
   );
+}
+
+function buildBridgeFileMarkdown(label: string, rawPath: string | null | undefined): string | null {
+  const normalizedPath = normalizeText(rawPath);
+  if (!normalizedPath) {
+    return null;
+  }
+
+  return `[${label}](bridge-file://${encodeURIComponent(normalizedPath)})`;
+}
+
+function buildSavedFileLine(rawPath: string | null | undefined): string | null {
+  const normalizedPath = normalizeText(rawPath);
+  if (!normalizedPath) {
+    return null;
+  }
+
+  const link = buildBridgeFileMarkdown(path.basename(normalizedPath), normalizedPath);
+  return link ? `已保存：${link}` : `已保存：${normalizedPath}`;
 }
 
 function buildImageMarkdown(alt: string | null | undefined, source: string | null | undefined): string | null {

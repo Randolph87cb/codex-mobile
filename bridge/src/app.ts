@@ -73,6 +73,10 @@ const imageFileQuerySchema = z.object({
   path: z.string().trim().min(1),
 });
 
+const fileDownloadQuerySchema = z.object({
+  path: z.string().trim().min(1),
+});
+
 const approveSchema = z.object({
   requestId: z.union([z.string().min(1), z.number()]).optional(),
   decision: z.enum(["approve", "approve_for_session", "reject", "reject_and_interrupt"]).default("approve"),
@@ -226,13 +230,37 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     }
 
     const candidatePath = path.resolve(query.data.path);
-    if (!canServeImagePath(candidatePath, security, attachmentStore)) {
+    if (!canServeLocalPath(candidatePath, security, attachmentStore)) {
       return reply.status(403).send({
         error: "image-path-not-allowed",
       });
     }
 
     return sendImageFile(reply, candidatePath, mimeTypeFromPath(candidatePath));
+  });
+
+  app.get("/api/file/download", async (request, reply) => {
+    const query = fileDownloadQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: query.error.flatten(),
+      });
+    }
+
+    const candidatePath = path.resolve(query.data.path);
+    if (!canServeLocalPath(candidatePath, security, attachmentStore)) {
+      return reply.status(403).send({
+        error: "file-path-not-allowed",
+      });
+    }
+
+    return sendDownloadFile(
+      reply,
+      candidatePath,
+      path.basename(candidatePath),
+      mimeTypeFromPath(candidatePath),
+    );
   });
 
   app.post("/api/session", async (request, reply) => {
@@ -660,7 +688,7 @@ async function sendImageFile(
   return reply.send(createReadStream(filePath));
 }
 
-function canServeImagePath(
+function canServeLocalPath(
   candidatePath: string,
   security: BridgeSecurityConfig,
   attachmentStore: AttachmentStore,
@@ -679,6 +707,26 @@ function canServeImagePath(
 
 function mimeTypeFromPath(filePath: string): string {
   switch (path.extname(filePath).toLowerCase()) {
+    case ".txt":
+      return "text/plain; charset=utf-8";
+    case ".md":
+      return "text/markdown; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".log":
+      return "text/plain; charset=utf-8";
+    case ".csv":
+      return "text/csv; charset=utf-8";
+    case ".tsv":
+      return "text/tab-separated-values; charset=utf-8";
+    case ".pdf":
+      return "application/pdf";
+    case ".zip":
+      return "application/zip";
+    case ".tar":
+      return "application/x-tar";
+    case ".gz":
+      return "application/gzip";
     case ".png":
       return "image/png";
     case ".jpeg":
@@ -691,8 +739,30 @@ function mimeTypeFromPath(filePath: string): string {
     case ".bmp":
       return "image/bmp";
     default:
-      return "image/jpeg";
+      return "application/octet-stream";
   }
+}
+
+async function sendDownloadFile(
+  reply: FastifyReply,
+  filePath: string,
+  displayName: string,
+  mimeType: string,
+) {
+  try {
+    await access(filePath);
+  } catch {
+    return reply.status(404).send({ error: "file-not-found" });
+  }
+
+  const safeDisplayName = sanitizeDispositionFileName(displayName);
+  reply.header("Content-Type", mimeType);
+  reply.header("Cache-Control", "no-store");
+  reply.header(
+    "Content-Disposition",
+    `attachment; filename="${safeDisplayName}"; filename*=UTF-8''${encodeURIComponent(displayName)}`,
+  );
+  return reply.send(createReadStream(filePath));
 }
 
 function normalizePathForComparison(value: string): string {
@@ -700,6 +770,13 @@ function normalizePathForComparison(value: string): string {
   const root = path.parse(resolved).root;
   const trimmed = resolved === root ? resolved : resolved.replace(/[\\/]+$/, "");
   return process.platform === "win32" ? trimmed.toLowerCase() : trimmed;
+}
+
+function sanitizeDispositionFileName(value: string): string {
+  const sanitized = value
+    .replace(/[\r\n"]/g, "_")
+    .trim();
+  return sanitized || "download";
 }
 
 function normalizeDrainGraceMs(value: number | undefined): number {

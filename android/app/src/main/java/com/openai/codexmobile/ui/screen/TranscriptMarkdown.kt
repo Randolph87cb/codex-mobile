@@ -5,14 +5,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -22,6 +26,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 private const val MarkdownLinkTag = "markdown_link"
 
@@ -50,6 +55,9 @@ internal fun MarkdownTextBlock(
     text: String,
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyMedium,
+    bridgeEndpoint: String = "",
+    bridgeAuthToken: String = "",
+    onShowMessage: (String) -> Unit = {},
 ) {
     val blocks = remember(text) { parseMarkdownBlocks(text) }
     Column(
@@ -61,24 +69,36 @@ internal fun MarkdownTextBlock(
                 is MarkdownBlock.Heading -> MarkdownHeading(
                     block = block,
                     modifier = Modifier.fillMaxWidth(),
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onShowMessage = onShowMessage,
                 )
 
                 is MarkdownBlock.Paragraph -> MarkdownAnnotatedText(
                     text = block.text,
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onShowMessage = onShowMessage,
                 )
 
                 is MarkdownBlock.Quote -> MarkdownQuote(
                     text = block.text,
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onShowMessage = onShowMessage,
                 )
 
                 is MarkdownBlock.ListBlock -> MarkdownList(
                     block = block,
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onShowMessage = onShowMessage,
                 )
             }
         }
@@ -89,6 +109,9 @@ internal fun MarkdownTextBlock(
 private fun MarkdownHeading(
     block: MarkdownBlock.Heading,
     modifier: Modifier = Modifier,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onShowMessage: (String) -> Unit,
 ) {
     val style = when (block.level) {
         1 -> MaterialTheme.typography.headlineSmall
@@ -100,6 +123,9 @@ private fun MarkdownHeading(
         text = block.text,
         style = style,
         modifier = modifier,
+        bridgeEndpoint = bridgeEndpoint,
+        bridgeAuthToken = bridgeAuthToken,
+        onShowMessage = onShowMessage,
     )
 }
 
@@ -108,6 +134,9 @@ private fun MarkdownQuote(
     text: String,
     style: TextStyle,
     modifier: Modifier = Modifier,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onShowMessage: (String) -> Unit,
 ) {
     Row(
         modifier = modifier,
@@ -123,6 +152,9 @@ private fun MarkdownQuote(
             text = text,
             style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
             modifier = Modifier.weight(1f),
+            bridgeEndpoint = bridgeEndpoint,
+            bridgeAuthToken = bridgeAuthToken,
+            onShowMessage = onShowMessage,
         )
     }
 }
@@ -132,6 +164,9 @@ private fun MarkdownList(
     block: MarkdownBlock.ListBlock,
     style: TextStyle,
     modifier: Modifier = Modifier,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onShowMessage: (String) -> Unit,
 ) {
     Column(
         modifier = modifier,
@@ -151,6 +186,9 @@ private fun MarkdownList(
                     text = item,
                     style = style,
                     modifier = Modifier.weight(1f),
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onShowMessage = onShowMessage,
                 )
             }
         }
@@ -162,7 +200,13 @@ private fun MarkdownAnnotatedText(
     text: String,
     style: TextStyle,
     modifier: Modifier = Modifier,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onShowMessage: (String) -> Unit,
 ) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val coroutineScope = rememberCoroutineScope()
     val annotated = remember(text, style.color) {
         buildMarkdownAnnotatedString(
             text = text,
@@ -170,10 +214,46 @@ private fun MarkdownAnnotatedText(
         )
     }
     SelectionContainer {
-        Text(
+        ClickableText(
             text = annotated,
             modifier = modifier,
             style = style,
+            onClick = { offset ->
+                val link = annotated.getStringAnnotations(
+                    tag = MarkdownLinkTag,
+                    start = offset,
+                    end = offset,
+                ).firstOrNull()?.item ?: return@ClickableText
+                val localDownloadRequest = resolveTranscriptFileDownloadRequest(
+                    source = link,
+                    bridgeEndpoint = bridgeEndpoint,
+                )
+                if (localDownloadRequest != null) {
+                    coroutineScope.launch {
+                        val message = runCatching {
+                            saveTranscriptFile(
+                                context = context,
+                                request = localDownloadRequest,
+                                bridgeAuthToken = bridgeAuthToken,
+                            )
+                        }.getOrElse { error ->
+                            error.message ?: "保存文件失败。"
+                        }
+                        onShowMessage(message)
+                    }
+                    return@ClickableText
+                }
+
+                val resolvedUrl = resolveMarkdownExternalUrl(link, bridgeEndpoint) ?: run {
+                    onShowMessage("暂不支持的链接。")
+                    return@ClickableText
+                }
+                runCatching {
+                    uriHandler.openUri(resolvedUrl)
+                }.onFailure { error ->
+                    onShowMessage(error.message ?: "打开链接失败。")
+                }
+            },
         )
     }
 }
@@ -421,3 +501,21 @@ private val HeadingRegex = Regex("^(#{1,6})\\s+(.+)$")
 private val UnorderedListRegex = Regex("^[-*+]\\s+(.+)$")
 private val OrderedListRegex = Regex("^\\d+\\.\\s+(.+)$")
 private val QuoteRegex = Regex("^>\\s?(.*)$")
+
+private fun resolveMarkdownExternalUrl(
+    source: String,
+    bridgeEndpoint: String,
+): String? {
+    val trimmed = source.trim()
+    if (trimmed.isBlank()) {
+        return null
+    }
+
+    return when {
+        trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("https://", ignoreCase = true) -> trimmed
+
+        trimmed.startsWith("/") -> resolveTranscriptImageUrl(trimmed, bridgeEndpoint)
+        else -> null
+    }
+}
