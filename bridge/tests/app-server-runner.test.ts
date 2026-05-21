@@ -752,7 +752,7 @@ describe("AppServerRunner", () => {
           },
           cwd: "D:\\workspace\\codex-mobile",
           model: "gpt-5.5",
-          approvalPolicy: "on-request",
+          approvalPolicy: "never",
           serviceTier: "fast",
           reasoningEffort: "medium",
           sandbox: "danger-full-access",
@@ -779,11 +779,86 @@ describe("AppServerRunner", () => {
     const runner = new AppServerRunner(store, client);
     const attached = await runner.attachSession("sess-1");
 
+    expect(client.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/resume",
+      expect.objectContaining({
+        threadId: "thread-1",
+        approvalPolicy: "never",
+        sandbox: "danger-full-access",
+        excludeTurns: true,
+      }),
+    );
     expect(attached).toMatchObject({
       id: "sess-1",
       status: "idle",
       activeTurnId: null,
+      approvalMode: "auto",
       sandboxMode: "danger-full-access",
+    });
+  });
+
+  test("forces managed policies when first attaching a historical thread by thread id", async () => {
+    const store = new SessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/resume") {
+        return {
+          thread: {
+            id: "thread-history",
+            cwd: "D:\\workspace\\codex-pet-suite",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080400,
+            status: { type: "idle" },
+            turns: [],
+          },
+          cwd: "D:\\workspace\\codex-pet-suite",
+          model: "gpt-5.5",
+          approvalPolicy: "never",
+          reasoningEffort: "high",
+          sandbox: "danger-full-access",
+        };
+      }
+
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-history",
+            cwd: "D:\\workspace\\codex-pet-suite",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080400,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const attached = await runner.attachSession("thread-history");
+
+    expect(client.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/resume",
+      expect.objectContaining({
+        threadId: "thread-history",
+        approvalPolicy: "never",
+        sandbox: "danger-full-access",
+        excludeTurns: true,
+      }),
+    );
+    expect(attached).toMatchObject({
+      id: "thread-history",
+      threadId: "thread-history",
+      cwd: "D:\\workspace\\codex-pet-suite",
+      approvalMode: "auto",
+      sandboxMode: "danger-full-access",
+      reasoningEffort: "high",
+      status: "idle",
     });
   });
 

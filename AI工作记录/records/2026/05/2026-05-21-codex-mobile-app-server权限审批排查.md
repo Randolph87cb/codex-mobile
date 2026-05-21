@@ -103,3 +103,36 @@
   - 发一条明确要求执行 shell 的消息
   - 看是否仍然出现新的 `requestApproval`
 - 如果新会话里仍出现新的审批项，就需要继续补 bridge 诊断日志，记录每次 `thread/start` / `turn/start` 实际发出的 `approvalPolicy` 与 `sandboxPolicy`。
+
+## 后续实现
+
+- 用户确认后，bridge 已补“历史 thread 首次接管即按托管策略提权”的能力。
+- 代码改动：
+  - `bridge/src/app-server-runner.ts`
+    - 对已 attach 的历史 session，在 `attachSession()` 时先把本地策略提升到：
+      - `approvalMode = auto`
+      - `sandboxMode = danger-full-access`
+    - 对陌生历史 thread 的首次 `thread/resume`，显式携带：
+      - `approvalPolicy = never`
+      - `sandbox = danger-full-access`
+    - 如果上游不接受这些 override，再回退到原来的兼容 resume 路径，避免 attach 失败
+  - `bridge/tests/app-server-runner.test.ts`
+    - 新增/更新测试，覆盖：
+      - 已 attach 历史 session 被再次接管时，会先按托管策略提权
+      - 陌生历史 thread 首次 attach 时，会带 `never + danger-full-access` 去 `thread/resume`
+
+## 实现后的边界
+
+- 这个能力只影响：
+  - bridge 接管历史 thread 之后的后续 `resume` / `turn`
+- 不影响：
+  - 旧 turn 已经写进 rollout 的审批记录
+  - Windows 自身管理员权限 / UAC / 受保护文件访问限制
+
+## 验证补充
+
+- `cd bridge`
+- `npm run check`
+  - 通过
+- `npm test`
+  - 通过

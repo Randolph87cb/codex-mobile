@@ -84,6 +84,9 @@ class BusySessionError extends Error {
   }
 }
 
+const ManagedAttachedApprovalMode: SessionRecord["approvalMode"] = "auto";
+const ManagedAttachedSandboxMode: SessionRecord["sandboxMode"] = "danger-full-access";
+
 export class AppServerRunner implements HistoryCapableBridgeRunner {
   readonly mode = "app-server" as const;
   private readonly listeners = new Map<string, Set<BridgeEventListener>>();
@@ -338,15 +341,20 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   async attachSession(sessionId: string): Promise<SessionRecord | null> {
     const existing = this.store.get(sessionId);
     if (existing) {
-      return (await this.refreshAttachedSession(existing)) ?? existing;
+      const managed = this.enforceManagedSessionPolicies(existing);
+      return (await this.refreshAttachedSession(managed)) ?? managed;
     }
 
     const byThreadId = this.store.findByThreadId(sessionId);
     if (byThreadId) {
-      return (await this.refreshAttachedSession(byThreadId)) ?? byThreadId;
+      const managed = this.enforceManagedSessionPolicies(byThreadId);
+      return (await this.refreshAttachedSession(managed)) ?? managed;
     }
 
-    const resumed = await this.tryResumeThread(sessionId);
+    const resumed = await this.tryResumeThread(sessionId, {
+      approvalMode: ManagedAttachedApprovalMode,
+      sandboxMode: ManagedAttachedSandboxMode,
+    });
     if (resumed) {
       return this.syncSessionWithThreadRead(this.attachResumedThread(sessionId, resumed));
     }
@@ -360,10 +368,10 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       id: thread.id,
       cwd: thread.cwd,
       model: thread.modelProvider ?? "openai",
-      approvalMode: "manual",
+      approvalMode: ManagedAttachedApprovalMode,
       reasoningEffort: "medium",
       serviceTier: "default",
-      sandboxMode: "workspace-write",
+      sandboxMode: ManagedAttachedSandboxMode,
       status: mapThreadStatus(thread.status),
       threadId: thread.id,
       activeTurnId: null,
@@ -383,6 +391,26 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     });
     this.rememberThreadSession(thread.id, attached.id);
     return this.applyThreadSnapshot(attached, thread);
+  }
+
+  private enforceManagedSessionPolicies(session: SessionRecord): SessionRecord {
+    if (
+      session.approvalMode === ManagedAttachedApprovalMode &&
+      session.sandboxMode === ManagedAttachedSandboxMode
+    ) {
+      return session;
+    }
+
+    return (
+      this.store.update(session.id, {
+        approvalMode: ManagedAttachedApprovalMode,
+        sandboxMode: ManagedAttachedSandboxMode,
+      }) ?? {
+        ...session,
+        approvalMode: ManagedAttachedApprovalMode,
+        sandboxMode: ManagedAttachedSandboxMode,
+      }
+    );
   }
 
   private handleNotification(notification: JsonRpcNotification): void {
@@ -811,14 +839,32 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     );
   }
 
-  private async tryResumeThread(threadId: string): Promise<ThreadResumeResult | null> {
+  private async tryResumeThread(
+    threadId: string,
+    sessionOverrides?: Pick<SessionRecord, "approvalMode" | "sandboxMode">,
+  ): Promise<ThreadResumeResult | null> {
     try {
       return await this.client.request<ThreadResumeResult>("thread/resume", {
         threadId,
+        approvalPolicy: sessionOverrides
+          ? this.getApprovalPolicy(sessionOverrides.approvalMode)
+          : undefined,
+        sandbox: sessionOverrides?.sandboxMode,
         excludeTurns: true,
       });
     } catch {
-      return null;
+      if (!sessionOverrides) {
+        return null;
+      }
+
+      try {
+        return await this.client.request<ThreadResumeResult>("thread/resume", {
+          threadId,
+          excludeTurns: true,
+        });
+      } catch {
+        return null;
+      }
     }
   }
 
@@ -827,10 +873,10 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       id: sessionId,
       cwd: resumed.cwd ?? resumed.thread.cwd,
       model: resumed.model ?? resumed.thread.modelProvider ?? "openai",
-      approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? "manual",
+      approvalMode: mapApprovalMode(resumed.approvalPolicy) ?? ManagedAttachedApprovalMode,
       reasoningEffort: mapReasoningEffort(resumed.reasoningEffort) ?? "medium",
       serviceTier: mapServiceTier(resumed.serviceTier) ?? "default",
-      sandboxMode: mapSandboxMode(resumed.sandbox) ?? "workspace-write",
+      sandboxMode: mapSandboxMode(resumed.sandbox) ?? ManagedAttachedSandboxMode,
       status: mapThreadStatus(resumed.thread.status),
       threadId: resumed.thread.id,
       activeTurnId: null,
