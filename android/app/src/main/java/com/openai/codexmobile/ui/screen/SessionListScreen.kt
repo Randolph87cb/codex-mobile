@@ -14,16 +14,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -69,10 +72,14 @@ fun groupSessionsByDirectory(sessions: List<SessionSummary>): List<SessionDirect
 fun SessionListScreen(
     paddingValues: PaddingValues,
     sessions: List<SessionSummary>,
+    showArchivedSessions: Boolean,
     connectionState: BridgeConnectionState,
     currentCwd: String,
     isLoading: Boolean,
     onOpenSession: (String) -> Unit,
+    onShowArchivedSessionsChange: (Boolean) -> Unit,
+    onArchiveSession: (String) -> Unit,
+    onUnarchiveSession: (String) -> Unit,
     onCreateDraft: (String) -> Unit,
     onDisconnect: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -80,6 +87,8 @@ fun SessionListScreen(
     val groups = groupSessionsByDirectory(sessions)
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
     var draftDirectory by rememberSaveable(currentCwd) { mutableStateOf(currentCwd) }
+    var pendingArchiveSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingArchiveSessionTitle by rememberSaveable { mutableStateOf("") }
 
     if (showCreateDialog) {
         AlertDialog(
@@ -113,6 +122,42 @@ fun SessionListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showCreateDialog = false }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
+    if (pendingArchiveSessionId != null) {
+        AlertDialog(
+            modifier = Modifier.testTag(TestTags.SessionListArchiveDialog),
+            onDismissRequest = {
+                pendingArchiveSessionId = null
+                pendingArchiveSessionTitle = ""
+            },
+            title = { Text("归档会话") },
+            text = {
+                Text("确认归档“${pendingArchiveSessionTitle.ifBlank { "这条会话" }}”吗？归档后会从当前列表移到“已归档”。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingArchiveSessionId?.let(onArchiveSession)
+                        pendingArchiveSessionId = null
+                        pendingArchiveSessionTitle = ""
+                    },
+                    modifier = Modifier.testTag(TestTags.SessionListArchiveDialogConfirmButton),
+                ) {
+                    Text("归档")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingArchiveSessionId = null
+                        pendingArchiveSessionTitle = ""
+                    },
+                ) {
                     Text("取消")
                 }
             },
@@ -176,12 +221,56 @@ fun SessionListScreen(
                 )
             }
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (showArchivedSessions) {
+                OutlinedButton(
+                    onClick = { onShowArchivedSessionsChange(false) },
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(TestTags.SessionListFilterCurrentButton),
+                ) {
+                    Text("当前")
+                }
+                FilledTonalButton(
+                    onClick = { },
+                    enabled = false,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(TestTags.SessionListFilterArchivedButton),
+                ) {
+                    Text("已归档")
+                }
+            } else {
+                FilledTonalButton(
+                    onClick = { },
+                    enabled = false,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(TestTags.SessionListFilterCurrentButton),
+                ) {
+                    Text("当前")
+                }
+                OutlinedButton(
+                    onClick = { onShowArchivedSessionsChange(true) },
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(TestTags.SessionListFilterArchivedButton),
+                ) {
+                    Text("已归档")
+                }
+            }
+        }
         Button(
             onClick = {
                 draftDirectory = currentCwd
                 showCreateDialog = true
             },
-            enabled = !isLoading,
+            enabled = !isLoading && !showArchivedSessions,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(TestTags.SessionListCreateDraftButton),
@@ -190,7 +279,10 @@ fun SessionListScreen(
                 CircularProgressIndicator(strokeWidth = 2.dp)
             } else {
                 Icon(imageVector = Icons.Filled.Add, contentDescription = null)
-                Text("新建草稿线程", modifier = Modifier.padding(start = 8.dp))
+                Text(
+                    text = if (showArchivedSessions) "归档列表不支持新建草稿" else "新建草稿线程",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
         }
         LazyColumn(
@@ -201,15 +293,25 @@ fun SessionListScreen(
         ) {
             if (groups.isEmpty()) {
                 item {
-                    EmptySessionState(currentCwd = currentCwd)
+                    EmptySessionState(
+                        currentCwd = currentCwd,
+                        showArchivedSessions = showArchivedSessions,
+                    )
                 }
             }
 
             items(groups, key = { it.cwd }) { group ->
                 SessionDirectoryCard(
                     group = group,
+                    showArchivedSessions = showArchivedSessions,
+                    isLoading = isLoading,
                     onOpenSession = onOpenSession,
                     onCreateDraft = onCreateDraft,
+                    onArchiveSession = { session ->
+                        pendingArchiveSessionId = session.id
+                        pendingArchiveSessionTitle = session.title
+                    },
+                    onUnarchiveSession = onUnarchiveSession,
                 )
             }
         }
@@ -228,6 +330,7 @@ fun SessionListScreen(
 @Composable
 private fun EmptySessionState(
     currentCwd: String,
+    showArchivedSessions: Boolean,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -239,11 +342,15 @@ private fun EmptySessionState(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "还没有会话",
+                text = if (showArchivedSessions) "还没有归档会话" else "还没有会话",
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = "可以先用“新建草稿线程”选择目录。默认目录：${currentCwd.ifBlank { "未配置" }}",
+                text = if (showArchivedSessions) {
+                    "归档后的线程会显示在这里。"
+                } else {
+                    "可以先用“新建草稿线程”选择目录。默认目录：${currentCwd.ifBlank { "未配置" }}"
+                },
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -253,8 +360,12 @@ private fun EmptySessionState(
 @Composable
 private fun SessionDirectoryCard(
     group: SessionDirectoryGroup,
+    showArchivedSessions: Boolean,
+    isLoading: Boolean,
     onOpenSession: (String) -> Unit,
     onCreateDraft: (String) -> Unit,
+    onArchiveSession: (SessionSummary) -> Unit,
+    onUnarchiveSession: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier
@@ -299,12 +410,15 @@ private fun SessionDirectoryCard(
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
-                TextButton(
-                    onClick = { onCreateDraft(group.cwd) },
-                    modifier = Modifier.testTag(TestTags.SessionListFolderCreatePrefix + group.cwd),
-                ) {
-                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
-                    Text("新建", modifier = Modifier.padding(start = 4.dp))
+                if (!showArchivedSessions) {
+                    TextButton(
+                        onClick = { onCreateDraft(group.cwd) },
+                        enabled = !isLoading,
+                        modifier = Modifier.testTag(TestTags.SessionListFolderCreatePrefix + group.cwd),
+                    ) {
+                        Icon(imageVector = Icons.Filled.Add, contentDescription = null)
+                        Text("新建", modifier = Modifier.padding(start = 4.dp))
+                    }
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -345,6 +459,28 @@ private fun SessionDirectoryCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            FilledTonalIconButton(
+                                onClick = {
+                                    if (showArchivedSessions) {
+                                        onUnarchiveSession(session.id)
+                                    } else {
+                                        onArchiveSession(session)
+                                    }
+                                },
+                                enabled = !isLoading,
+                                modifier = Modifier.testTag(
+                                    if (showArchivedSessions) {
+                                        TestTags.SessionListUnarchiveButtonPrefix + session.id
+                                    } else {
+                                        TestTags.SessionListArchiveButtonPrefix + session.id
+                                    },
+                                ),
+                            ) {
+                                Icon(
+                                    imageVector = if (showArchivedSessions) Icons.Filled.Unarchive else Icons.Filled.Archive,
+                                    contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
                                 )
                             }
                             Icon(

@@ -379,6 +379,87 @@ class AppViewModelTest {
     }
 
     @Test
+    fun switchArchiveFilterReloadsArchivedSessions() = runTest(dispatcher.scheduler) {
+        val activeDetail = sampleDetail(id = "sess_active", status = "idle")
+        val archivedDetail = sampleDetail(id = "sess_archived", status = "idle")
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(activeDetail.toSummary()),
+            archivedSessionSummaries = listOf(archivedDetail.toSummary().copy(archived = true)),
+            detailsById = mapOf(
+                activeDetail.id to activeDetail,
+                archivedDetail.id to archivedDetail,
+            ),
+        )
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = activeDetail),
+            sessionRepository = repository,
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = FakeAppLogger(),
+        )
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.setShowArchivedSessions(true)
+        advanceUntilIdle()
+
+        assertEquals(listOf(false, true), repository.listArchivedFlags.takeLast(2))
+        assertTrue(viewModel.uiState.value.showArchivedSessions)
+        assertEquals(listOf("sess_archived"), viewModel.uiState.value.sessions.map { it.id })
+        assertTrue(viewModel.uiState.value.sessions.all { it.archived })
+    }
+
+    @Test
+    fun archiveSessionRefreshesCurrentListAndClearsSelectedDetail() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_archive_target", status = "idle")
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            archivedSessionSummaries = emptyList(),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = detail),
+            sessionRepository = repository,
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = FakeAppLogger(),
+        )
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail("sess_archive_target")
+        advanceUntilIdle()
+        viewModel.archiveSession("sess_archive_target")
+        advanceUntilIdle()
+
+        assertEquals(listOf("sess_archive_target"), repository.archivedSessionIds)
+        assertTrue(viewModel.uiState.value.sessions.isEmpty())
+        assertNull(viewModel.uiState.value.selectedSession)
+    }
+
+    @Test
+    fun unarchiveSessionRefreshesArchivedList() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_restore_target", status = "idle")
+        val repository = FakeSessionRepository(
+            sessionSummaries = emptyList(),
+            archivedSessionSummaries = listOf(detail.toSummary().copy(archived = true)),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = detail),
+            sessionRepository = repository,
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = FakeAppLogger(),
+        )
+
+        viewModel.setShowArchivedSessions(true)
+        advanceUntilIdle()
+        viewModel.unarchiveSession("sess_restore_target")
+        advanceUntilIdle()
+
+        assertEquals(listOf("sess_restore_target"), repository.unarchivedSessionIds)
+        assertTrue(viewModel.uiState.value.sessions.isEmpty())
+    }
+
+    @Test
     fun streamClosedInForegroundReconnectsAutomatically() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_reconnect", status = "running")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -675,7 +756,7 @@ class AppViewModelTest {
     fun updatingDraftConfigDoesNotOverwriteGlobalSettings() = runTest(dispatcher.scheduler) {
         val createdDetail = sampleDetail(id = "sess_draft_config", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = createdDetail)
-        val repository = FakeSessionRepository(emptyList(), emptyMap())
+        val repository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap())
         val globalSettings = AppSettings(
             endpoint = "http://10.0.2.2:8787",
             authToken = "",
@@ -1034,7 +1115,7 @@ class AppViewModelTest {
         val detail = sampleDetail(id = "sess_legacy", status = "idle")
         val viewModel = AppViewModel(
             bridgeApi = FakeBridgeApi(createdDetail = detail),
-            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            sessionRepository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap()),
             settingsStore = FakeAppSettingsStore(
                 AppSettings(
                     endpoint = "https://bridge-a.example.com",
@@ -1090,7 +1171,7 @@ class AppViewModelTest {
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
         val viewModel = AppViewModel(
             bridgeApi = bridgeApi,
-            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            sessionRepository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap()),
             settingsStore = settingsStore,
             appLogger = FakeAppLogger(),
         )
@@ -1136,7 +1217,7 @@ class AppViewModelTest {
         )
         val viewModel = AppViewModel(
             bridgeApi = FakeBridgeApi(createdDetail = detail),
-            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            sessionRepository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap()),
             settingsStore = settingsStore,
             appLogger = FakeAppLogger(),
         )
@@ -1163,7 +1244,7 @@ class AppViewModelTest {
         val appLogger = FakeAppLogger(initialLog = "初始日志")
         val viewModel = AppViewModel(
             bridgeApi = FakeBridgeApi(createdDetail = detail),
-            sessionRepository = FakeSessionRepository(emptyList(), emptyMap()),
+            sessionRepository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap()),
             settingsStore = FakeAppSettingsStore(),
             appLogger = appLogger,
         )
@@ -1291,17 +1372,44 @@ private data class ApprovalCall(
 )
 
 private class FakeSessionRepository(
-    private val sessionSummaries: List<SessionSummary>,
+    sessionSummaries: List<SessionSummary>,
+    archivedSessionSummaries: List<SessionSummary> = emptyList(),
     private val detailsById: Map<String, SessionDetail>,
 ) : SessionRepository {
     private val getCounts = mutableMapOf<String, Int>()
+    private val activeSessions = sessionSummaries.toMutableList()
+    private val archivedSessions = archivedSessionSummaries.toMutableList()
+    val listArchivedFlags = mutableListOf<Boolean>()
+    val archivedSessionIds = mutableListOf<String>()
+    val unarchivedSessionIds = mutableListOf<String>()
 
-    override suspend fun listSessions(): List<SessionSummary> = sessionSummaries
+    override suspend fun listSessions(archived: Boolean): List<SessionSummary> {
+        listArchivedFlags += archived
+        return if (archived) archivedSessions.toList() else activeSessions.toList()
+    }
 
     override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
         val count = getCounts.getOrDefault(sessionId, 0)
         getCounts[sessionId] = count + 1
         return detailsById["$sessionId#refresh"].takeIf { count > 0 } ?: detailsById[sessionId]
+    }
+
+    override suspend fun archiveSession(sessionId: String) {
+        archivedSessionIds += sessionId
+        val index = activeSessions.indexOfFirst { it.id == sessionId }
+        if (index >= 0) {
+            val session = activeSessions.removeAt(index)
+            archivedSessions += session.copy(archived = true)
+        }
+    }
+
+    override suspend fun unarchiveSession(sessionId: String) {
+        unarchivedSessionIds += sessionId
+        val index = archivedSessions.indexOfFirst { it.id == sessionId }
+        if (index >= 0) {
+            val session = archivedSessions.removeAt(index)
+            activeSessions += session.copy(archived = false)
+        }
     }
 }
 

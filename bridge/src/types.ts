@@ -37,6 +37,7 @@ export interface SessionView {
   subtitle: string;
   lastUpdated: string;
   transcriptPreview: string | null;
+  archived: boolean;
   source: "local" | "history";
   cwd: string;
   model: string;

@@ -191,9 +191,13 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         }
     }
 
-    override suspend fun listSessions(): List<SessionSummary> = listOf(session)
+    override suspend fun listSessions(archived: Boolean): List<SessionSummary> = if (archived) emptyList() else listOf(session)
 
     override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
         return detail.takeIf { it.id == sessionId }
     }
+
+    override suspend fun archiveSession(sessionId: String) = Unit
+
+    override suspend fun unarchiveSession(sessionId: String) = Unit
 }

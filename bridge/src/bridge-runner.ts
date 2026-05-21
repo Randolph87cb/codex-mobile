@@ -20,15 +20,19 @@ export interface BridgeRunner {
 }
 
 export interface HistoryCapableBridgeRunner extends BridgeRunner {
-  listSessionViews(): Promise<SessionView[]>;
+  listSessionViews(archived?: boolean): Promise<SessionView[]>;
   getSessionView(sessionId: string): Promise<SessionView | null>;
   attachSession(sessionId: string): Promise<SessionRecord | null>;
+  archiveSession(sessionId: string): Promise<void>;
+  unarchiveSession(sessionId: string): Promise<void>;
 }
 
 export function isHistoryCapableRunner(runner: BridgeRunner): runner is HistoryCapableBridgeRunner {
   return (
     "listSessionViews" in runner &&
     "getSessionView" in runner &&
-    "attachSession" in runner
+    "attachSession" in runner &&
+    "archiveSession" in runner &&
+    "unarchiveSession" in runner
   );
 }

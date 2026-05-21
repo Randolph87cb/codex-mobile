@@ -4,6 +4,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class RealBridgeDataProviderTest {
     @Test
@@ -39,5 +40,15 @@ class RealBridgeDataProviderTest {
         assertTrue(event?.graceMs == 2000)
         assertTrue(event?.bridgeVersion == "0.1.0")
         assertTrue(event?.bridgeStartedAt == "2026-05-20T11:59:00Z")
+    }
+
+    @Test
+    fun parseSessionSummaryReadsArchivedFlag() {
+        val summary = JSONObject(
+            """{"id":"thread-archived","title":"已归档会话","model":"gpt-5.5","status":"idle","cwd":"D:\\workspace\\archived","updatedAt":"2026-05-21T10:00:00Z","archived":true}""",
+        ).toSessionSummary()
+
+        assertTrue(summary.archived)
+        assertTrue(summary.id == "thread-archived")
     }
 }

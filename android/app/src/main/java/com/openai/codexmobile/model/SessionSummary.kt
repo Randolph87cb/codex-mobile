@@ -5,6 +5,7 @@ data class SessionSummary(
     val title: String,
     val subtitle: String,
     val lastUpdated: String,
+    val archived: Boolean = false,
     val cwd: String = "未提供工作目录",
     val model: String = "gpt-5.5",
     val approvalMode: String = "manual",

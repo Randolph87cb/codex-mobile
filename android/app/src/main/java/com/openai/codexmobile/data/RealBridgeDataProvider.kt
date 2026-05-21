@@ -366,11 +366,11 @@ class RealBridgeDataProvider(
         }
     }
 
-    override suspend fun listSessions(): List<SessionSummary> = withContext(Dispatchers.IO) {
+    override suspend fun listSessions(archived: Boolean): List<SessionSummary> = withContext(Dispatchers.IO) {
         val response = request(
             method = "GET",
-            url = "${requireBaseUrl()}/api/sessions",
-            summary = "list sessions",
+            url = "${requireBaseUrl()}/api/sessions?archived=$archived",
+            summary = "list sessions, archived=$archived",
         )
         if (response.statusCode !in 200..299) {
             appLogger.warn(
@@ -383,6 +383,40 @@ class RealBridgeDataProvider(
         val items = JSONObject(response.body).optJSONArray("items") ?: JSONArray()
         List(items.length()) { index ->
             items.getJSONObject(index).toSessionSummary()
+        }
+    }
+
+    override suspend fun archiveSession(sessionId: String) = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "归档会话：sessionId=$sessionId")
+        val response = request(
+            method = "POST",
+            url = "${requireBaseUrl()}/api/session/$sessionId/archive",
+            body = JSONObject().toString(),
+            summary = "archive session, sessionId=$sessionId",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "归档会话失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+    }
+
+    override suspend fun unarchiveSession(sessionId: String) = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "恢复归档会话：sessionId=$sessionId")
+        val response = request(
+            method = "POST",
+            url = "${requireBaseUrl()}/api/session/$sessionId/unarchive",
+            body = JSONObject().toString(),
+            summary = "unarchive session, sessionId=$sessionId",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "恢复归档会话失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
         }
     }
 
@@ -674,11 +708,11 @@ private class BridgeRequestException(
     body: String,
 ) : IllegalStateException("桥接请求失败，HTTP $statusCode：${body.ifBlank { "<empty>" }}")
 
-private fun String.toSessionSummary(): SessionSummary {
+internal fun String.toSessionSummary(): SessionSummary {
     return JSONObject(this).toSessionSummary()
 }
 
-private fun JSONObject.toSessionSummary(): SessionSummary {
+internal fun JSONObject.toSessionSummary(): SessionSummary {
     val id = getString("id")
     val title = optString("title").ifBlank { id }
     val model = optString("model").ifBlank { "未知模型" }
@@ -691,6 +725,7 @@ private fun JSONObject.toSessionSummary(): SessionSummary {
         title = title,
         subtitle = "$model • ${localizedStatus(status)} • $cwd",
         lastUpdated = updatedAt.ifBlank { "未知更新时间" },
+        archived = optBoolean("archived", false),
         cwd = cwd,
         model = model,
         approvalMode = optString("approvalMode").ifBlank { "manual" },

@@ -862,6 +862,112 @@ describe("AppServerRunner", () => {
     });
   });
 
+  test("filters archived thread lists and keeps archived attached sessions out of active list", async () => {
+    const store = createSessionStore();
+    store.attach({
+      id: "sess-archived-local",
+      cwd: "D:\\workspace\\archived",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+      status: "idle",
+      threadId: "thread-archived",
+      activeTurnId: null,
+      lastError: null,
+      createdAt: "2026-05-19T02:00:00.000Z",
+      updatedAt: "2026-05-19T02:00:00.000Z",
+    });
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: any) => {
+      if (method === "thread/list" && params?.archived === false) {
+        return {
+          data: [
+            {
+              id: "thread-1",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: 1716080300,
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      if (method === "thread/list" && params?.archived === true) {
+        return {
+          data: [
+            {
+              id: "thread-archived",
+              cwd: "D:\\workspace\\archived",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: 1716080400,
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const activeViews = await runner.listSessionViews(false);
+    const archivedViews = await runner.listSessionViews(true);
+
+    expect(activeViews.map((view) => view.id)).toEqual(["sess-1"]);
+    expect(activeViews.every((view) => !view.archived)).toBe(true);
+    expect(archivedViews.map((view) => view.id)).toEqual(["sess-archived-local"]);
+    expect(archivedViews.every((view) => view.archived)).toBe(true);
+  });
+
+  test("archives attached thread-backed sessions and removes them from local store", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    const runner = new AppServerRunner(store, client);
+
+    await runner.archiveSession("sess-1");
+
+    expect(client.request).toHaveBeenCalledWith("thread/archive", {
+      threadId: "thread-1",
+    });
+    expect(store.get("sess-1")).toBeUndefined();
+  });
+
+  test("unarchives history sessions by thread id", async () => {
+    const store = new SessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-history",
+            cwd: "D:\\workspace\\codex-pet-suite",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080400,
+            status: { type: "inactive" },
+            turns: [],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await runner.unarchiveSession("thread-history");
+
+    expect(client.request).toHaveBeenCalledWith("thread/unarchive", {
+      threadId: "thread-history",
+    });
+  });
+
   test("blocks turn/start when the thread is already active in another client", async () => {
     const store = createSessionStore();
     store.update("sess-1", {

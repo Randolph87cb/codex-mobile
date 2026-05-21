@@ -85,6 +85,7 @@ export function buildSessionViewFromRecord(
     subtitle: `${session.model} • ${formatStatusLabel(session.status)} • ${session.cwd}`,
     lastUpdated: session.updatedAt,
     transcriptPreview: buildLocalTranscriptPreview(session),
+    archived: false,
     source: "local",
     cwd: session.cwd,
     model: session.model,
@@ -106,6 +107,7 @@ export function buildSessionViewFromThread(
   thread: AppServerThread,
   session?: SessionRecord,
   pendingApproval: PendingApprovalView | null = null,
+  archived = false,
 ): SessionView {
   const fallbackStatus = mapThreadStatus(thread.status);
   const status = resolveThreadBackedStatus(thread, session, fallbackStatus);
@@ -130,6 +132,7 @@ export function buildSessionViewFromThread(
     subtitle: `${model} • ${formatStatusLabel(status)} • ${thread.cwd}`,
     lastUpdated: updatedAt,
     transcriptPreview,
+    archived,
     source: session ? "local" : "history",
     cwd: thread.cwd,
     model,

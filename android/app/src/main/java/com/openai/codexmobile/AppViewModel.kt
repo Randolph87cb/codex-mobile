@@ -61,6 +61,7 @@ data class AppUiState(
     val serviceTierInput: String,
     val sandboxModeInput: String,
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
+    val showArchivedSessions: Boolean = false,
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSession: SessionDetail? = null,
     val selectedDraftSession: DraftSessionUiState? = null,
@@ -482,7 +483,7 @@ class AppViewModel(
             try {
                 appLogger.info("AppViewModel", "开始连接桥接服务：$endpoint")
                 val connectionState = bridgeApi.connect(endpoint)
-                val syncedSessions = synchronizeManagedSessionPolicies(sessionRepository.listSessions())
+                val syncedSessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
                 val selectedSession = syncedSessions.firstOrNull()
                     ?.let { sessionRepository.getSessionDetail(it.id) }
                     ?.let(::enforceManagedSessionDetailLocally)
@@ -515,6 +516,121 @@ class AppViewModel(
                 }
                 refreshDiagnosticsLog()
             }
+        }
+    }
+
+    fun setShowArchivedSessions(showArchived: Boolean) {
+        if (uiState.value.showArchivedSessions == showArchived) {
+            return
+        }
+
+        viewModelScope.launch {
+            appLogger.info("AppViewModel", "切换会话筛选：archived=$showArchived")
+            stopSessionStream()
+            clearPendingImageUploads()
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    message = null,
+                    showArchivedSessions = showArchived,
+                    selectedSession = null,
+                    selectedDraftSession = null,
+                    pendingImageAttachments = emptyList(),
+                    queuedInputs = emptyList(),
+                    sessionRealtimeState = SessionRealtimeUiState(),
+                )
+            }
+            try {
+                val sessions = loadManagedSessionSummaries(showArchived)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        sessions = sessions,
+                        message = if (showArchived) "已切换到归档会话。" else "已切换到当前会话。",
+                    )
+                }
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "切换会话筛选失败：archived=$showArchived", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        sessions = emptyList(),
+                        message = error.message ?: "刷新会话列表失败。",
+                    )
+                }
+            }
+            refreshDiagnosticsLog()
+        }
+    }
+
+    fun archiveSession(sessionId: String) {
+        if (sessionId.isBlank()) {
+            return
+        }
+
+        viewModelScope.launch {
+            val shouldClearSelection = uiState.value.selectedSession?.id == sessionId
+            appLogger.info("AppViewModel", "归档会话：sessionId=$sessionId")
+            if (shouldClearSelection) {
+                stopSessionStream()
+                clearPendingImageUploads()
+            }
+            _uiState.update { it.copy(isLoading = true, message = null) }
+            try {
+                sessionRepository.archiveSession(sessionId)
+                val sessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        sessions = sessions,
+                        selectedSession = if (shouldClearSelection) null else it.selectedSession,
+                        selectedDraftSession = if (shouldClearSelection) null else it.selectedDraftSession,
+                        queuedInputs = if (shouldClearSelection) emptyList() else it.queuedInputs,
+                        sessionRealtimeState = if (shouldClearSelection) SessionRealtimeUiState() else it.sessionRealtimeState,
+                        message = "已归档会话。",
+                    )
+                }
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "归档会话失败：sessionId=$sessionId", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "归档会话失败。",
+                    )
+                }
+            }
+            refreshDiagnosticsLog()
+        }
+    }
+
+    fun unarchiveSession(sessionId: String) {
+        if (sessionId.isBlank()) {
+            return
+        }
+
+        viewModelScope.launch {
+            appLogger.info("AppViewModel", "恢复归档会话：sessionId=$sessionId")
+            _uiState.update { it.copy(isLoading = true, message = null) }
+            try {
+                sessionRepository.unarchiveSession(sessionId)
+                val sessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        sessions = sessions,
+                        message = "已恢复会话。",
+                    )
+                }
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "恢复归档会话失败：sessionId=$sessionId", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "恢复归档会话失败。",
+                    )
+                }
+            }
+            refreshDiagnosticsLog()
         }
     }
 
@@ -1603,8 +1719,18 @@ class AppViewModel(
 
     private suspend fun refreshSessions() {
         try {
-            val sessions = synchronizeManagedSessionPolicies(sessionRepository.listSessions())
-            _uiState.update { it.copy(sessions = sessions) }
+            val sessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
+            val visibleIds = sessions.map { it.id }.toSet()
+            _uiState.update {
+                it.copy(
+                    sessions = sessions,
+                    selectedSession = if (visibleIds.isEmpty()) {
+                        it.selectedSession
+                    } else {
+                        it.selectedSession?.takeIf { detail -> visibleIds.contains(detail.id) }
+                    },
+                )
+            }
         } catch (error: Exception) {
             appLogger.error("AppViewModel", "刷新会话列表失败。", error)
             // Keep the latest visible list if list refresh fails.
@@ -1800,6 +1926,10 @@ class AppViewModel(
             sessions
         }
         return latest.map(::enforceManagedSessionSummaryLocally)
+    }
+
+    private suspend fun loadManagedSessionSummaries(archived: Boolean): List<SessionSummary> {
+        return synchronizeManagedSessionPolicies(sessionRepository.listSessions(archived = archived))
     }
 
     private suspend fun ensureManagedSessionPolicy(detail: SessionDetail): SessionDetail {

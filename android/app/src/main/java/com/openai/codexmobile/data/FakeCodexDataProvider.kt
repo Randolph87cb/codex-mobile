@@ -110,9 +110,9 @@ class FakeCodexDataProvider : CodexDataProvider {
 
     override fun observeSessionEvents(sessionId: String): Flow<SessionStreamEvent> = emptyFlow()
 
-    override suspend fun listSessions(): List<SessionSummary> {
+    override suspend fun listSessions(archived: Boolean): List<SessionSummary> {
         delay(150)
-        return sessions
+        return if (archived) emptyList() else sessions
     }
 
     override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
@@ -132,5 +132,13 @@ class FakeCodexDataProvider : CodexDataProvider {
             sandboxMode = session.sandboxMode,
             status = session.status,
         )
+    }
+
+    override suspend fun archiveSession(sessionId: String) {
+        delay(100)
+    }
+
+    override suspend fun unarchiveSession(sessionId: String) {
+        delay(100)
     }
 }

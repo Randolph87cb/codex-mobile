@@ -161,12 +161,16 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 SessionListScreen(
                     paddingValues = paddingValues,
                     sessions = uiState.sessions,
+                    showArchivedSessions = uiState.showArchivedSessions,
                     connectionState = uiState.connectionState,
                     currentCwd = uiState.cwdInput,
                     isLoading = uiState.isLoading,
                     onOpenSession = { sessionId ->
                         navController.navigate("session/$sessionId")
                     },
+                    onShowArchivedSessionsChange = appViewModel::setShowArchivedSessions,
+                    onArchiveSession = appViewModel::archiveSession,
+                    onUnarchiveSession = appViewModel::unarchiveSession,
                     onCreateDraft = { cwd ->
                         appViewModel.startDraftSession(cwd)
                         navController.navigate(Routes.DraftSession)

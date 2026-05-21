@@ -26,6 +26,8 @@ class TestRunner implements HistoryCapableBridgeRunner {
     status: input.decision === "reject_and_interrupt" ? "idle" : "running",
   }));
   readonly interrupt = vi.fn(async () => undefined);
+  readonly archiveSession = vi.fn(async (_sessionId: string) => undefined);
+  readonly unarchiveSession = vi.fn(async (_sessionId: string) => undefined);
 
   constructor(protected readonly store: SessionStore) {}
 
@@ -33,23 +35,24 @@ class TestRunner implements HistoryCapableBridgeRunner {
     return () => undefined;
   }
 
-  async listSessionViews(): Promise<SessionView[]> {
+  async listSessionViews(archived = false): Promise<SessionView[]> {
     return [
       {
-        id: "thread-history",
-        title: "历史会话",
-        subtitle: "openai • 空闲 • D:\\workspace\\history",
+        id: archived ? "thread-archived" : "thread-history",
+        title: archived ? "已归档会话" : "历史会话",
+        subtitle: archived ? "openai • 空闲 • D:\\workspace\\archived" : "openai • 空闲 • D:\\workspace\\history",
         lastUpdated: "2026-05-19T01:00:00.000Z",
         transcriptPreview: "你：之前说过什么？\n\nCodex：这里是历史回复。",
+        archived,
         source: "history",
-        cwd: "D:\\workspace\\history",
+        cwd: archived ? "D:\\workspace\\archived" : "D:\\workspace\\history",
         model: "openai",
         approvalMode: "manual",
         reasoningEffort: "medium",
         serviceTier: "default",
         sandboxMode: "workspace-write",
         status: "idle",
-        threadId: "thread-history",
+        threadId: archived ? "thread-archived" : "thread-history",
         activeTurnId: null,
         lastError: null,
         createdAt: "2026-05-19T01:00:00.000Z",
@@ -69,6 +72,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
       subtitle: "openai • 空闲 • D:\\workspace\\history",
       lastUpdated: "2026-05-19T01:00:00.000Z",
       transcriptPreview: "你：之前说过什么？\n\nCodex：这里是历史回复。",
+      archived: false,
       source: "history",
       cwd: "D:\\workspace\\history",
       model: "openai",
@@ -336,6 +340,19 @@ describe("buildBridgeApp", () => {
         {
           id: "thread-history",
           title: "历史会话",
+          archived: false,
+        },
+      ],
+    });
+
+    const archivedSessions = await app.inject({ method: "GET", url: "/api/sessions?archived=true" });
+    expect(archivedSessions.statusCode).toBe(200);
+    expect(archivedSessions.json()).toMatchObject({
+      items: [
+        {
+          id: "thread-archived",
+          title: "已归档会话",
+          archived: true,
         },
       ],
     });
@@ -867,6 +884,30 @@ describe("buildBridgeApp", () => {
       requestId: "req-history",
       decision: "approve",
     });
+
+    await app.close();
+  });
+
+  test("forwards archive and unarchive actions to the history runner", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+
+    const archive = await app.inject({
+      method: "POST",
+      url: "/api/session/thread-history/archive",
+    });
+    expect(archive.statusCode).toBe(200);
+    expect(archive.json()).toMatchObject({ ok: true });
+    expect(runner.archiveSession).toHaveBeenCalledWith("thread-history");
+
+    const unarchive = await app.inject({
+      method: "POST",
+      url: "/api/session/thread-history/unarchive",
+    });
+    expect(unarchive.statusCode).toBe(200);
+    expect(unarchive.json()).toMatchObject({ ok: true });
+    expect(runner.unarchiveSession).toHaveBeenCalledWith("thread-history");
 
     await app.close();
   });

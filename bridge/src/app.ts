@@ -77,6 +77,10 @@ const fileDownloadQuerySchema = z.object({
   path: z.string().trim().min(1),
 });
 
+const listSessionsQuerySchema = z.object({
+  archived: z.enum(["true", "false"]).optional(),
+});
+
 const approveSchema = z.object({
   requestId: z.union([z.string().min(1), z.number()]).optional(),
   decision: z.enum(["approve", "approve_for_session", "reject", "reject_and_interrupt"]).default("approve"),
@@ -182,9 +186,20 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     };
   });
 
-  app.get("/api/sessions", async () => ({
-    items: historyRunner ? await historyRunner.listSessionViews() : store.list(),
-  }));
+  app.get("/api/sessions", async (request, reply) => {
+    const query = listSessionsQuerySchema.safeParse(request.query ?? {});
+    if (!query.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: query.error.flatten(),
+      });
+    }
+
+    const archived = query.data.archived === "true";
+    return {
+      items: historyRunner ? await historyRunner.listSessionViews(archived) : store.list(),
+    };
+  });
 
   app.post("/api/attachment/image", async (request, reply) => {
     if (isDraining()) {
@@ -428,6 +443,56 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     }
 
     return reply.status(202).send({ accepted: true });
+  });
+
+  app.post("/api/session/:id/archive", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-archive"));
+    }
+    if (!historyRunner) {
+      return reply.status(501).send({ error: "archive-not-supported" });
+    }
+
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    try {
+      await historyRunner.archiveSession(params.id);
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "session-not-archivable") {
+        return reply.status(409).send({ error: message });
+      }
+
+      return reply.status(502).send({
+        error: "session-archive-failed",
+        message,
+      });
+    }
+  });
+
+  app.post("/api/session/:id/unarchive", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-unarchive"));
+    }
+    if (!historyRunner) {
+      return reply.status(501).send({ error: "archive-not-supported" });
+    }
+
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    try {
+      await historyRunner.unarchiveSession(params.id);
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "session-not-archivable") {
+        return reply.status(409).send({ error: message });
+      }
+
+      return reply.status(502).send({
+        error: "session-unarchive-failed",
+        message,
+      });
+    }
   });
 
   app.post("/api/session/:id/interrupt", async (request, reply) => {

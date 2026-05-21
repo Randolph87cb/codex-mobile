@@ -281,24 +281,26 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     await this.client.close();
   }
 
-  async listSessionViews(): Promise<SessionView[]> {
-    const result = await this.client.request<{ data: AppServerThread[] }>("thread/list", {
-      sortDirection: "desc",
-      sortKey: "updated_at",
-    });
-
-    const views = result.data.map((thread) => {
+  async listSessionViews(archived = false): Promise<SessionView[]> {
+    const threads = await this.listThreads(archived);
+    const views = threads.map((thread) => {
       const session = this.store.findByThreadId(thread.id);
       return buildSessionViewFromThread(
         thread,
         session,
         session ? this.getPendingApprovalView(session.id) : null,
+        archived,
       );
     });
-    const threadIds = new Set(result.data.map((thread) => thread.id));
 
+    if (archived) {
+      return views.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    }
+
+    const knownThreadIds = new Set(threads.map((thread) => thread.id));
+    const archivedThreadIds = new Set((await this.listThreads(true)).map((thread) => thread.id));
     for (const session of this.store.list()) {
-      if (session.threadId && threadIds.has(session.threadId)) {
+      if (session.threadId && (knownThreadIds.has(session.threadId) || archivedThreadIds.has(session.threadId))) {
         continue;
       }
       views.push(buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id)));
@@ -391,6 +393,32 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     });
     this.rememberThreadSession(thread.id, attached.id);
     return this.applyThreadSnapshot(attached, thread);
+  }
+
+  async archiveSession(sessionId: string): Promise<void> {
+    const threadId = await this.resolveArchivableThreadId(sessionId);
+    if (!threadId) {
+      throw new Error("session-not-archivable");
+    }
+
+    await this.client.request("thread/archive", { threadId });
+    const attached = this.store.findByThreadId(threadId);
+    const resolvedSessionId = attached?.id ?? sessionId;
+    if (attached) {
+      this.store.delete(attached.id);
+    }
+    this.threadToSession.delete(threadId);
+    this.clearPendingApprovals(resolvedSessionId);
+    this.clearActivityState(resolvedSessionId);
+  }
+
+  async unarchiveSession(sessionId: string): Promise<void> {
+    const threadId = await this.resolveArchivableThreadId(sessionId);
+    if (!threadId) {
+      throw new Error("session-not-archivable");
+    }
+
+    await this.client.request("thread/unarchive", { threadId });
   }
 
   private enforceManagedSessionPolicies(session: SessionRecord): SessionRecord {
@@ -763,6 +791,15 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
   }
 
+  private async listThreads(archived: boolean): Promise<AppServerThread[]> {
+    const result = await this.client.request<{ data: AppServerThread[] }>("thread/list", {
+      archived,
+      sortDirection: "desc",
+      sortKey: "updated_at",
+    });
+    return result.data;
+  }
+
   private async startTurnWithResumeRetry(
     session: SessionRecord,
     input: ResolvedSessionInput,
@@ -866,6 +903,24 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         return null;
       }
     }
+  }
+
+  private async resolveArchivableThreadId(sessionId: string): Promise<string | null> {
+    const direct = this.store.get(sessionId);
+    if (direct?.threadId) {
+      return direct.threadId;
+    }
+
+    const byThreadId = this.store.findByThreadId(sessionId);
+    if (byThreadId?.threadId) {
+      return byThreadId.threadId;
+    }
+
+    if (await this.tryReadThread(sessionId)) {
+      return sessionId;
+    }
+
+    return null;
   }
 
   private attachResumedThread(sessionId: string, resumed: ThreadResumeResult): SessionRecord {

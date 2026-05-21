@@ -75,12 +75,20 @@ class FallbackCodexDataProvider(
         return requireActiveProvider().observeSessionEvents(sessionId)
     }
 
-    override suspend fun listSessions(): List<SessionSummary> {
-        return requireActiveProvider().listSessions()
+    override suspend fun listSessions(archived: Boolean): List<SessionSummary> {
+        return requireActiveProvider().listSessions(archived)
     }
 
     override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
         return requireActiveProvider().getSessionDetail(sessionId)
+    }
+
+    override suspend fun archiveSession(sessionId: String) {
+        requireActiveProvider().archiveSession(sessionId)
+    }
+
+    override suspend fun unarchiveSession(sessionId: String) {
+        requireActiveProvider().unarchiveSession(sessionId)
     }
 
     private fun requireActiveProvider(): CodexDataProvider {
