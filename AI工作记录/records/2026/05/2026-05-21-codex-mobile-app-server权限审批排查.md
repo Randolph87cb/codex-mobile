@@ -56,6 +56,40 @@
   - 这是旧会话历史里残留的审批过程项，当前详情页只是把历史 transcript 展示出来
   - 真正碰到的是 Windows 系统权限问题，例如 UAC / 管理员令牌 / 高完整性进程访问限制，而不是 Codex 的审批机制
 
+## 针对 `codex-pet-suite` 线程的进一步确认
+
+- 继续排查后，已定位到 `cwd = D:\workspace\codex-pet-suite` 的唯一相关 thread：
+  - `threadId = 019e441b-fe4f-7020-bafc-e36735387389`
+  - `source = vscode`
+- 这条 thread 最后一轮修复“紫底/串帧”的 turn 上下文不是 `never + danger-full-access`，而是：
+  - `approval_policy = "on-request"`
+  - `sandbox_policy.type = "workspace-write"`
+  - `network_access = false`
+- 这说明该轮任务本身就运行在一个需要审批、且不是全权限的宿主会话里，不是我们当前 Android bridge 的托管策略。
+
+## 审批项的精确触发点
+
+- 在该 turn 的收尾阶段，模型先执行：
+  - `git add ...`
+- 随后失败，原始输出为：
+  - `fatal: Unable to create 'D:/workspace/codex-pet-suite/.git/index.lock': Permission denied`
+- 之后该线程明确进入“需要提权”的分支，并发起了一个带审批参数的命令调用：
+  - `git commit -m "修复桌宠透明紫边与相邻动作串帧"`
+  - 调用参数里包含：
+    - `sandbox_permissions = "require_escalated"`
+    - `justification = "Do you want to allow creating the git commit ..."`
+    - `prefix_rule = ["git", "commit"]`
+- Android 里看到的“本会话都批准（item/commandExecution/request...）”对应的就是这类提权命令审批，而不是普通 shell 在 `never + danger-full-access` 下仍被卡审批。
+
+## 最终判断
+
+- `codex-pet-suite` 这条会话里的审批，根因不是 `app-server` 做不到“完全权限 + 不审批”。
+- 根因是：
+  - 这条历史 thread 当时运行在另一个宿主会话里，turn context 明确是 `on-request + workspace-write`
+  - 提交 Git 时又触发了 `.git/index.lock` 写入权限限制
+  - 因而模型改走了 `require_escalated` 的审批流程
+- 所以，手机端看到的审批项是这条历史 turn 的真实执行记录，不是当前 bridge 托管模式失效。
+
 ## 补充判断
 
 - 当前 Android 端会强制把会话视图修正为托管模式 `auto + danger-full-access`。
