@@ -228,7 +228,7 @@ class RealBridgeDataProvider(
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment = withContext(Dispatchers.IO) {
         appLogger.info(
             "BridgeApi",
-            "上传图片附件：displayName=${request.displayName}, mimeType=${request.mimeType}, byteLength=${request.contentBytes.size}, sessionId=${request.sessionId ?: "none"}",
+            "上传图片附件：${request.toDiagnosticsSummary()}",
         )
         val uploadUrl = "${requireBaseUrl()}/api/attachment/image"
         val response = try {
@@ -238,20 +238,20 @@ class RealBridgeDataProvider(
         } catch (error: SocketTimeoutException) {
             appLogger.warn(
                 "BridgeApi",
-                "图片上传超时：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+                "图片上传超时：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
             )
             throw IllegalStateException("图片上传超时，请检查当前网络后重试。", error)
         } catch (error: SocketException) {
             appLogger.warn(
                 "BridgeApi",
-                "图片上传连接中断：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+                "图片上传连接中断：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
             )
             throw IllegalStateException("图片上传连接中断，请稍后重试。", error)
         }
         if (response.statusCode !in 200..299) {
             appLogger.warn(
                 "BridgeApi",
-                "上传图片附件失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
+                "上传图片附件失败：${request.toDiagnosticsSummary()}, HTTP ${response.statusCode}：${response.body.compactForLog()}",
             )
             throw IllegalStateException(
                 buildUploadImageFailureMessage(
@@ -360,7 +360,7 @@ class RealBridgeDataProvider(
         authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
         appLogger.debug(
             "BridgeApi",
-            "HTTP 请求：POST $url (upload image attachment, displayName=${request.displayName}, sessionId=${request.sessionId ?: "none"})",
+            "HTTP 请求：POST $url (upload image attachment, ${request.toDiagnosticsSummary()})",
         )
         uploadHttpClient.newCall(requestBuilder.build()).execute().use { response ->
             val payload = response.body?.string().orEmpty()
@@ -384,13 +384,13 @@ class RealBridgeDataProvider(
         } catch (error: SocketTimeoutException) {
             appLogger.warn(
                 "BridgeApi",
-                "图片上传遇到 SocketTimeoutException，准备重试一次：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+                "图片上传遇到 SocketTimeoutException，准备重试一次：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
             )
             retryUploadMultipartImageAttachment(url, request, error)
         } catch (error: SocketException) {
             appLogger.warn(
                 "BridgeApi",
-                "图片上传遇到 SocketException，准备重试一次：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+                "图片上传遇到 SocketException，准备重试一次：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
             )
             retryUploadMultipartImageAttachment(url, request, error)
         }

@@ -92,6 +92,22 @@
   - 补了详情页失败卡片展示错误文案的仪表测试断言。
   - 补了 `ImageAttachmentPreparer` 的仪表测试，覆盖“大图被预处理、小图保持原样”。
 
+## 2026-05-23 调整
+
+- 用户补充：实际失败图片约 `2.7MB`，因此“图片超大导致失败”不足以成立为主因。
+- Android：
+  - `ImageAttachmentPreparer` 改回原图直传，不再按尺寸或体积自动缩放、转 JPEG 或重编码。
+  - 选图阶段仍保留基础校验：必须能解码出有效图片宽高。
+  - 预上传请求新增诊断元信息：
+    - `sourceByteLength`
+    - `imageWidth`
+    - `imageHeight`
+    - `preparationMode`
+  - 当前实现固定记录 `preparationMode=original`，便于确认上传时是否经过压缩链路。
+  - `AppViewModel` 和 `RealBridgeDataProvider` 的上传日志增加统一摘要，包含文件名、MIME、原始字节数、上传字节数、分辨率、预处理模式和 `sessionId`。
+- 判断：
+  - 现在如果再次出现“2.7MB 但失败”，应用日志可以直接证明是否为原图直传，以及失败发生在 Android 预上传、HTTP 请求、bridge 返回还是远端链路中断阶段。
+
 ## 实施后验证
 
 - bridge：
@@ -109,3 +125,4 @@
 - 说明：
   - 全量 `connectedDebugAndroidTest` 仍存在仓库内既有失败，主要落在 `SessionDetailConfigDialogRoutingTest`、`SessionDetailConfigIsolationTest` 与 `SessionDetailReplayTest`，与本次图片上传改动无直接关联。
   - 本次针对图片上传相关仪表测试做了 AVD 运行时验证，6 条相关用例全部通过，可证明图片预处理与失败卡片展示链路在 Android 运行时正常工作。
+  - 2026-05-23 在取消自动压缩后，重新执行了同一组 Android 构建与定向仪表测试，5 条相关用例全部通过，可证明“原图直传 + 失败卡片展示”链路在 Android 运行时正常工作。

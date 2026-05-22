@@ -19,6 +19,7 @@ import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
+import com.openai.codexmobile.data.toDiagnosticsSummary
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.PendingApprovalSnapshot
@@ -409,7 +410,7 @@ class AppViewModel(
 
                 appLogger.info(
                     "AppViewModel",
-                    "开始预上传图片：localId=$localId, displayName=${request.displayName}, mimeType=${request.mimeType}",
+                    "开始预上传图片：localId=$localId, ${request.toDiagnosticsSummary()}",
                 )
                 runCatching {
                     bridgeApi.uploadImageAttachment(request)
@@ -434,7 +435,7 @@ class AppViewModel(
                     }
                     appLogger.info(
                         "AppViewModel",
-                        "图片预上传完成：localId=$localId, stagedPath=${uploaded.stagedPath}, savedPath=${uploaded.savedPath ?: "none"}",
+                        "图片预上传完成：localId=$localId, ${request.toDiagnosticsSummary()}, stagedPath=${uploaded.stagedPath}, savedPath=${uploaded.savedPath ?: "none"}",
                     )
                 }.onFailure { error ->
                     if (error is CancellationException) {
@@ -457,7 +458,7 @@ class AppViewModel(
                     }
                     appLogger.error(
                         "AppViewModel",
-                        "图片预上传失败：localId=$localId, displayName=${request.displayName}",
+                        "图片预上传失败：localId=$localId, ${request.toDiagnosticsSummary()}",
                         error,
                     )
                 }

@@ -40,7 +40,36 @@ data class UploadImageAttachmentRequest(
     val mimeType: String,
     val contentBytes: ByteArray,
     val sessionId: String? = null,
+    val sourceByteLength: Int? = null,
+    val imageWidth: Int? = null,
+    val imageHeight: Int? = null,
+    val preparationMode: String = "original",
 )
+
+internal fun UploadImageAttachmentRequest.toDiagnosticsSummary(): String {
+    val sourceBytes = sourceByteLength ?: contentBytes.size
+    val dimensions = if (imageWidth != null && imageHeight != null) {
+        "${imageWidth}x${imageHeight}"
+    } else {
+        "unknown"
+    }
+    return buildString {
+        append("displayName=")
+        append(displayName)
+        append(", mimeType=")
+        append(mimeType)
+        append(", sourceBytes=")
+        append(sourceBytes)
+        append(", uploadBytes=")
+        append(contentBytes.size)
+        append(", dimensions=")
+        append(dimensions)
+        append(", preparationMode=")
+        append(preparationMode)
+        append(", sessionId=")
+        append(sessionId ?: "none")
+    }
+}
 
 data class UploadedImageAttachment(
     val id: String,

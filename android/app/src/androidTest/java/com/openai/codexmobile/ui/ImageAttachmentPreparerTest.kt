@@ -5,13 +5,12 @@ import android.net.Uri
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class ImageAttachmentPreparerTest {
     @Test
-    fun oversizedOpaquePngIsResizedForUpload() {
+    fun oversizedOpaquePngKeepsOriginalBytesAndMetadata() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val sourceFile = File(context.cacheDir, "oversized-photo.png")
         val rawBytes = createBitmapFile(
@@ -19,15 +18,17 @@ class ImageAttachmentPreparerTest {
             width = 3000,
             height = 1800,
             format = Bitmap.CompressFormat.PNG,
-            transparentPixel = false,
         )
 
         val request = prepareImageAttachmentForBridge(context, Uri.fromFile(sourceFile))
 
-        assertEquals("image/jpeg", request.mimeType)
-        assertTrue(request.displayName.endsWith(".jpg"))
-        assertTrue(request.contentBytes.size <= PreparedImageTargetBytes)
-        assertTrue(request.contentBytes.size < rawBytes.size)
+        assertEquals("image/png", request.mimeType)
+        assertEquals("oversized-photo.png", request.displayName)
+        assertEquals(3000, request.imageWidth)
+        assertEquals(1800, request.imageHeight)
+        assertEquals(rawBytes.size, request.sourceByteLength)
+        assertEquals("original", request.preparationMode)
+        assertArrayEquals(rawBytes, request.contentBytes)
     }
 
     @Test
@@ -39,33 +40,17 @@ class ImageAttachmentPreparerTest {
             width = 320,
             height = 240,
             format = Bitmap.CompressFormat.PNG,
-            transparentPixel = false,
         )
 
         val request = prepareImageAttachmentForBridge(context, Uri.fromFile(sourceFile))
 
         assertEquals("image/png", request.mimeType)
         assertEquals("small-image.png", request.displayName)
+        assertEquals(320, request.imageWidth)
+        assertEquals(240, request.imageHeight)
+        assertEquals(rawBytes.size, request.sourceByteLength)
+        assertEquals("original", request.preparationMode)
         assertArrayEquals(rawBytes, request.contentBytes)
-    }
-
-    @Test
-    fun oversizedTransparentPngKeepsPngMimeType() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val sourceFile = File(context.cacheDir, "oversized-transparent.png")
-        val rawBytes = createBitmapFile(
-            file = sourceFile,
-            width = 2800,
-            height = 1800,
-            format = Bitmap.CompressFormat.PNG,
-            transparentPixel = true,
-        )
-
-        val request = prepareImageAttachmentForBridge(context, Uri.fromFile(sourceFile))
-
-        assertEquals("image/png", request.mimeType)
-        assertTrue(request.displayName.endsWith(".png"))
-        assertTrue(request.contentBytes.size <= rawBytes.size)
     }
 
     private fun createBitmapFile(
@@ -73,7 +58,6 @@ class ImageAttachmentPreparerTest {
         width: Int,
         height: Int,
         format: Bitmap.CompressFormat,
-        transparentPixel: Boolean,
     ): ByteArray {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         try {
@@ -84,8 +68,7 @@ class ImageAttachmentPreparerTest {
                     val red = (x * 255 / maxOf(1, width - 1))
                     val green = (y * 255 / maxOf(1, height - 1))
                     val blue = ((x + y) * 255 / maxOf(1, width + height - 2))
-                    val alpha = if (transparentPixel && x < width / 6 && y < height / 6) 0x00 else 0xFF
-                    pixels[index] = (alpha shl 24) or (red shl 16) or (green shl 8) or blue
+                    pixels[index] = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     index += 1
                 }
             }
