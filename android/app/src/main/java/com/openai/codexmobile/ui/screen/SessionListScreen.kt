@@ -451,7 +451,7 @@ private fun SessionDirectoryCard(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
@@ -470,7 +470,7 @@ private fun SessionDirectoryCard(
             }
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -491,13 +491,15 @@ private fun SessionDirectoryCard(
             }
             if (!showArchivedSessions) {
                 Row(
-                    modifier = Modifier.testTag(TestTags.SessionListFolderCreatePrefix + group.cwd),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier
+                        .testTag(TestTags.SessionListFolderCreatePrefix + group.cwd)
+                        .padding(end = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = "新建",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
                         color = if (isLoading) {
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f)
@@ -506,14 +508,21 @@ private fun SessionDirectoryCard(
                         },
                         modifier = Modifier.clickable(enabled = !isLoading) { onCreateDraft(group.cwd) },
                     )
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
             }
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
-            )
         }
 
         group.sessions.forEach { session ->

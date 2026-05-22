@@ -864,6 +864,7 @@ private fun GoalCard(
             )
             detail.goal?.let { goal ->
                 FlowRow(
+                    modifier = Modifier.padding(top = 1.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
