@@ -359,7 +359,7 @@ private fun AppTopBar(
     }
 
     TopAppBar(
-        expandedHeight = 50.dp,
+        expandedHeight = 48.dp,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
             titleContentColor = MaterialTheme.colorScheme.onBackground,
@@ -370,7 +370,7 @@ private fun AppTopBar(
                 Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(1.dp)) {
                     Text(
                         text = resolvedTitle,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                     )
@@ -380,7 +380,7 @@ private fun AppTopBar(
                     ) {
                         androidx.compose.foundation.Canvas(
                             modifier = Modifier
-                                .size(4.dp),
+                                .size(3.dp),
                         ) {
                             drawCircle(
                                 color = sessionStatusDotColor,
@@ -402,44 +402,44 @@ private fun AppTopBar(
             if (isSessionDetailRoute || currentRoute == Routes.Settings) {
                 IconButton(
                     onClick = { navController.popBackStack() },
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(28.dp),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(15.dp),
                     )
                 }
             }
         },
         actions = {
             if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
-                IconButton(onClick = {}, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Filled.Refresh,
                         contentDescription = "刷新",
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
-                IconButton(onClick = {}, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Filled.OpenInFull,
                         contentDescription = "展开",
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
-                IconButton(onClick = {}, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,
                         contentDescription = "复制",
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
-                IconButton(onClick = {}, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "更多",
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
             }
