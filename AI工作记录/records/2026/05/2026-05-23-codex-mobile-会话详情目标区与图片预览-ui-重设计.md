@@ -35,6 +35,7 @@
   - 最新一轮继续压缩发送图片区：移除冗余说明胶囊，把标题下说明收成单行状态摘要，文件名改成单行截断，失败态压成更短的单行错误提示，整体更接近参考图的轻量附件托盘。
   - 修正失败态图片卡的动作 test tag，失败卡明确暴露 `retry` 按钮 tag，保持截图拟真和交互测试一致。
   - 再继续压缩详情页首屏纵向密度：外层纵向 padding、状态条指标块、目标卡、transcript 卡和输入区的留白都收小一层，让首屏更多地露出消息与附件区。
+  - 最新一轮继续压缩消息气泡本体：缩小气泡圆角和内边距，收紧标签 chip、复制按钮和气泡间距，让消息流更接近参考图的轻薄卡片感。
   - 调整输入区、卡片圆角和留白，让整体更接近用户给出的浅色参考风格。
   - 第六轮把目标卡首行的重复状态胶囊移到底部指标区，首行收成更接近参考稿的“标签 + 状态 + 展开”关系。
   - 第七轮把状态条改成单外框四列指标 + 细分隔线，缩小外层与列间边距，继续贴近参考稿。
@@ -396,6 +397,18 @@
 
 - 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
 - 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v37.png`
+
+- 消息气泡字级 / 内边距 / 头部控件继续收口后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v38.png`
 
 ## 备注
 
