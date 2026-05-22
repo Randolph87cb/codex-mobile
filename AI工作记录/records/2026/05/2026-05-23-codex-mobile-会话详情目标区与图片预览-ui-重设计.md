@@ -717,3 +717,22 @@
 
 - 本轮继续压的是底部输入区和整页默认态节奏：页面上下 padding、各区块之间的默认间距、输入条外层容器圆角和内边距都再薄了一层。
 - 输入条里的加图按钮、文本框和发送按钮也一起从 `48dp` 收成 `44dp` 级别，保持行为不变，只让首屏整体更接近参考图那种更扁、更轻的控制台比例。
+
+- 消息卡本体继续收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `adb install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`；截图继续使用手工 `adb install -r` 后拉起 `SessionDetailShowcaseActivity`，等待 5 秒后再执行 `adb shell screencap`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v54.png`
+
+## 本轮说明
+
+- 本轮继续收的是消息卡本体：用户/助手消息宽度又缩了一层，执行过程卡也同步变窄，消息流不再像上一版那样横向铺得太满。
+- 气泡圆角、内边距和卡内元素间距也一起压了一层，所以消息正文、执行过程卡和发送图片区之间的厚度关系更接近参考图。

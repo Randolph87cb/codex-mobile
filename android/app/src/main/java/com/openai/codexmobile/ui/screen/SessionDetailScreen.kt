@@ -1482,12 +1482,12 @@ private fun TranscriptBubbleCard(
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(if (isUser) 0.82f else 0.88f),
+                .fillMaxWidth(if (isUser) 0.80f else 0.86f),
             shape = RoundedCornerShape(
-                topStart = 18.dp,
-                topEnd = 18.dp,
-                bottomStart = if (isUser) 18.dp else 8.dp,
-                bottomEnd = if (isUser) 8.dp else 18.dp,
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (isUser) 16.dp else 8.dp,
+                bottomEnd = if (isUser) 8.dp else 16.dp,
             ),
             colors = CardDefaults.cardColors(
                 containerColor = backgroundColor,
@@ -1495,8 +1495,8 @@ private fun TranscriptBubbleCard(
             ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 if (isCollapsible) {
                     TranscriptToggleHeader(
@@ -1554,13 +1554,13 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.88f),
-            shape = RoundedCornerShape(22.dp),
+                .fillMaxWidth(0.86f),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp),
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TranscriptToggleHeader(
                     bubble = null,
@@ -1613,11 +1613,11 @@ private fun ExecutionActivityCard(
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             TranscriptToggleHeader(
                 bubble = bubble,
