@@ -40,6 +40,7 @@
   - 压缩会话卡信息层级，减少每条会话对垂直空间的占用。
   - 第二轮继续压缩卡片高度、缩小归档动作权重，并把视觉重心拉回到标题 / 状态 / 时间三要素。
   - 第三轮继续把右侧归档动作弱化成更轻的 icon，进一步贴近参考稿里“卡片主体优先、动作退后”的视觉关系。
+  - 第四轮把“当前 / 已归档”改成真正的分段胶囊，缩小高宽比并统一选中态层级，继续往参考稿靠。
 - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
   - 连接页和会话列表页移除重复顶栏。
   - 会话详情顶栏改成更接近参考图的标题 + 在线状态样式。
@@ -82,6 +83,8 @@
   - 会话列表第三轮截图，顶栏工具区改成更接近参考稿的搜索 / 筛选 / 更多布局。
 - `./.tmp/ui-screenshots/sessions-showcase-v7.png`
   - 会话列表第四轮截图，右侧归档动作进一步弱化，更接近参考稿。
+- `./.tmp/ui-screenshots/sessions-showcase-v8.png`
+  - 会话列表第五轮截图，顶部“当前 / 已归档”已改成更接近参考稿的分段胶囊。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
   - 会话详情页第二轮截图，包含新的顶栏样式。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
@@ -90,6 +93,8 @@
   - 会话详情页第三轮截图，顶部状态条和目标卡进一步收瘦。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v8.png`
   - 会话详情页第四轮截图，顶栏 action 排布更接近参考稿。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v9.png`
+  - 会话详情页第五轮截图，状态条四个指标块进一步统一，目标卡与图片托盘继续保持紧凑布局。
 
 ## 验证结果
 
@@ -116,6 +121,13 @@
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+- 分段胶囊与状态条收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat installDebugAndroidTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
 
 ## 备注
 
