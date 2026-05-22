@@ -520,3 +520,20 @@
 
 - 本轮继续压的是顶部四指标状态条：外层圆角、上下 padding、每个指标块的 `minHeight`、图标尺寸、分隔线高度和右侧展开按钮都再收了一层。
 - 目标是不改信息结构，只把默认态整体厚度压到更接近参考图的水平，让会话标题区和目标区之间的纵向节奏更顺。
+
+- 底部输入区继续压缩默认态后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v45.png`
+
+## 本轮说明
+
+- 本轮继续压的是底部输入条：外层容器圆角、上下 padding、加图按钮、文本框最小高度和发送按钮都从 `52dp` 体系收到了 `48dp` 体系。
+- 发送、加图、test tag 和现有交互都没变，只是把默认态做得更薄，让底部视觉重量更接近参考图。
