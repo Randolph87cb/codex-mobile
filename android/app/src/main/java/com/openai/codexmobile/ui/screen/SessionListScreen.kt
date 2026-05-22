@@ -493,8 +493,8 @@ private fun SessionDirectoryCard(
                 Row(
                     modifier = Modifier
                         .testTag(TestTags.SessionListFolderCreatePrefix + group.cwd)
-                        .padding(end = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        .padding(end = 1.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -512,7 +512,7 @@ private fun SessionDirectoryCard(
                         imageVector = Icons.Filled.KeyboardArrowDown,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             } else {
@@ -520,7 +520,7 @@ private fun SessionDirectoryCard(
                     imageVector = Icons.Filled.KeyboardArrowDown,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
