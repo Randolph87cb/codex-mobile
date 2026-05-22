@@ -235,12 +235,12 @@ fun SessionListScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -254,7 +254,7 @@ fun SessionListScreen(
                 ) {
                     Text(
                         text = sessions.size.toString(),
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
@@ -264,8 +264,8 @@ fun SessionListScreen(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SessionListFilterChip(
@@ -387,7 +387,7 @@ private fun SessionListFilterChip(
                     shape = RoundedCornerShape(999.dp),
                 )
                 .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+                .padding(horizontal = 11.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(

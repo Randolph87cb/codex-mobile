@@ -322,16 +322,16 @@ fun SessionDetailScreen(
             modifier = Modifier
                 .testTag(TestTags.SessionDetailTranscript)
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f, fill = false),
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 ConversationHeader(
                     detail = detail,
