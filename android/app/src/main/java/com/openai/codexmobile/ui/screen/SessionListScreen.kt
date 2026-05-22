@@ -526,23 +526,28 @@ private fun SessionDirectoryCard(
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(54.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Code,
-                            contentDescription = null,
-                            modifier = Modifier.padding(9.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.Code,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                     Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(top = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             text = session.title,
