@@ -11,8 +11,33 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -29,6 +54,8 @@ import java.io.File
 import java.io.FileOutputStream
 
 class SessionDetailScreenshotTest {
+    private val screenshotRootTag = "session_detail_screenshot_root"
+
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
@@ -61,97 +88,105 @@ class SessionDetailScreenshotTest {
 
         composeRule.setContent {
             CodexMobileTheme(darkTheme = false) {
-                SessionDetailScreen(
-                    paddingValues = PaddingValues(0.dp),
-                    sessionDetail = SessionDetail(
-                        id = "session-screenshot",
-                        title = "支付系统改造",
-                        subtitle = "修复支付回调签名失败并验证图片上传链路",
-                        lastUpdated = "10:17 更新",
-                        transcriptPreview = """
-                            你：请帮我排查支付回调失败，并确认这几张图片的上传展示不要再挡住消息。
+                Scaffold(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(screenshotRootTag),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    topBar = { ScreenshotReferenceTopBar() },
+                ) { paddingValues ->
+                    SessionDetailScreen(
+                        paddingValues = paddingValues,
+                        sessionDetail = SessionDetail(
+                            id = "session-screenshot",
+                            title = "支付系统改造",
+                            subtitle = "修复支付回调签名失败并验证图片上传链路",
+                            lastUpdated = "10:17 更新",
+                            transcriptPreview = """
+                                你：请帮我排查支付回调失败，并确认这几张图片的上传展示不要再挡住消息。
 
-                            Codex：我先接入项目环境，再把图片预览改成固定窗口。
+                                Codex：我先接入项目环境，再把图片预览改成固定窗口。
 
-                            Codex：已定位到签名串拼接顺序不一致，接下来调整回调验签并复测上传链路。
-                        """.trimIndent(),
-                        cwd = "D:\\workspace\\codex-mobile",
-                        model = "gpt-5.5",
-                        approvalMode = "manual",
-                        reasoningEffort = "medium",
-                        serviceTier = "default",
-                        sandboxMode = "workspace-write",
-                        status = "running",
-                        goalCapability = "supported",
-                        goal = SessionGoalSnapshot(
-                            objective = "修复支付回调签名失败并验证图片上传链路",
-                            status = "active",
-                            tokenBudget = 180000L,
-                            tokensUsed = 124000L,
-                            timeUsedSeconds = 1080L,
-                            createdAt = "2026-05-23T00:12:00Z",
-                            updatedAt = "2026-05-23T00:30:00Z",
+                                Codex：已定位到签名串拼接顺序不一致，接下来调整回调验签并复测上传链路。
+                            """.trimIndent(),
+                            cwd = "D:\\workspace\\codex-mobile",
+                            model = "gpt-5.5",
+                            approvalMode = "manual",
+                            reasoningEffort = "medium",
+                            serviceTier = "default",
+                            sandboxMode = "workspace-write",
+                            status = "running",
+                            goalCapability = "supported",
+                            goal = SessionGoalSnapshot(
+                                objective = "修复支付回调签名失败并验证图片上传链路",
+                                status = "active",
+                                tokenBudget = 180000L,
+                                tokensUsed = 124000L,
+                                timeUsedSeconds = 1080L,
+                                createdAt = "2026-05-23T00:12:00Z",
+                                updatedAt = "2026-05-23T00:30:00Z",
+                            ),
                         ),
-                    ),
-                    draftSession = null,
-                    sessionRealtimeState = SessionRealtimeUiState(
-                        isConnected = true,
-                        connectionText = "Bridge 已连接",
-                        statusText = "正在处理支付回调日志",
-                        lastEventText = "最近一条事件：已完成图片上传预检查。",
-                    ),
-                    queuedInputs = emptyList(),
-                    draftMessage = "",
-                    pendingImageAttachments = listOf(
-                        PendingImageAttachmentUiState(
-                            localId = "pending-portrait",
-                            displayName = "girl-portrait.png",
-                            mimeType = "image/png",
-                            previewSource = portraitImage,
-                            uploadState = PendingImageUploadState.Uploaded,
-                            stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\girl-portrait.png",
+                        draftSession = null,
+                        sessionRealtimeState = SessionRealtimeUiState(
+                            isConnected = true,
+                            connectionText = "Bridge 已连接",
+                            statusText = "正在处理支付回调日志",
+                            lastEventText = "最近一条事件：已完成图片上传预检查。",
                         ),
-                        PendingImageAttachmentUiState(
-                            localId = "pending-square",
-                            displayName = "avatar-square.png",
-                            mimeType = "image/png",
-                            previewSource = squareImage,
-                            uploadState = PendingImageUploadState.Uploaded,
-                            stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\avatar-square.png",
+                        queuedInputs = emptyList(),
+                        draftMessage = "",
+                        pendingImageAttachments = listOf(
+                            PendingImageAttachmentUiState(
+                                localId = "pending-portrait",
+                                displayName = "girl-portrait.png",
+                                mimeType = "image/png",
+                                previewSource = portraitImage,
+                                uploadState = PendingImageUploadState.Uploaded,
+                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\girl-portrait.png",
+                            ),
+                            PendingImageAttachmentUiState(
+                                localId = "pending-square",
+                                displayName = "avatar-square.png",
+                                mimeType = "image/png",
+                                previewSource = squareImage,
+                                uploadState = PendingImageUploadState.Uploaded,
+                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\avatar-square.png",
+                            ),
+                            PendingImageAttachmentUiState(
+                                localId = "pending-landscape",
+                                displayName = "wide-banner.png",
+                                mimeType = "image/png",
+                                previewSource = landscapeImage,
+                                uploadState = PendingImageUploadState.Failed,
+                                uploadError = "上传失败，请重试。",
+                            ),
+                            PendingImageAttachmentUiState(
+                                localId = "pending-dark",
+                                displayName = "dark-portrait.png",
+                                mimeType = "image/png",
+                                previewSource = darkPortraitImage,
+                                uploadState = PendingImageUploadState.Uploading,
+                            ),
                         ),
-                        PendingImageAttachmentUiState(
-                            localId = "pending-landscape",
-                            displayName = "wide-banner.png",
-                            mimeType = "image/png",
-                            previewSource = landscapeImage,
-                            uploadState = PendingImageUploadState.Failed,
-                            uploadError = "上传失败，请重试。",
-                        ),
-                        PendingImageAttachmentUiState(
-                            localId = "pending-dark",
-                            displayName = "dark-portrait.png",
-                            mimeType = "image/png",
-                            previewSource = darkPortraitImage,
-                            uploadState = PendingImageUploadState.Uploading,
-                        ),
-                    ),
-                    bridgeEndpoint = "",
-                    bridgeAuthToken = "",
-                    isLoading = false,
-                    onDraftMessageChange = {},
-                    onPickImage = {},
-                    onRemovePendingImageAttachment = {},
-                    onRetryPendingImageAttachment = {},
-                    onSend = {},
-                    onApprovalDecision = {},
-                    onUpdateCwd = {},
-                    onUpdateModel = {},
-                    onUpdateReasoningEffort = {},
-                    onUpdateServiceTier = {},
-                    onUpdateSandboxMode = {},
-                    onRefreshSession = {},
-                    onShowMessage = {},
-                )
+                        bridgeEndpoint = "",
+                        bridgeAuthToken = "",
+                        isLoading = false,
+                        onDraftMessageChange = {},
+                        onPickImage = {},
+                        onRemovePendingImageAttachment = {},
+                        onRetryPendingImageAttachment = {},
+                        onSend = {},
+                        onApprovalDecision = {},
+                        onUpdateCwd = {},
+                        onUpdateModel = {},
+                        onUpdateReasoningEffort = {},
+                        onUpdateServiceTier = {},
+                        onUpdateSandboxMode = {},
+                        onRefreshSession = {},
+                        onShowMessage = {},
+                    )
+                }
             }
         }
 
@@ -159,7 +194,7 @@ class SessionDetailScreenshotTest {
 
         saveCapture(
             fileName = "session-detail-refactor-full.png",
-            bitmap = composeRule.onNodeWithTag(TestTags.SessionDetailScreen).captureToImage().asAndroidBitmap(),
+            bitmap = composeRule.onNodeWithTag(screenshotRootTag).captureToImage().asAndroidBitmap(),
         )
         saveCapture(
             fileName = "session-detail-refactor-pending-tray.png",
@@ -237,4 +272,77 @@ class SessionDetailScreenshotTest {
         val payload = Base64.encodeToString(byteStream.toByteArray(), Base64.NO_WRAP)
         return "data:image/png;base64,$payload"
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScreenshotReferenceTopBar() {
+    TopAppBar(
+        expandedHeight = 58.dp,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onBackground,
+            navigationIconContentColor = MaterialTheme.colorScheme.primary,
+        ),
+        navigationIcon = {
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(text = "支付系统改造", style = MaterialTheme.typography.titleLarge)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Canvas(modifier = Modifier.size(6.dp)) {
+                        drawCircle(
+                            color = Color(0xFF54A66E),
+                            radius = size.minDimension / 2,
+                        )
+                    }
+                    Text(
+                        text = "在线",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        actions = {
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "刷新",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.OpenInFull,
+                    contentDescription = "展开",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.ContentCopy,
+                    contentDescription = "复制",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "更多",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+    )
 }

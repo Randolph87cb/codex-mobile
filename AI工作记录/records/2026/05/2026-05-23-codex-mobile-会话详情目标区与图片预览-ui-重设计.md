@@ -778,3 +778,24 @@
 
 - 本轮继续压的是消息卡本体和执行过程卡：宽度、圆角、内边距、头部标签间距和复制按钮尺寸都再收了一层，消息流不再像上一版那样“鼓”。
 - 截图样本里的 transcript 也去掉了内联图片，只保留更接近参考图的纯文本消息流；图片展示验证继续放在下方固定尺寸托盘里，所以 `v58` 的整体构图比上一版更贴近参考图。
+
+- 顶栏整页截图验证补齐并继续压缩输入区后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮先因截图测试缺少 `@Composable` 导入导致 AndroidTest Kotlin 编译失败，补上导入后重跑通过；导图前继续清空了设备侧 `/sdcard/Download/codex-mobile-ui/*.png`，避免同名残留污染结果。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v59.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v59.png`
+
+## 本轮说明
+
+- 本轮把截图验证从“内容区局部图”补成了“带顶栏的整页图”，所以 `v59` 现在能直接对应参考稿里的会话详情整页构图，验证信号比前几轮更强。
+- 真实详情页里也继续把整页节奏和输入区收了一层：外层留白更小，输入条圆角、按钮尺寸和内部间距都更薄，首屏更接近参考图那种轻薄控制台比例。
