@@ -455,13 +455,13 @@ private fun SessionDirectoryCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Folder,
                     contentDescription = null,
-                    modifier = Modifier.padding(9.dp),
+                    modifier = Modifier.padding(8.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -487,18 +487,29 @@ private fun SessionDirectoryCard(
                 }
             }
             if (!showArchivedSessions) {
-                TextButton(
-                    onClick = { onCreateDraft(group.cwd) },
-                    enabled = !isLoading,
+                Row(
                     modifier = Modifier.testTag(TestTags.SessionListFolderCreatePrefix + group.cwd),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("新建")
+                    Text(
+                        text = "新建",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isLoading) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f)
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.clickable(enabled = !isLoading) { onCreateDraft(group.cwd) },
+                    )
                 }
             }
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
             )
         }
 

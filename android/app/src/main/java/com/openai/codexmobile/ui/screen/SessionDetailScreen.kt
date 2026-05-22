@@ -821,11 +821,11 @@ private fun GoalCard(
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TranscriptLabelChip(
@@ -837,28 +837,15 @@ private fun GoalCard(
                 Text(
                     text = primaryStatusText,
                     style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                GoalMetricChip(
-                    text = primaryStatusText,
-                    containerColor = when (primaryStatusText) {
-                        "进行中" -> MaterialTheme.colorScheme.primaryContainer
-                        "已完成" -> MaterialTheme.colorScheme.tertiaryContainer
-                        "待开始", "未设置" -> MaterialTheme.colorScheme.surfaceVariant
-                        else -> MaterialTheme.colorScheme.secondaryContainer
-                    },
-                    contentColor = when (primaryStatusText) {
-                        "进行中" -> MaterialTheme.colorScheme.onPrimaryContainer
-                        "已完成" -> MaterialTheme.colorScheme.onTertiaryContainer
-                        "待开始", "未设置" -> MaterialTheme.colorScheme.onSurfaceVariant
-                        else -> MaterialTheme.colorScheme.onSecondaryContainer
-                    },
-                )
                 Icon(
                     imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起目标详情" else "展开目标详情",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(
@@ -869,9 +856,24 @@ private fun GoalCard(
             )
             detail.goal?.let { goal ->
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
+                    GoalMetricChip(
+                        text = primaryStatusText,
+                        containerColor = when (primaryStatusText) {
+                            "进行中" -> MaterialTheme.colorScheme.primaryContainer
+                            "已完成" -> MaterialTheme.colorScheme.tertiaryContainer
+                            "待开始", "未设置" -> MaterialTheme.colorScheme.surfaceVariant
+                            else -> MaterialTheme.colorScheme.secondaryContainer
+                        },
+                        contentColor = when (primaryStatusText) {
+                            "进行中" -> MaterialTheme.colorScheme.onPrimaryContainer
+                            "已完成" -> MaterialTheme.colorScheme.onTertiaryContainer
+                            "待开始", "未设置" -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                    )
                     GoalMetricChip(text = formatTokenUsage(goal.tokensUsed))
                     goal.tokenBudget?.let { budget ->
                         GoalMetricChip(text = "预算 $budget")
