@@ -288,7 +288,7 @@ fun SessionDetailScreen(
             .fillMaxSize()
             .padding(paddingValues)
             .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         StatusStrip(
             detail = detail,

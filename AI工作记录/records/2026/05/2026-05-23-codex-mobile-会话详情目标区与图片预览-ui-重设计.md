@@ -131,6 +131,8 @@
   - 会话列表第十八轮截图，中间标题块与右侧状态列的横向比例继续收口。
 - `./.tmp/ui-screenshots/sessions-showcase-v22.png`
   - 会话列表第十九轮截图，标题字级和副标题灰度继续向参考稿收口。
+- `./.tmp/ui-screenshots/sessions-showcase-v23.png`
+  - 会话列表第二十轮截图，目录头和首张会话卡之间的纵向落点继续向参考稿收口。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
   - 会话详情页第二轮截图，包含新的顶栏样式。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
@@ -169,6 +171,8 @@
   - 会话详情页第十八轮截图，目标卡首行到正文首行的纵向距离继续压紧。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v23.png`
   - 会话详情页第十九轮截图，目标卡 chip 行与下方消息卡之间的节奏继续收薄。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v24.png`
+  - 会话详情页第二十轮截图，状态条与目标卡之间的间距继续向参考稿收口。
 
 ## 验证结果
 
@@ -278,6 +282,11 @@
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
   - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
 - 标题字级 / 副标题灰度与目标卡下沿节奏继续收口后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+- 目录头落点与状态条/目标卡间距继续收口后再次执行：
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过

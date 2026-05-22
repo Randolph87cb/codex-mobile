@@ -447,10 +447,12 @@ private fun SessionDirectoryCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionListFolderPrefix + group.cwd),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 1.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
