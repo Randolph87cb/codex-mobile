@@ -468,3 +468,21 @@
 
 - 本轮继续收的是消息区外层层级，不再让 transcript 被一整块独立白卡包住；改成直接在页面背景上承载消息流，只保留极薄的内部留白。
 - 目标是把详情页首屏更接近参考图那种“状态区之后直接进入消息内容”的结构，同时继续保留固定尺寸发送图片预览窗和现有点击看原图行为。
+
+- 发送图片区继续压缩高度后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailImageRenderingTest'`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v42.png`
+
+## 本轮说明
+
+- 本轮继续压发送图片区本身，不改固定预览窗和点开原图能力：缩略卡宽高从 `106x92dp` 收成 `98x84dp`，头部图标块、容器圆角和内边距同步收小。
+- 失败态去掉了单独占一行的重复“上传失败”文案，只保留行内 `失败 / 重试`，并把原测试 tag 保留在失败状态文字上，兼顾首屏高度和现有 UI 测试稳定性。

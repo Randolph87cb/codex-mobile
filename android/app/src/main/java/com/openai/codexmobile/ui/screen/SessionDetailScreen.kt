@@ -125,8 +125,8 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 106.dp
-private val PendingImagePreviewHeight = 92.dp
+private val PendingImagePreviewWidth = 98.dp
+private val PendingImagePreviewHeight = 84.dp
 
 @Composable
 fun SessionDetailScreen(
@@ -462,27 +462,27 @@ private fun PendingImageAttachmentTray(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 11.dp)
+                .padding(horizontal = 12.dp, vertical = 9.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(15.dp),
+                    shape = RoundedCornerShape(13.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
-                        modifier = Modifier.padding(9.dp),
+                        modifier = Modifier.padding(8.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
@@ -497,14 +497,14 @@ private fun PendingImageAttachmentTray(
                             uploadingCount > 0 -> "$uploadingCount 张上传中，发送前会自动就绪。"
                             else -> "固定预览窗，点缩略图看原图。"
                         },
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -532,12 +532,12 @@ private fun PendingImageThumbnailCard(
 ) {
     Surface(
         modifier = Modifier.width(PendingImagePreviewWidth),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             FixedPreviewImageCard(
                 source = attachment.previewSource,
@@ -552,14 +552,14 @@ private fun PendingImageThumbnailCard(
             )
             Text(
                 text = attachment.displayName,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
@@ -590,7 +590,15 @@ private fun PendingImageThumbnailCard(
                                 contentDescription = null,
                                 modifier = Modifier.size(13.dp),
                             )
-                            Text("失败", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text(
+                                "失败",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                maxLines = 1,
+                                modifier = Modifier.testTag(
+                                    TestTags.SessionDetailPendingImageErrorPrefix + attachment.localId,
+                                ),
+                            )
                         }
                     }
                 }
@@ -614,18 +622,6 @@ private fun PendingImageThumbnailCard(
                             },
                         ),
                 )
-            }
-            if (attachment.uploadState == PendingImageUploadState.Failed) {
-                attachment.uploadError?.takeIf { it.isNotBlank() }?.let {
-                    Text(
-                        text = "上传失败",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.testTag(TestTags.SessionDetailPendingImageErrorPrefix + attachment.localId),
-                    )
-                }
             }
         }
     }
