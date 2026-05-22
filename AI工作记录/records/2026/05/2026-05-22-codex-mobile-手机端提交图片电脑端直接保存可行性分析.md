@@ -1,0 +1,60 @@
+﻿# codex-mobile 手机端提交图片电脑端直接保存可行性分析
+
+- 日期：2026-05-22
+- 来源：AI 对话摘要
+- 类型：记录
+- 相关目录：
+- 相关 skill：
+- 标签：
+
+## 本次目标
+
+- 分析当前 codex-mobile 链路里，手机端提交的图片是否能让电脑端直接保存，以及应落在哪一层实现。
+
+## 当前状态
+
+- 仅做只读检查，尚未修改代码。
+
+## 初步计划
+
+- 检查 Android 发图入口与提交载荷。
+- 检查 bridge 输入处理、host 侧文件能力与目录边界。
+- 输出可行方案、所需改动面、风险与建议。
+
+## 检查结果
+
+- Android 端当前会读取用户选中的图片原始字节，并通过 `multipart/form-data` 上传到 `POST /api/attachment/image`，不是只发图片 URL。
+- bridge 收到图片后，会先把内容写入 Windows 主机临时目录 `%TEMP%\codex-mobile-bridge\attachments\`。
+- 后续 `POST /api/session/:id/input` 提交给会话的并不是二进制，而是 bridge 已暂存图片的 `attachments[].path`。
+- `app-server` runner 会把该路径转成 `localImage` 输入块，作为模型可读图片，不是“保存到电脑指定目录”的业务动作。
+- 当前仓库已经支持“图片预上传、展示、手机侧预览/保存”，但没有“把手机提交图片直接保存到电脑正式目录”的独立 bridge API 或保存策略。
+
+## 结论
+
+- 严格说，当前不是“电脑完全不能保存”，而是“只能先暂存在 bridge 临时目录，不能按业务语义直接保存到用户指定或约定的正式目录”。
+- 这件事可以实现，而且最合适落在 `bridge/`，不建议落在 Android，也不建议直接把原始 `app-server` 文件系统能力暴露给手机端。
+
+## 推荐实现方向
+
+- 方案 A：上传即保存
+- 在 `POST /api/attachment/image` 增加可选保存策略，例如保存到当前会话 `cwd` 下的 `mobile_uploads/` 或 bridge 配置的固定目录。
+- 方案 B：显式保存
+- 保持现有“先暂存再引用”，新增独立接口，例如 `POST /api/attachment/image/:id/save`，由手机端在需要时触发保存。
+- 如果需要最小风险和更清晰语义，优先方案 B；如果目标是“发图后电脑端总能立刻看到正式文件”，优先方案 A。
+
+## 关键约束与风险
+
+- 保存目标目录不能让手机端任意指定，必须由 bridge 校验并限制在 `allowedCwds`、会话 `cwd` 子目录或显式配置白名单内。
+- 如果允许覆盖、重名处理、子目录创建，需要在 bridge 层统一定义规则。
+- 若把“直接保存到电脑”视为高风险主机写入，建议补审批点；如果仅允许落到当前工作区固定子目录，也可以作为低风险自动动作处理。
+- 相关改动会同时影响 bridge API 文档、bridge 测试，以及 Android 数据层请求模型。
+
+## 证据
+
+- Android 读取图片字节并准备上传：`android/app/src/main/java/com/openai/codexmobile/ui/ImageAttachmentPreparer.kt`
+- Android 先上传图片再发送 `attachments[].path`：`android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`、`android/app/src/main/java/com/openai/codexmobile/data/RealBridgeDataProvider.kt`
+- bridge 上传与暂存：`bridge/src/app.ts`、`bridge/src/attachment-store.ts`
+- session input 只引用附件 `id/path`：`bridge/src/types.ts`、`bridge/src/app.ts`
+- runner 将图片转成 `localImage`：`bridge/src/app-server-runner.ts`
+- 协议文档已明确“预上传后引用暂存路径”：`docs/api.md`
+
