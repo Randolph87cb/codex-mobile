@@ -998,6 +998,28 @@
 - 本轮不再只是继续压尺寸，而是把普通消息从“头部在上、气泡在下”改成了更接近参考稿的“侧边徽标 + 气泡”结构：助手消息左侧是紧凑 `>` 徽标，用户消息右侧是紧凑 `你` 徽标。
 - 同时普通消息宽度又收窄了一层，所以 `v72` 比 `v71` 更接近参考稿那种“角色标识退到侧边、正文主体居中”的消息区骨架；发送图片区仍然保持固定尺寸预览窗。
 
+- 普通消息头部继续改成“头部行 + 偏移气泡”并重新执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行；首轮截图核对到 `v73` 后，又把用户头部的重复 `你` 收成纯头像点并重新完成同一套验证，最终以 `v74` 为准。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v74.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v74.png`
+
+## 本轮说明
+
+- 本轮把普通消息进一步收成更接近参考稿的“头部行 + 偏移气泡”结构：助手消息是 `>` 圆徽标加 `Codex` 文本，用户消息是 `你` 文本加纯头像点，消息气泡再相对头像做侧向偏移。
+- 相比 `v72`，`v74` 的左右消息落点关系更接近参考稿；发送图片区仍然保持固定尺寸预览窗，点缩略图看原图的行为没变。
+
 - 继续压缩状态条、目标卡和消息头部后重新执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过

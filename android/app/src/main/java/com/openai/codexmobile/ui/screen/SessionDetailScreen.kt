@@ -1471,7 +1471,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.58f else 0.64f
+        val bubbleWidthFraction = if (isUser) 0.56f else 0.62f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1546,20 +1546,22 @@ private fun TranscriptBubbleCard(
                     }
                 }
             } else {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
-                    verticalAlignment = Alignment.Top,
+                    horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    if (!isUser) {
-                        ConversationSpeakerBadge(
-                            bubble = bubble,
-                            isUser = false,
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
+                    ConversationSpeakerHeader(
+                        bubble = bubble,
+                        isUser = isUser,
+                    )
                     Card(
-                        modifier = Modifier.fillMaxWidth(bubbleWidthFraction),
+                        modifier = Modifier
+                            .fillMaxWidth(bubbleWidthFraction)
+                            .padding(
+                                start = if (isUser) 0.dp else 22.dp,
+                                end = if (isUser) 22.dp else 0.dp,
+                            ),
                         shape = RoundedCornerShape(
                             topStart = 12.dp,
                             topEnd = 12.dp,
@@ -1604,13 +1606,6 @@ private fun TranscriptBubbleCard(
                             }
                         }
                     }
-                    if (isUser) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        ConversationSpeakerBadge(
-                            bubble = bubble,
-                            isUser = true,
-                        )
-                    }
                 }
             }
         }
@@ -1618,32 +1613,50 @@ private fun TranscriptBubbleCard(
 }
 
 @Composable
-private fun ConversationSpeakerBadge(
+private fun ConversationSpeakerHeader(
     bubble: TranscriptBubble,
     isUser: Boolean,
 ) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 2.dp),
+    ) {
+        if (!isUser) {
+            ConversationSpeakerBadge(isUser = false)
+            Text(
+                text = bubble.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                text = bubble.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ConversationSpeakerBadge(isUser = true)
+        }
+    }
+}
+
+@Composable
+private fun ConversationSpeakerBadge(isUser: Boolean) {
     Surface(
         shape = CircleShape,
-        color = if (isUser) {
-            MaterialTheme.colorScheme.secondary
-        } else {
-            MaterialTheme.colorScheme.primary
-        },
-        contentColor = if (isUser) {
-            MaterialTheme.colorScheme.onSecondary
-        } else {
-            MaterialTheme.colorScheme.onPrimary
-        },
+        color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+        contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
         modifier = Modifier.size(18.dp),
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
-                Text(
-                    text = "你",
-                    style = MaterialTheme.typography.labelSmall,
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
+                            shape = CircleShape,
+                        ),
                 )
             } else {
                 Text(
