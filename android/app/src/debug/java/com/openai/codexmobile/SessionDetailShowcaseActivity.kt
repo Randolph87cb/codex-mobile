@@ -147,6 +147,7 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
                         onUpdateSandboxMode = {},
                         onRefreshSession = {},
                         onShowMessage = {},
+                        autoScrollTranscript = false,
                     )
                 }
             }

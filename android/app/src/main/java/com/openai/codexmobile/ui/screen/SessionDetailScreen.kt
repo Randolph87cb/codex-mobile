@@ -158,6 +158,7 @@ fun SessionDetailScreen(
     onRefreshSession: () -> Unit,
     onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
+    autoScrollTranscript: Boolean = true,
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -187,7 +188,12 @@ fun SessionDetailScreen(
         detail?.transcriptPreview,
         sessionRealtimeState.lastEventText,
         sessionRealtimeState.pendingApproval?.requestId?.toString(),
+        autoScrollTranscript,
     ) {
+        if (!autoScrollTranscript) {
+            previousTranscriptScrollMax = currentTranscriptScrollState.maxValue
+            return@LaunchedEffect
+        }
         val shouldAutoScroll = previousTranscriptScrollMax == 0 ||
             previousTranscriptScrollMax - currentTranscriptScrollState.value <= 32
         if (shouldAutoScroll) {

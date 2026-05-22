@@ -31,6 +31,7 @@
   - 将目标卡改成“标签 + 状态 + 目标摘要 + 展开详情”的紧凑结构，默认收起。
   - 将消息内图片改成统一尺寸缩略窗，固定窗口裁切预览，点击继续查看原图。
   - 将发送区附件托盘改成统一卡片样式和固定预览窗，避免竖图撑高。
+  - 增加 `autoScrollTranscript` 开关，保留真实详情页自动滚动，同时允许 showcase 固定在首屏构图，避免截图被滚动位置污染。
   - 调整输入区、卡片圆角和留白，让整体更接近用户给出的浅色参考风格。
   - 第六轮把目标卡首行的重复状态胶囊移到底部指标区，首行收成更接近参考稿的“标签 + 状态 + 展开”关系。
   - 第七轮把状态条改成单外框四列指标 + 细分隔线，缩小外层与列间边距，继续贴近参考稿。
@@ -65,6 +66,7 @@
   - 继续把会话详情顶栏 action 区补齐为更接近参考图的多图标排布。
 - `android/app/src/debug/java/com/openai/codexmobile/SessionDetailShowcaseActivity.kt`
   - showcase 顶栏同步补齐参考图风格的 action 排布，用于截图验证。
+  - 固定关闭 transcript 自动滚动，保证详情页参考图稳定停在首屏。
 - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Theme.kt`
   - 主题支持显式传入浅色模式，方便截图回放页稳定复现。
 - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
@@ -349,7 +351,22 @@
 
 ## 当前残余
 
-- 详情页 showcase 的 transcript 卡顶部仍会露出一条浅色顶边，属于当前回放样本视角问题，不影响发送图片区固定窗口本身；后续如果继续追像素级，需要再单独收这块验证视角。
+- 详情页 showcase 的 transcript 卡顶部浅色顶边问题已定位并修复，根因不是卡片样式本身，而是 showcase 首屏仍沿用真实页面的 transcript 自动滚动逻辑，导致截图落点被带偏。
+- 当前真实页面继续保留 transcript 自动滚动；仅 `SessionDetailShowcaseActivity` 关闭自动滚动，用于稳定输出首屏参考图，不影响正式会话体验。
+
+## 最新补充
+
+- transcript 首屏残留修正后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v35b.png`
 
 ## 备注
 
