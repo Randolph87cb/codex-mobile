@@ -130,6 +130,10 @@ private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
 private val PendingImagePreviewWidth = 70.dp
 private val PendingImagePreviewHeight = 56.dp
+private val PendingAttachmentMetaTextStyle = TextStyle(
+    fontSize = 10.sp,
+    lineHeight = 12.sp,
+)
 private val TranscriptBodyTextStyle = TextStyle(
     fontSize = 12.sp,
     lineHeight = 16.sp,
@@ -583,27 +587,35 @@ private fun PendingImageThumbnailCard(
                     when (attachment.uploadState) {
                         PendingImageUploadState.Uploading -> {
                             CircularProgressIndicator(modifier = Modifier.size(6.dp), strokeWidth = 1.6.dp)
-                            Text("上传中", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text(
+                                "上传中",
+                                style = MaterialTheme.typography.labelSmall.merge(PendingAttachmentMetaTextStyle),
+                                maxLines = 1,
+                            )
                         }
 
                         PendingImageUploadState.Uploaded -> {
                             Icon(
                                 imageVector = Icons.Filled.CheckCircle,
                                 contentDescription = null,
-                                modifier = Modifier.size(8.dp),
+                                modifier = Modifier.size(7.dp),
                             )
-                            Text("已就绪", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text(
+                                "已就绪",
+                                style = MaterialTheme.typography.labelSmall.merge(PendingAttachmentMetaTextStyle),
+                                maxLines = 1,
+                            )
                         }
 
                         PendingImageUploadState.Failed -> {
                             Icon(
                                 imageVector = Icons.Filled.Error,
                                 contentDescription = null,
-                                modifier = Modifier.size(8.dp),
+                                modifier = Modifier.size(7.dp),
                             )
                             Text(
                                 "失败",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.merge(PendingAttachmentMetaTextStyle),
                                 color = MaterialTheme.colorScheme.error,
                                 maxLines = 1,
                                 modifier = Modifier.testTag(
@@ -615,7 +627,7 @@ private fun PendingImageThumbnailCard(
                 }
                 Text(
                     text = if (attachment.uploadState == PendingImageUploadState.Failed) "重试" else "移除",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.merge(PendingAttachmentMetaTextStyle),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .clickable(
@@ -1685,7 +1697,7 @@ private fun TranscriptToggleHeader(
             )
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1693,13 +1705,13 @@ private fun TranscriptToggleHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(15.dp)
+                .size(14.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(9.dp),
+                modifier = Modifier.size(8.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
@@ -1710,7 +1722,7 @@ private fun TranscriptToggleHeader(
                 Icons.Default.KeyboardArrowDown
             },
             contentDescription = if (expanded) "收起消息" else "展开消息",
-            modifier = Modifier.size(11.dp),
+            modifier = Modifier.size(10.dp),
         )
     }
 }
@@ -1743,7 +1755,7 @@ private fun TranscriptStaticHeader(
             title?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1752,13 +1764,13 @@ private fun TranscriptStaticHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(15.dp)
+                .size(14.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(9.dp),
+                modifier = Modifier.size(8.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
@@ -2352,21 +2364,21 @@ private fun TranscriptLabelChip(
 ) {
     if (plain) {
         Row(
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(if (compact) 10.dp else 12.dp),
-                tint = contentColor.copy(alpha = 0.78f),
-            )
-        }
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (compact) 9.dp else 12.dp),
+                    tint = contentColor.copy(alpha = 0.74f),
+                )
+            }
             Text(
                 text = text,
                 style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelSmall,
-                color = contentColor.copy(alpha = 0.82f),
+                color = contentColor.copy(alpha = 0.76f),
             )
         }
     } else {
