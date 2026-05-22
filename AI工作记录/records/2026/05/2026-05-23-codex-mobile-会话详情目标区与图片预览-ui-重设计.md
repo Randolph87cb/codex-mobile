@@ -698,3 +698,22 @@
 
 - 本轮继续压的是发送图片区本体：附件托盘外层圆角、头部 icon 块、卡片内边距和横向间距都更小了，首屏纵向占用明显下降。
 - 每张图片卡也同步收了一层：固定预览窗从 `98x84dp` 压到 `92x80dp`，状态图标和底部状态行更轻，但“固定大小预览窗 + 点图看原图”的行为完全没变。
+
+- 底部输入区和整页纵向节奏继续收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `adb install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续沿用手工 `adb install -r` + `adb shell am start` + 等待 5 秒的截图方式，保证截图落在真实首屏而不是 splash。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v53.png`
+
+## 本轮说明
+
+- 本轮继续压的是底部输入区和整页默认态节奏：页面上下 padding、各区块之间的默认间距、输入条外层容器圆角和内边距都再薄了一层。
+- 输入条里的加图按钮、文本框和发送按钮也一起从 `48dp` 收成 `44dp` 级别，保持行为不变，只让首屏整体更接近参考图那种更扁、更轻的控制台比例。
