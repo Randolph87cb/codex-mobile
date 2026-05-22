@@ -131,8 +131,8 @@ private val TranscriptInlineImageHeight = 118.dp
 private val PendingImagePreviewWidth = 78.dp
 private val PendingImagePreviewHeight = 66.dp
 private val TranscriptBodyTextStyle = TextStyle(
-    fontSize = 13.sp,
-    lineHeight = 17.sp,
+    fontSize = 12.sp,
+    lineHeight = 16.sp,
 )
 
 @Composable
@@ -388,13 +388,13 @@ fun SessionDetailScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 3.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 FilledTonalIconButton(
                     onClick = onPickImage,
                     enabled = !isLoading && detail != null,
                     modifier = Modifier
-                        .size(35.dp)
+                        .size(34.dp)
                         .testTag(TestTags.SessionDetailAttachImageButton),
                 ) {
                     Icon(
@@ -408,7 +408,7 @@ fun SessionDetailScreen(
                     onValueChange = onDraftMessageChange,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 35.dp)
+                        .heightIn(min = 34.dp)
                         .testTag(TestTags.SessionDetailDraftField),
                     placeholder = {
                         Text(
@@ -430,7 +430,7 @@ fun SessionDetailScreen(
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
                     modifier = Modifier
-                        .defaultMinSize(minWidth = 35.dp, minHeight = 35.dp)
+                        .defaultMinSize(minWidth = 34.dp, minHeight = 34.dp)
                         .testTag(TestTags.SessionDetailSendButton),
                     shape = RoundedCornerShape(11.dp),
                     contentPadding = PaddingValues(0.dp),
@@ -1483,7 +1483,7 @@ private fun TranscriptBubbleCard(
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(if (isUser) 0.70f else 0.75f),
+                .fillMaxWidth(if (isUser) 0.68f else 0.73f),
             shape = RoundedCornerShape(
                 topStart = 14.dp,
                 topEnd = 14.dp,
@@ -1496,7 +1496,7 @@ private fun TranscriptBubbleCard(
             ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
                 verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 if (isCollapsible) {
@@ -1555,7 +1555,7 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.75f),
+                .fillMaxWidth(0.73f),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
