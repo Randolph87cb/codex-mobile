@@ -125,8 +125,8 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 112.dp
-private val PendingImagePreviewHeight = 84.dp
+private val PendingImagePreviewWidth = 110.dp
+private val PendingImagePreviewHeight = 88.dp
 
 @Composable
 fun SessionDetailScreen(
@@ -493,7 +493,7 @@ private fun PendingImageAttachmentTray(
             )
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -526,7 +526,7 @@ private fun PendingImageThumbnailCard(
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             FixedPreviewImageCard(
                 source = attachment.previewSource,
@@ -541,25 +541,26 @@ private fun PendingImageThumbnailCard(
             )
             Text(
                 text = attachment.displayName,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier
+                        .weight(1f)
                         .testTag(TestTags.SessionDetailPendingImageStatusPrefix + attachment.localId),
                 ) {
                     when (attachment.uploadState) {
                         PendingImageUploadState.Uploading -> {
-                            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(11.dp), strokeWidth = 2.dp)
                             Text("上传中", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
 
@@ -567,27 +568,35 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.CheckCircle,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(13.dp),
                             )
-                            Text("就绪", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text("已就绪", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
 
                         PendingImageUploadState.Failed -> {
                             Icon(
                                 imageVector = Icons.Filled.Error,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(13.dp),
                             )
                             Text("失败", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
                     }
                 }
-                TextButton(
-                    onClick = if (attachment.uploadState == PendingImageUploadState.Failed) onRetry else onRemove,
-                    modifier = Modifier.testTag(TestTags.SessionDetailClearImageButton + "_" + attachment.localId),
-                ) {
-                    Text(if (attachment.uploadState == PendingImageUploadState.Failed) "重试" else "移除")
-                }
+                Text(
+                    text = if (attachment.uploadState == PendingImageUploadState.Failed) "重试" else "移除",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable(
+                            onClick = if (attachment.uploadState == PendingImageUploadState.Failed) {
+                                onRetry
+                            } else {
+                                onRemove
+                            },
+                        )
+                        .testTag(TestTags.SessionDetailClearImageButton + "_" + attachment.localId),
+                )
             }
             if (attachment.uploadState == PendingImageUploadState.Failed) {
                 attachment.uploadError?.takeIf { it.isNotBlank() }?.let { uploadError ->
@@ -600,15 +609,6 @@ private fun PendingImageThumbnailCard(
                         modifier = Modifier.testTag(TestTags.SessionDetailPendingImageErrorPrefix + attachment.localId),
                     )
                 }
-                Text(
-                    text = "可重试",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(TestTags.SessionDetailPendingImageRetryButtonPrefix + attachment.localId),
-                )
             }
         }
     }

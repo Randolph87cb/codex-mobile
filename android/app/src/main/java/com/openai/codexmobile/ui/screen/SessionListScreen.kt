@@ -457,15 +457,15 @@ private fun SessionDirectoryCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                modifier = Modifier.size(40.dp),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(36.dp),
+                shape = RoundedCornerShape(11.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Filled.Folder,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -488,7 +488,7 @@ private fun SessionDirectoryCard(
                 ) {
                     Text(
                         text = group.sessions.size.toString(),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
@@ -543,20 +543,20 @@ private fun SessionDirectoryCard(
                 ),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Surface(
-                        modifier = Modifier.size(50.dp),
-                        shape = RoundedCornerShape(15.dp),
+                        modifier = Modifier.size(46.dp),
+                        shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Filled.Code,
                                 contentDescription = null,
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -585,11 +585,11 @@ private fun SessionDirectoryCard(
                     Column(
                         modifier = Modifier.padding(top = 1.dp),
                         horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
                         SessionStatusBadge(status = session.status)
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -617,8 +617,8 @@ private fun SessionDirectoryCard(
                         },
                         enabled = !isLoading,
                         modifier = Modifier
-                            .padding(top = 32.dp)
-                            .size(22.dp)
+                            .padding(top = 30.dp)
+                            .size(20.dp)
                             .testTag(
                                 if (showArchivedSessions) {
                                     TestTags.SessionListUnarchiveButtonPrefix + session.id
@@ -634,7 +634,7 @@ private fun SessionDirectoryCard(
                                 Icons.Filled.Archive
                             },
                             contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
-                            modifier = Modifier.size(17.dp),
+                            modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.56f),
                         )
                     }
@@ -674,7 +674,7 @@ private fun SessionStatusBadge(status: String) {
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             color = contentColor,
         )
