@@ -85,7 +85,7 @@ private fun optimizeImageForUpload(
     targetDimensions.forEach { targetDimension ->
         val bitmap = decodeScaledBitmap(rawBytes, width, height, targetDimension) ?: return@forEach
         bitmap.use { decodedBitmap ->
-            val hasAlpha = decodedBitmap.hasAlpha()
+            val hasAlpha = bitmapContainsTransparentPixels(decodedBitmap)
             if (hasAlpha) {
                 val pngBytes = compressBitmap(decodedBitmap, Bitmap.CompressFormat.PNG, quality = 100)
                 val pngCandidate = PreparedImage(
@@ -119,6 +119,23 @@ private fun optimizeImageForUpload(
     }
 
     return bestCandidate
+}
+
+private fun bitmapContainsTransparentPixels(bitmap: Bitmap): Boolean {
+    if (!bitmap.hasAlpha()) {
+        return false
+    }
+    val width = bitmap.width
+    val rowPixels = IntArray(width)
+    for (y in 0 until bitmap.height) {
+        bitmap.getPixels(rowPixels, 0, width, 0, y, width, 1)
+        for (pixel in rowPixels) {
+            if ((pixel ushr 24) != 0xFF) {
+                return true
+            }
+        }
+    }
+    return false
 }
 
 private inline fun <T : Bitmap?, R> T.use(block: (T) -> R): R {

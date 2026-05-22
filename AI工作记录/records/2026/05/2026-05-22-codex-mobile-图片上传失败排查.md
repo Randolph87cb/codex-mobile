@@ -2,7 +2,7 @@
 
 - 日期：2026-05-22
 - 目标：排查聊天详情里 4 张图片中有 2 张持续上传失败、重复重试无效的原因。
-- 范围：只读排查 Android 图片预上传链路、bridge 接收链路与现有日志；本次不改业务代码。
+- 范围：排查 Android 图片预上传链路、bridge 接收链路与现有日志，并补齐根因修复与运行时验证。
 
 ## 结论
 
@@ -80,6 +80,7 @@
     - 目标体积压到 `12MB` 以内；
     - 非透明大图优先转为 JPEG，降低原始手机照片上传失败概率；
     - GIF 等不适合重编码的格式保持原样，仍由后续错误提示兜底。
+    - 透明判断从单纯 `Bitmap.hasAlpha()` 改为逐行检查像素 alpha，避免“像素全不透明但编码带 alpha 通道”的 PNG 被误判为透明图、错过 JPEG 压缩。
   - 详情页失败卡片直接展示 `uploadError`，不再只有“失败/重试”。
   - `SessionDetailScreen` 的 goal 回调补默认值，恢复现有 `androidTest` 编译。
 - bridge：
@@ -103,6 +104,8 @@
   - `cd android`
   - `gradlew.bat testDebugUnitTest`
   - `gradlew.bat compileDebugAndroidTestKotlin`
+  - `gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.ui.ImageAttachmentPreparerTest,com.openai.codexmobile.SessionDetailImageRenderingTest'`
   - 结果：通过
-- 未完成：
-  - 真机或模拟器执行 `connectedDebugAndroidTest` 未做，本次只验证到 `androidTest` 可编译。
+- 说明：
+  - 全量 `connectedDebugAndroidTest` 仍存在仓库内既有失败，主要落在 `SessionDetailConfigDialogRoutingTest`、`SessionDetailConfigIsolationTest` 与 `SessionDetailReplayTest`，与本次图片上传改动无直接关联。
+  - 本次针对图片上传相关仪表测试做了 AVD 运行时验证，6 条相关用例全部通过，可证明图片预处理与失败卡片展示链路在 Android 运行时正常工作。
