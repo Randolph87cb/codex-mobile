@@ -1470,6 +1470,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
+        val bubbleWidthFraction = if (isUser) 0.62f else 0.67f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1495,58 +1496,141 @@ private fun TranscriptBubbleCard(
                 -> MaterialTheme.colorScheme.onSurfaceVariant
             }
         }
-        Card(
+        Column(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                                .fillMaxWidth(if (isUser) 0.62f else 0.67f),
-            shape = RoundedCornerShape(
-                topStart = 12.dp,
-                topEnd = 12.dp,
-                bottomStart = if (isUser) 12.dp else 6.dp,
-                bottomEnd = if (isUser) 6.dp else 12.dp,
-            ),
-            colors = CardDefaults.cardColors(
-                containerColor = backgroundColor,
-                contentColor = contentColor,
-            ),
+                .fillMaxWidth(bubbleWidthFraction),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                if (isCollapsible) {
-                    TranscriptToggleHeader(
-                        bubble = bubble,
-                        label = bubble.label,
-                        title = bubble.summaryLine,
-                        expanded = expanded,
-                        toggleTag = toggleTag,
-                        copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
-                        onCopy = { onCopyText(bubble.copyText) },
-                        onToggle = { expanded = !expanded },
-                    )
-                } else {
-                    TranscriptStaticHeader(
-                        bubble = bubble,
-                        label = bubble.label,
-                        title = bubble.title,
-                        copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
-                        onCopy = { onCopyText(bubble.copyText) },
-                    )
-                }
+            if (isCollapsible) {
+                Card(
+                    shape = RoundedCornerShape(
+                        topStart = 12.dp,
+                        topEnd = 12.dp,
+                        bottomStart = if (isUser) 12.dp else 6.dp,
+                        bottomEnd = if (isUser) 6.dp else 12.dp,
+                    ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = backgroundColor,
+                        contentColor = contentColor,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
+                    ) {
+                        TranscriptToggleHeader(
+                            bubble = bubble,
+                            label = bubble.label,
+                            title = bubble.summaryLine,
+                            expanded = expanded,
+                            toggleTag = toggleTag,
+                            copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
+                            onCopy = { onCopyText(bubble.copyText) },
+                            onToggle = { expanded = !expanded },
+                        )
 
-                if (!isCollapsible || expanded) {
-                    TranscriptPartsColumn(
-                        parts = bubble.parts,
-                        bridgeEndpoint = bridgeEndpoint,
-                        bridgeAuthToken = bridgeAuthToken,
-                        onShowMessage = onShowMessage,
-                        onFileDownloadRequest = onFileDownloadRequest,
-                        testTagPrefix = toggleTag,
-                        onCopyCode = onCopyCode,
-                        onOpenImagePreview = onOpenImagePreview,
-                    )
+                        if (expanded) {
+                            TranscriptPartsColumn(
+                                parts = bubble.parts,
+                                bridgeEndpoint = bridgeEndpoint,
+                                bridgeAuthToken = bridgeAuthToken,
+                                onShowMessage = onShowMessage,
+                                onFileDownloadRequest = onFileDownloadRequest,
+                                testTagPrefix = toggleTag,
+                                onCopyCode = onCopyCode,
+                                onOpenImagePreview = onOpenImagePreview,
+                            )
+                        }
+                    }
                 }
+            } else {
+                TranscriptExternalHeader(
+                    bubble = bubble,
+                    copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
+                    alignEnd = isUser,
+                    onCopy = { onCopyText(bubble.copyText) },
+                )
+                Card(
+                    shape = RoundedCornerShape(
+                        topStart = 12.dp,
+                        topEnd = 12.dp,
+                        bottomStart = if (isUser) 12.dp else 6.dp,
+                        bottomEnd = if (isUser) 6.dp else 12.dp,
+                    ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = backgroundColor,
+                        contentColor = contentColor,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                    ) {
+                        TranscriptPartsColumn(
+                            parts = bubble.parts,
+                            bridgeEndpoint = bridgeEndpoint,
+                            bridgeAuthToken = bridgeAuthToken,
+                            onShowMessage = onShowMessage,
+                            onFileDownloadRequest = onFileDownloadRequest,
+                            testTagPrefix = toggleTag,
+                            onCopyCode = onCopyCode,
+                            onOpenImagePreview = onOpenImagePreview,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TranscriptExternalHeader(
+    bubble: TranscriptBubble,
+    copyTag: String,
+    alignEnd: Boolean,
+    onCopy: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (!alignEnd) {
+                TranscriptLabelChip(
+                    text = bubble.label,
+                    icon = bubble.headerIcon(),
+                    containerColor = bubble.headerContainerColor(),
+                    contentColor = bubble.headerContentColor(),
+                    compact = true,
+                    plain = true,
+                )
+            }
+            IconButton(
+                onClick = onCopy,
+                modifier = Modifier
+                    .size(14.dp)
+                    .testTag(copyTag),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ContentCopy,
+                    contentDescription = "复制消息",
+                    modifier = Modifier.size(8.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                )
+            }
+            if (alignEnd) {
+                TranscriptLabelChip(
+                    text = bubble.label,
+                    icon = bubble.headerIcon(),
+                    containerColor = bubble.headerContainerColor(),
+                    contentColor = bubble.headerContentColor(),
+                    compact = true,
+                    plain = true,
+                )
             }
         }
     }
