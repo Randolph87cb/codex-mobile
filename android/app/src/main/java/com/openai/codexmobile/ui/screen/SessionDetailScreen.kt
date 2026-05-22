@@ -1676,16 +1676,17 @@ private fun TranscriptToggleHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        FilledTonalIconButton(
+        IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(32.dp)
+                .size(28.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(15.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
         Icon(
@@ -1733,16 +1734,17 @@ private fun TranscriptStaticHeader(
                 )
             }
         }
-        FilledTonalIconButton(
+        IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(32.dp)
+                .size(28.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(15.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
     }
