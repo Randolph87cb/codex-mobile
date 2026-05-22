@@ -455,15 +455,18 @@ private fun SessionDirectoryCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(13.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Folder,
-                    contentDescription = null,
-                    modifier = Modifier.padding(8.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Filled.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
             Row(
                 modifier = Modifier.weight(1f),

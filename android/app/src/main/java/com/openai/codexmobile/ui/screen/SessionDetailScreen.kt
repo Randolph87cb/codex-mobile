@@ -839,6 +839,7 @@ private fun GoalCard(
                     icon = Icons.Filled.Flag,
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    compact = true,
                 )
                 Text(
                     text = primaryStatusText,
@@ -2303,6 +2304,7 @@ private fun TranscriptLabelChip(
     icon: ImageVector? = null,
     containerColor: androidx.compose.ui.graphics.Color,
     contentColor: androidx.compose.ui.graphics.Color,
+    compact: Boolean = false,
 ) {
     Surface(
         shape = RoundedCornerShape(999.dp),
@@ -2310,20 +2312,23 @@ private fun TranscriptLabelChip(
         contentColor = contentColor,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(
+                horizontal = if (compact) 8.dp else 10.dp,
+                vertical = if (compact) 5.dp else 6.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(if (compact) 13.dp else 14.dp),
                 )
             }
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelMedium,
+                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
             )
         }
     }
