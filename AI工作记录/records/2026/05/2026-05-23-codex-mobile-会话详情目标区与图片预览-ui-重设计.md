@@ -503,3 +503,20 @@
 
 - 本轮继续压缩目标卡默认态，不再默认显示 `token / 预算 / 耗时` 这排指标，只保留标题状态和一行目标内容；完整指标仍保留在展开态。
 - 同时把目标卡正文从 `bodyMedium` 收成 `bodySmall`，整体 padding 和行间距再压一层，目的就是进一步减少它对首屏消息区的遮挡。
+
+- 顶部状态条继续压缩默认态后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v44.png`
+
+## 本轮说明
+
+- 本轮继续压的是顶部四指标状态条：外层圆角、上下 padding、每个指标块的 `minHeight`、图标尺寸、分隔线高度和右侧展开按钮都再收了一层。
+- 目标是不改信息结构，只把默认态整体厚度压到更接近参考图的水平，让会话标题区和目标区之间的纵向节奏更顺。

@@ -696,15 +696,15 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -748,14 +748,14 @@ private fun StatusStrip(
                 IconButton(
                     onClick = onToggleExpanded,
                     modifier = Modifier
-                        .padding(start = 2.dp)
-                        .size(26.dp),
+                        .padding(start = 1.dp)
+                        .size(24.dp),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                         contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
@@ -1006,15 +1006,15 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 54.dp)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .defaultMinSize(minHeight = 48.dp)
+            .padding(horizontal = 5.dp, vertical = 3.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(13.dp),
+            modifier = Modifier.size(12.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
@@ -1024,7 +1024,7 @@ private fun SessionStatusMetric(
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             textAlign = TextAlign.Center,
             maxLines = 2,
@@ -1038,7 +1038,7 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(36.dp)
+            .height(32.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.09f)),
     )
 }
