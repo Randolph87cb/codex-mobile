@@ -542,7 +542,7 @@ private fun SessionDirectoryCard(
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Surface(
@@ -614,8 +614,8 @@ private fun SessionDirectoryCard(
                         },
                         enabled = !isLoading,
                         modifier = Modifier
-                            .padding(top = 33.dp)
-                            .size(24.dp)
+                            .padding(top = 32.dp)
+                            .size(22.dp)
                             .testTag(
                                 if (showArchivedSessions) {
                                     TestTags.SessionListUnarchiveButtonPrefix + session.id
@@ -631,7 +631,7 @@ private fun SessionDirectoryCard(
                                 Icons.Filled.Archive
                             },
                             contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(17.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.56f),
                         )
                     }
