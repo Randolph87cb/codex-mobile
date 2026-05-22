@@ -2317,7 +2317,7 @@ private fun TranscriptLabelChip(
         Row(
             modifier = Modifier.padding(
                 horizontal = if (compact) 7.dp else 10.dp,
-                vertical = if (compact) 4.dp else 6.dp,
+                vertical = if (compact) 3.dp else 6.dp,
             ),
             horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically,

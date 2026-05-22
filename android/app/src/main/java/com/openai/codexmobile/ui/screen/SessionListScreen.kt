@@ -183,7 +183,7 @@ fun SessionListScreen(
             .fillMaxSize()
             .padding(paddingValues)
             .padding(horizontal = 24.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

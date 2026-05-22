@@ -291,6 +291,17 @@
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
   - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+- 分段胶囊 / 目录头距离与目标标题行 baseline 继续收口后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 本轮截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v24.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v25.png`
 
 ## 备注
 
