@@ -324,6 +324,17 @@
 
 - 会话列表：`.tmp/ui-screenshots/sessions-showcase-v26.png`
 - 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v28.png`
+- 顶栏 action 与四指标状态条比例继续收口后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 本轮截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v27.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v29.png`
 
 ## 备注
 

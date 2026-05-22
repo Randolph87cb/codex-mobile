@@ -208,26 +208,37 @@ fun SessionListScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                IconButton(onClick = onSearch) {
+            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                IconButton(
+                    onClick = onSearch,
+                    modifier = Modifier.size(40.dp),
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Search,
                         contentDescription = "搜索",
+                        modifier = Modifier.size(22.dp),
                     )
                 }
-                IconButton(onClick = onFilter) {
+                IconButton(
+                    onClick = onFilter,
+                    modifier = Modifier.size(40.dp),
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Tune,
                         contentDescription = "筛选",
+                        modifier = Modifier.size(22.dp),
                     )
                 }
                 IconButton(
                     onClick = onOpenSettings,
-                    modifier = Modifier.testTag(TestTags.SessionListOpenSettingsButton),
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag(TestTags.SessionListOpenSettingsButton),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "更多",
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
