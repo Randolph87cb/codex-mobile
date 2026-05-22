@@ -375,28 +375,35 @@ fun SessionDetailScreen(
             )
         }
         Surface(
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilledTonalIconButton(
                     onClick = onPickImage,
                     enabled = !isLoading && detail != null,
-                    modifier = Modifier.testTag(TestTags.SessionDetailAttachImageButton),
+                    modifier = Modifier
+                        .size(52.dp)
+                        .testTag(TestTags.SessionDetailAttachImageButton),
                 ) {
-                    Icon(imageVector = Icons.Filled.Image, contentDescription = "添加图片")
+                    Icon(
+                        imageVector = Icons.Filled.Image,
+                        contentDescription = "添加图片",
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
                 OutlinedTextField(
                     value = draftMessage,
                     onValueChange = onDraftMessageChange,
                     modifier = Modifier
                         .weight(1f)
+                        .heightIn(min = 52.dp)
                         .testTag(TestTags.SessionDetailDraftField),
                     placeholder = {
                         Text(
@@ -405,9 +412,10 @@ fun SessionDetailScreen(
                             } else {
                                 "发送给 Codex"
                             },
+                            style = MaterialTheme.typography.bodyLarge,
                         )
                     },
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(20.dp),
                     maxLines = 3,
                 )
                 Button(
@@ -417,15 +425,21 @@ fun SessionDetailScreen(
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
                     modifier = Modifier
-                        .defaultMinSize(minWidth = 56.dp, minHeight = 56.dp)
+                        .defaultMinSize(minWidth = 52.dp, minHeight = 52.dp)
                         .testTag(TestTags.SessionDetailSendButton),
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(0.dp),
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = if (draftSession != null) "开始" else "发送",
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
