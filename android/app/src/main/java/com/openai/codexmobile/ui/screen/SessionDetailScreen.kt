@@ -1656,7 +1656,7 @@ private fun TranscriptToggleHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -1664,7 +1664,7 @@ private fun TranscriptToggleHeader(
                 .weight(1f)
                 .testTag(toggleTag)
                 .clickable(onClick = onToggle),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
@@ -1674,6 +1674,7 @@ private fun TranscriptToggleHeader(
                 contentColor = bubble?.headerContentColor()
                     ?: MaterialTheme.colorScheme.onPrimaryContainer,
                 compact = true,
+                plain = true,
             )
             Text(
                 text = title,
@@ -1685,13 +1686,13 @@ private fun TranscriptToggleHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(28.dp)
+                .size(24.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(15.dp),
+                modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
@@ -1717,12 +1718,12 @@ private fun TranscriptStaticHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
@@ -1730,6 +1731,7 @@ private fun TranscriptStaticHeader(
                 containerColor = bubble.headerContainerColor(),
                 contentColor = bubble.headerContentColor(),
                 compact = true,
+                plain = true,
             )
             title?.let {
                 Text(
@@ -1743,13 +1745,13 @@ private fun TranscriptStaticHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(28.dp)
+                .size(24.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(15.dp),
+                modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
@@ -2339,17 +2341,10 @@ private fun TranscriptLabelChip(
     containerColor: androidx.compose.ui.graphics.Color,
     contentColor: androidx.compose.ui.graphics.Color,
     compact: Boolean = false,
+    plain: Boolean = false,
 ) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = containerColor,
-        contentColor = contentColor,
-    ) {
+    if (plain) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = if (compact) 7.dp else 9.dp,
-                vertical = if (compact) 3.dp else 5.dp,
-            ),
             horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -2357,13 +2352,42 @@ private fun TranscriptLabelChip(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(if (compact) 12.dp else 13.dp),
+                    modifier = Modifier.size(if (compact) 11.dp else 12.dp),
+                    tint = contentColor.copy(alpha = 0.78f),
                 )
             }
             Text(
                 text = text,
                 style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelSmall,
+                color = contentColor.copy(alpha = 0.82f),
             )
+        }
+    } else {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = containerColor,
+            contentColor = contentColor,
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    horizontal = if (compact) 7.dp else 9.dp,
+                    vertical = if (compact) 3.dp else 5.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(if (compact) 12.dp else 13.dp),
+                    )
+                }
+                Text(
+                    text = text,
+                    style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelSmall,
+                )
+            }
         }
     }
 }

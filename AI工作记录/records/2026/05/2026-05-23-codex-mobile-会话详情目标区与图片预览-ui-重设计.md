@@ -641,3 +641,22 @@
 
 - 本轮继续收的是消息正文密度：正文 markdown 从 `bodyMedium` 改成更紧的 `bodySmall`，并把行高收成 `18sp`，同时压缩了段落、引用和列表块之间的间距。
 - 代码块外壳也同步缩了一层：圆角、padding、复制按钮尺寸都更轻，保证正文和代码块一起向参考稿那种“更薄、更靠内容”的比例收口。
+
+- transcript 头部继续轻量化后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `adb install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`；这轮截图继续用 `adb shell am start` 拉起 `SessionDetailShowcaseActivity` 后执行 `adb shell screencap`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v50.png`
+
+## 本轮说明
+
+- 本轮继续收的是消息头结构：`你 / Codex / 执行过程` 这条标签从彩色胶囊退成更轻的 plain caption，图标和文字都更小，和参考图里“作者行退后、正文前置”的感觉更接近。
+- 复制按钮也继续缩了一层，但复制能力、展开能力和现有 test tag 都保留，所以只是在视觉上继续弱化动作，不改消息交互。
