@@ -128,8 +128,8 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 84.dp
-private val PendingImagePreviewHeight = 72.dp
+private val PendingImagePreviewWidth = 80.dp
+private val PendingImagePreviewHeight = 68.dp
 private val TranscriptBodyTextStyle = TextStyle(
     fontSize = 14.sp,
     lineHeight = 18.sp,
@@ -300,7 +300,7 @@ fun SessionDetailScreen(
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         StatusStrip(
@@ -380,13 +380,13 @@ fun SessionDetailScreen(
             )
         }
         Surface(
-            shape = RoundedCornerShape(15.dp),
+            shape = RoundedCornerShape(14.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(horizontal = 4.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
@@ -394,13 +394,13 @@ fun SessionDetailScreen(
                     onClick = onPickImage,
                     enabled = !isLoading && detail != null,
                     modifier = Modifier
-                        .size(39.dp)
+                        .size(37.dp)
                         .testTag(TestTags.SessionDetailAttachImageButton),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = "添加图片",
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
                 OutlinedTextField(
@@ -408,7 +408,7 @@ fun SessionDetailScreen(
                     onValueChange = onDraftMessageChange,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 39.dp)
+                        .heightIn(min = 37.dp)
                         .testTag(TestTags.SessionDetailDraftField),
                     placeholder = {
                         Text(
@@ -420,7 +420,7 @@ fun SessionDetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     },
-                    shape = RoundedCornerShape(13.dp),
+                    shape = RoundedCornerShape(12.dp),
                     maxLines = 3,
                 )
                 Button(
@@ -430,21 +430,21 @@ fun SessionDetailScreen(
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
                     modifier = Modifier
-                        .defaultMinSize(minWidth = 39.dp, minHeight = 39.dp)
+                        .defaultMinSize(minWidth = 37.dp, minHeight = 37.dp)
                         .testTag(TestTags.SessionDetailSendButton),
-                    shape = RoundedCornerShape(13.dp),
+                    shape = RoundedCornerShape(12.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(13.dp),
+                            modifier = Modifier.size(12.dp),
                             strokeWidth = 2.dp,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = if (draftSession != null) "开始" else "发送",
-                            modifier = Modifier.size(15.dp),
+                            modifier = Modifier.size(14.dp),
                         )
                     }
                 }
@@ -469,27 +469,27 @@ private fun PendingImageAttachmentTray(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 7.dp, vertical = 5.dp)
+                .padding(horizontal = 6.dp, vertical = 4.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(7.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
-                        modifier = Modifier.padding(4.dp).size(14.dp),
+                        modifier = Modifier.padding(4.dp).size(13.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
@@ -511,7 +511,7 @@ private fun PendingImageAttachmentTray(
             }
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -539,11 +539,11 @@ private fun PendingImageThumbnailCard(
 ) {
     Surface(
         modifier = Modifier.width(PendingImagePreviewWidth),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(11.dp),
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             FixedPreviewImageCard(
@@ -578,7 +578,7 @@ private fun PendingImageThumbnailCard(
                 ) {
                     when (attachment.uploadState) {
                         PendingImageUploadState.Uploading -> {
-                            CircularProgressIndicator(modifier = Modifier.size(9.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(8.dp), strokeWidth = 2.dp)
                             Text("上传中", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
 
@@ -586,7 +586,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.CheckCircle,
                                 contentDescription = null,
-                                modifier = Modifier.size(11.dp),
+                                modifier = Modifier.size(10.dp),
                             )
                             Text("已就绪", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
@@ -595,7 +595,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.Error,
                                 contentDescription = null,
-                                modifier = Modifier.size(11.dp),
+                                modifier = Modifier.size(10.dp),
                             )
                             Text(
                                 "失败",
@@ -703,7 +703,7 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(13.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
@@ -756,13 +756,13 @@ private fun StatusStrip(
                     onClick = onToggleExpanded,
                     modifier = Modifier
                         .padding(start = 0.dp)
-                        .size(18.dp),
+                        .size(16.dp),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                         contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(11.dp),
+                        modifier = Modifier.size(10.dp),
                     )
                 }
             }
@@ -840,14 +840,14 @@ private fun GoalCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(13.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 7.dp, vertical = 1.dp),
+                .padding(horizontal = 6.dp, vertical = 1.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Row(
@@ -877,12 +877,12 @@ private fun GoalCard(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(start = 4.dp)
-                        .size(14.dp),
+                        .size(13.dp),
                 )
             }
             Text(
                 text = objectiveText,
-                modifier = Modifier.padding(end = 24.dp),
+                modifier = Modifier.padding(end = 22.dp),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
@@ -890,7 +890,7 @@ private fun GoalCard(
             if (expanded) {
                 detail.goal?.let { goal ->
                     FlowRow(
-                        modifier = Modifier.padding(end = 24.dp),
+                        modifier = Modifier.padding(end = 22.dp),
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
@@ -1016,7 +1016,7 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 35.dp)
+            .defaultMinSize(minHeight = 33.dp)
             .padding(horizontal = 2.dp, vertical = 1.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1024,7 +1024,7 @@ private fun SessionStatusMetric(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(9.dp),
+            modifier = Modifier.size(8.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
@@ -1048,7 +1048,7 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(22.dp)
+            .height(20.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.07f)),
     )
 }

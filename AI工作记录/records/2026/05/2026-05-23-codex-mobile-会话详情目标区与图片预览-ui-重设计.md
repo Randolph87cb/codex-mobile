@@ -865,3 +865,25 @@
 
 - 本轮继续收的是“像不像”最显眼的两处：把用户消息从冷蓝调整成更接近参考稿的暖色气泡，把助手消息收成更清的浅蓝，同时继续压缩消息卡和执行过程卡的横向占比。
 - 顶栏标题、返回键和右侧 action 也再轻了一层，所以整页首屏现在更接近参考稿那种“轻顶栏 + 紧状态卡 + 明显区分的左右消息气泡”。
+
+- 顶部状态区、图片托盘和输入条继续压缩后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行，截图导出前仍先清空设备侧 `/sdcard/Download/codex-mobile-ui/*.png`，避免拉回旧图。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v63.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v63.png`
+
+## 本轮说明
+
+- 本轮继续压的是默认态最厚的两块：图片托盘和底部输入条。托盘外层、头部 icon 块、单卡预览窗和底部状态行都又缩了一层，输入条的外框、按钮和文本框高度也进一步变薄。
+- 同时顺手把顶部状态条和目标卡默认态也再收了一点，所以 `v63` 比 `v62` 的首屏更接近参考稿那种薄型、连续、少占位的控制台结构。
