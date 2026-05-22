@@ -28,6 +28,7 @@
 - 已支持历史线程详情、结构化执行过程展示、待审批恢复与自动审批兜底；
 - Android 会话详情已支持 Markdown 展示、复制整条消息、复制代码块，以及长按选择部分文本复制；
 - 会话详情页底部发送按钮当前使用小飞机图标，不再显示“发送”文字；
+- Android 会话列表已支持“当前 / 已归档”切换，以及单条归档 / 恢复归档；
 - 上游响应流的可重试断流会显示为“正在重试”，不再直接误报成终态失败；
 - `bridge` 已支持平滑重启窗口，Android 会在重启后自动重连并刷新快照；
 - `bridge` 已支持后台常驻启动与登录自启动脚本；
@@ -39,6 +40,7 @@
 - 只暴露自定义 `bridge` API，不直接把原始 `codex app-server` 暴露给手机；
 - 默认按内网 / Tailscale 使用，不默认公网暴露；
 - `bridge` 设计上保留审批与权限控制能力；当前 Android 客户端为了减少移动端卡在审批/权限设置上的中断，会把会话统一同步为自动审批和完全权限；
+- 线程删除当前仍不暴露；会话整理优先使用归档，而不是物理删除；
 - 首先优化“连得快、看得快、控制快”，而不是功能堆叠。
 
 ## 下一步
@@ -52,12 +54,13 @@
 如果当前任务和 Android UI 有关，优先读：
 
 - `docs/android-ui-collaboration.md`
+- `docs/thread-archive-collaboration.md`
 - `.codex/skills/codex-mobile-android-ui/SKILL.md`
 - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
 - `android/app/src/main/java/com/openai/codexmobile/ui/screen/`
 - `android/app/src/main/java/com/openai/codexmobile/ui/theme/`
 
-这几处说明了当前 UI 基线、协作边界、项目级 skill 和验证方式，适合作为多人或多 agent 协作的统一入口。
+这几处说明了当前 UI 基线、线程归档语义、协作边界、项目级 skill 和验证方式，适合作为多人或多 agent 协作的统一入口。
 
 ## Bridge 启动
 

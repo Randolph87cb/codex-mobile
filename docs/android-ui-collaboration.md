@@ -27,6 +27,10 @@
   - 顶部状态条更紧凑
   - 消息气泡、执行过程、审批卡片的视觉语言更统一
   - 发送按钮已改成小飞机图标
+- `SessionListScreen` 已支持：
+  - “当前 / 已归档”切换
+  - 单条归档确认
+  - 单条恢复归档
 
 这意味着后续协作时，默认不是“从零设计”，而是在现有基线上继续打磨。
 
@@ -122,7 +126,7 @@
 - `ConnectionScreen.kt`
   - 连接状态、入口地址、设置入口
 - `SessionListScreen.kt`
-  - 目录分组、草稿新建、会话卡片
+  - 目录分组、草稿新建、当前/已归档切换、会话卡片
 - `SessionDetailScreen.kt`
   - 状态条、消息气泡、执行过程、审批卡片、输入区
 - `SettingsScreen.kt`
@@ -205,6 +209,7 @@ Remove-Item -LiteralPath D:\workspace\codex-mobile\android\app\build\kotlin -Rec
 
 - `README.md`
 - 本文档
+- `docs/thread-archive-collaboration.md`
 - 当前线程记录 `AI工作记录/records/YYYY/MM/*.md`
 
 如果本次改动还影响 API 或数据契约，再额外检查：
