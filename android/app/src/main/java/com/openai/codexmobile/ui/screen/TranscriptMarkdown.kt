@@ -51,7 +51,7 @@ internal sealed interface MarkdownBlock {
 internal fun MarkdownTextBlock(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    style: TextStyle = MaterialTheme.typography.bodySmall,
     bridgeEndpoint: String = "",
     onShowMessage: (String) -> Unit = {},
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit = {},
@@ -59,7 +59,7 @@ internal fun MarkdownTextBlock(
     val blocks = remember(text) { parseMarkdownBlocks(text) }
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         blocks.forEach { block ->
             when (block) {
@@ -137,7 +137,7 @@ private fun MarkdownQuote(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Text(
@@ -167,12 +167,12 @@ private fun MarkdownList(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         block.items.forEachIndexed { index, item ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.Top,
             ) {
                 Text(

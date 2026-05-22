@@ -81,11 +81,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingImageAttachmentUiState
@@ -127,6 +129,10 @@ private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
 private val PendingImagePreviewWidth = 98.dp
 private val PendingImagePreviewHeight = 84.dp
+private val TranscriptBodyTextStyle = TextStyle(
+    fontSize = 14.sp,
+    lineHeight = 18.sp,
+)
 
 @Composable
 fun SessionDetailScreen(
@@ -1761,6 +1767,7 @@ private fun TranscriptPartsColumn(
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
+    val bodyTextStyle = MaterialTheme.typography.bodySmall.merge(TranscriptBodyTextStyle)
     var index = 0
     while (index < parts.size) {
         val part = parts[index]
@@ -1768,7 +1775,7 @@ private fun TranscriptPartsColumn(
             is TranscriptPart.Text -> {
                 MarkdownTextBlock(
                     text = part.text,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = bodyTextStyle,
                     bridgeEndpoint = bridgeEndpoint,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
@@ -1820,11 +1827,11 @@ private fun CodeBlockCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1840,11 +1847,14 @@ private fun CodeBlockCard(
                 } ?: SpacerWidth()
                 IconButton(
                     onClick = { onCopyCode(part.code) },
-                    modifier = Modifier.testTag(copyTag),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .testTag(copyTag),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,
                         contentDescription = "复制代码",
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
@@ -1852,7 +1862,7 @@ private fun CodeBlockCard(
                 Text(
                     text = part.code,
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                     fontFamily = FontFamily.Monospace,
                 )
             }

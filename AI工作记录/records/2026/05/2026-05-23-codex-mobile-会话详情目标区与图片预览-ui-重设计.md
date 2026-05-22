@@ -622,3 +622,22 @@
 
 - 本轮继续压的是消息卡本体：用户/助手消息宽度从 `0.84/0.90` 收成 `0.82/0.88`，气泡圆角和内边距也同步缩小。
 - 执行过程卡也跟着收成更窄更薄，目的是把消息流整体拉回更接近参考稿那种轻薄、留白更多的比例。
+
+- 消息正文密度继续收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过，但设备侧未留下可启动包
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `adb install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过，并确认 `SessionDetailShowcaseActivity` 可正常拉起
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`；这轮截图改为手工 `adb install -r` 后再执行 `adb shell am start` 和 `adb shell screencap`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v49.png`
+
+## 本轮说明
+
+- 本轮继续收的是消息正文密度：正文 markdown 从 `bodyMedium` 改成更紧的 `bodySmall`，并把行高收成 `18sp`，同时压缩了段落、引用和列表块之间的间距。
+- 代码块外壳也同步缩了一层：圆角、padding、复制按钮尺寸都更轻，保证正文和代码块一起向参考稿那种“更薄、更靠内容”的比例收口。
