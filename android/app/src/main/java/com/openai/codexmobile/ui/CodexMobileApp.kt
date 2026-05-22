@@ -212,6 +212,10 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
+                    onUpdateGoal = appViewModel::updateSelectedSessionGoal,
+                    onPauseGoal = appViewModel::pauseSelectedSessionGoal,
+                    onResumeGoal = appViewModel::resumeSelectedSessionGoal,
+                    onClearGoal = appViewModel::clearSelectedSessionGoal,
                     onRefreshSession = appViewModel::refreshSelectedSession,
                     onShowMessage = { message ->
                         coroutineScope.launch {
@@ -252,6 +256,10 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
+                    onUpdateGoal = appViewModel::updateSelectedSessionGoal,
+                    onPauseGoal = appViewModel::pauseSelectedSessionGoal,
+                    onResumeGoal = appViewModel::resumeSelectedSessionGoal,
+                    onClearGoal = appViewModel::clearSelectedSessionGoal,
                     onRefreshSession = appViewModel::refreshSelectedSession,
                     onShowMessage = { message ->
                         coroutineScope.launch {

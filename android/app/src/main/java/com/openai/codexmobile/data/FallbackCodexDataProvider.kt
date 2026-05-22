@@ -55,6 +55,21 @@ class FallbackCodexDataProvider(
         return requireActiveProvider().updateSessionConfig(sessionId, update)
     }
 
+    override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse {
+        return requireActiveProvider().getSessionGoal(sessionId)
+    }
+
+    override suspend fun updateSessionGoal(
+        sessionId: String,
+        request: SessionGoalUpdateRequest,
+    ): SessionGoalResponse {
+        return requireActiveProvider().updateSessionGoal(sessionId, request)
+    }
+
+    override suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult {
+        return requireActiveProvider().clearSessionGoal(sessionId)
+    }
+
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {
         return requireActiveProvider().uploadImageAttachment(request)
     }

@@ -2,6 +2,7 @@ package com.openai.codexmobile.data
 
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
+import com.openai.codexmobile.model.SessionGoalSnapshot
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.emptyFlow
 
 class FakeCodexDataProvider : CodexDataProvider {
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
+    private var sessionGoal: SessionGoalSnapshot? = null
 
     override fun updateAuthToken(token: String) = Unit
 
@@ -80,6 +82,44 @@ class FakeCodexDataProvider : CodexDataProvider {
         )
     }
 
+    override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse {
+        delay(60)
+        return SessionGoalResponse(
+            capability = "supported",
+            goal = sessionGoal,
+        )
+    }
+
+    override suspend fun updateSessionGoal(
+        sessionId: String,
+        request: SessionGoalUpdateRequest,
+    ): SessionGoalResponse {
+        delay(80)
+        val existing = sessionGoal
+        sessionGoal = SessionGoalSnapshot(
+            objective = request.objective ?: existing?.objective ?: "模拟目标",
+            status = request.status ?: existing?.status ?: "active",
+            tokenBudget = request.tokenBudget ?: existing?.tokenBudget,
+            tokensUsed = existing?.tokensUsed ?: 0L,
+            timeUsedSeconds = existing?.timeUsedSeconds ?: 0L,
+            createdAt = existing?.createdAt ?: "2026-05-22T09:00:00Z",
+            updatedAt = "2026-05-22T09:05:00Z",
+        )
+        return SessionGoalResponse(
+            capability = "supported",
+            goal = sessionGoal,
+        )
+    }
+
+    override suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult {
+        delay(60)
+        sessionGoal = null
+        return SessionGoalClearResult(
+            capability = "supported",
+            cleared = true,
+        )
+    }
+
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {
         delay(80)
         return UploadedImageAttachment(
@@ -131,6 +171,8 @@ class FakeCodexDataProvider : CodexDataProvider {
             serviceTier = session.serviceTier,
             sandboxMode = session.sandboxMode,
             status = session.status,
+            goal = sessionGoal,
+            goalCapability = "supported",
         )
     }
 

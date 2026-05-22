@@ -10,6 +10,7 @@ import {
 import { SessionStore } from "./session-store.js";
 import type {
   ApprovalDecision,
+  GoalCapability,
   JsonRpcRequestId,
   PendingApprovalView,
   ReasoningEffort,
@@ -17,6 +18,9 @@ import type {
   SandboxMode,
   SessionApprovalInput,
   SessionApprovalResult,
+  SessionGoal,
+  SessionGoalState,
+  SessionGoalUpdateInput,
   SessionRecord,
   SessionStatus,
   ServiceTier,
@@ -72,6 +76,17 @@ interface ThreadResumeResult {
     | null;
 }
 
+interface AppServerGoal {
+  threadId: string;
+  objective: string;
+  status: string;
+  tokenBudget?: number | null;
+  tokensUsed?: number;
+  timeUsedSeconds?: number;
+  createdAt?: number | string | null;
+  updatedAt?: number | string | null;
+}
+
 class ApprovalError extends Error {
   constructor(readonly code: "session-not-found" | "approval-not-found" | "approval-request-id-required") {
     super(code);
@@ -81,6 +96,12 @@ class ApprovalError extends Error {
 class BusySessionError extends Error {
   constructor(readonly status: Extract<SessionStatus, "running" | "awaiting_approval">) {
     super("thread-busy");
+  }
+}
+
+class GoalCapabilityError extends Error {
+  constructor(readonly code: "goal-not-supported" | "goal-session-unavailable") {
+    super(code);
   }
 }
 
@@ -94,6 +115,8 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   private readonly sessionApprovalKeys = new Map<string, string[]>();
   private readonly reasoningActivityBodies = new Map<string, string>();
+  private readonly goalByThreadId = new Map<string, SessionGoal | null>();
+  private goalCapability: GoalCapability = "unknown";
   private readonly client: AppServerRpcClient;
 
   constructor(
@@ -314,30 +337,101 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     if (session?.threadId) {
       const thread = await this.tryReadThread(session.threadId);
       if (!thread) {
-        return buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id));
+        return this.decorateSessionViewWithGoal(
+          buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id)),
+        );
       }
 
       const synced = this.applyThreadSnapshot(session, thread);
-      return buildSessionViewFromThread(thread, synced, this.getPendingApprovalView(synced.id));
+      return this.decorateSessionViewWithGoal(
+        buildSessionViewFromThread(thread, synced, this.getPendingApprovalView(synced.id)),
+      );
     }
 
     if (session) {
-      return buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id));
+      return this.decorateSessionViewWithGoal(
+        buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id)),
+      );
     }
 
     const attachedSession = this.store.findByThreadId(sessionId);
     if (attachedSession?.threadId) {
       const thread = await this.tryReadThread(attachedSession.threadId);
       if (!thread) {
-        return buildSessionViewFromRecord(attachedSession, this.getPendingApprovalView(attachedSession.id));
+        return this.decorateSessionViewWithGoal(
+          buildSessionViewFromRecord(attachedSession, this.getPendingApprovalView(attachedSession.id)),
+        );
       }
 
       const synced = this.applyThreadSnapshot(attachedSession, thread);
-      return buildSessionViewFromThread(thread, synced, this.getPendingApprovalView(synced.id));
+      return this.decorateSessionViewWithGoal(
+        buildSessionViewFromThread(thread, synced, this.getPendingApprovalView(synced.id)),
+      );
     }
 
     const thread = await this.tryReadThread(sessionId);
-    return thread ? buildSessionViewFromThread(thread) : null;
+    return thread ? this.decorateSessionViewWithGoal(buildSessionViewFromThread(thread)) : null;
+  }
+
+  async getSessionGoal(sessionId: string): Promise<SessionGoalState> {
+    const threadId = await this.resolveGoalThreadId(sessionId);
+    if (!threadId) {
+      throw new GoalCapabilityError("goal-session-unavailable");
+    }
+
+    return this.readGoalState(threadId);
+  }
+
+  async updateSessionGoal(sessionId: string, input: SessionGoalUpdateInput): Promise<SessionGoalState> {
+    const threadId = await this.resolveGoalThreadId(sessionId);
+    if (!threadId) {
+      throw new GoalCapabilityError("goal-session-unavailable");
+    }
+
+    try {
+      const result = await this.client.request<{ goal: AppServerGoal }>("thread/goal/set", {
+        threadId,
+        ...(input.objective !== undefined ? { objective: input.objective } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.tokenBudget !== undefined ? { tokenBudget: input.tokenBudget } : {}),
+      });
+      const goal = mapSessionGoal(result.goal);
+      this.goalCapability = "supported";
+      this.goalByThreadId.set(threadId, goal);
+      return {
+        capability: this.goalCapability,
+        goal,
+      };
+    } catch (error) {
+      if (isGoalUnsupportedError(error)) {
+        this.goalCapability = "unsupported";
+        throw new GoalCapabilityError("goal-not-supported");
+      }
+      throw error;
+    }
+  }
+
+  async clearSessionGoal(sessionId: string): Promise<{ capability: GoalCapability; cleared: boolean }> {
+    const threadId = await this.resolveGoalThreadId(sessionId);
+    if (!threadId) {
+      throw new GoalCapabilityError("goal-session-unavailable");
+    }
+
+    try {
+      const result = await this.client.request<{ cleared?: boolean }>("thread/goal/clear", { threadId });
+      this.goalCapability = "supported";
+      this.goalByThreadId.set(threadId, null);
+      return {
+        capability: this.goalCapability,
+        cleared: result.cleared ?? true,
+      };
+    } catch (error) {
+      if (isGoalUnsupportedError(error)) {
+        this.goalCapability = "unsupported";
+        throw new GoalCapabilityError("goal-not-supported");
+      }
+      throw error;
+    }
   }
 
   async attachSession(sessionId: string): Promise<SessionRecord | null> {
@@ -408,6 +502,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       this.store.delete(attached.id);
     }
     this.threadToSession.delete(threadId);
+    this.goalByThreadId.delete(threadId);
     this.clearPendingApprovals(resolvedSessionId);
     this.clearActivityState(resolvedSessionId);
   }
@@ -443,6 +538,12 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
 
   private handleNotification(notification: JsonRpcNotification): void {
     switch (notification.method) {
+      case "thread/goal/updated":
+        this.handleGoalUpdated(notification.params);
+        break;
+      case "thread/goal/cleared":
+        this.handleGoalCleared(notification.params);
+        break;
       case "thread/status/changed":
         this.handleThreadStatusChanged(notification.params);
         break;
@@ -515,6 +616,51 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         requestId: request.id,
         method: request.method,
         params,
+      },
+    });
+  }
+
+  private handleGoalUpdated(params: unknown): void {
+    const payload = params as {
+      threadId: string;
+      goal?: AppServerGoal;
+    };
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
+    if (!sessionId || !payload.goal) {
+      return;
+    }
+
+    const goal = mapSessionGoal(payload.goal);
+    this.goalCapability = "supported";
+    this.goalByThreadId.set(payload.threadId, goal);
+    this.emit(sessionId, {
+      type: "goal.updated",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        goal,
+        goalCapability: this.goalCapability,
+      },
+    });
+  }
+
+  private handleGoalCleared(params: unknown): void {
+    const payload = params as {
+      threadId: string;
+    };
+    const sessionId = this.resolveSessionIdByThreadId(payload.threadId);
+    if (!sessionId) {
+      return;
+    }
+
+    this.goalCapability = "supported";
+    this.goalByThreadId.set(payload.threadId, null);
+    this.emit(sessionId, {
+      type: "goal.cleared",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      data: {
+        goalCapability: this.goalCapability,
       },
     });
   }
@@ -779,6 +925,54 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
   }
 
+  private async decorateSessionViewWithGoal(view: SessionView): Promise<SessionView> {
+    const threadId = view.threadId;
+    if (!threadId) {
+      return {
+        ...view,
+        goal: null,
+        goalCapability: "unsupported",
+      };
+    }
+
+    const goalState = await this.readGoalState(threadId);
+    return {
+      ...view,
+      goal: goalState.goal,
+      goalCapability: goalState.capability,
+    };
+  }
+
+  private async readGoalState(threadId: string): Promise<SessionGoalState> {
+    if (this.goalCapability === "unsupported") {
+      return {
+        capability: this.goalCapability,
+        goal: null,
+      };
+    }
+
+    try {
+      const result = await this.client.request<{ goal: AppServerGoal | null }>("thread/goal/get", { threadId });
+      const goal = result.goal ? mapSessionGoal(result.goal) : null;
+      this.goalCapability = "supported";
+      this.goalByThreadId.set(threadId, goal);
+      return {
+        capability: this.goalCapability,
+        goal,
+      };
+    } catch (error) {
+      if (isGoalUnsupportedError(error)) {
+        this.goalCapability = "unsupported";
+        this.goalByThreadId.delete(threadId);
+        return {
+          capability: this.goalCapability,
+          goal: null,
+        };
+      }
+      throw error;
+    }
+  }
+
   private async tryReadThread(threadId: string): Promise<AppServerThread | null> {
     try {
       const result = await this.client.request<{ thread: AppServerThread }>("thread/read", {
@@ -921,6 +1115,10 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
 
     return null;
+  }
+
+  private async resolveGoalThreadId(sessionId: string): Promise<string | null> {
+    return this.resolveArchivableThreadId(sessionId);
   }
 
   private attachResumedThread(sessionId: string, resumed: ThreadResumeResult): SessionRecord {
@@ -1229,6 +1427,38 @@ function isImmediateInterruptDecision(method: ApprovalRequestMethod, decision: A
 function getPermissionsPayload(params: Record<string, unknown>): Record<string, unknown> {
   const permissions = params.permissions;
   return isRecord(permissions) ? permissions : {};
+}
+
+function isGoalUnsupportedError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /method not found|unsupported|not supported|unknown method|no such table:\s*thread_goals|no such table:\s*thread_goals_new/i.test(error.message);
+}
+
+function mapSessionGoal(goal: AppServerGoal): SessionGoal {
+  return {
+    objective: goal.objective,
+    status: goal.status,
+    tokenBudget: goal.tokenBudget ?? null,
+    tokensUsed: goal.tokensUsed ?? 0,
+    timeUsedSeconds: goal.timeUsedSeconds ?? 0,
+    createdAt: toGoalIsoString(goal.createdAt),
+    updatedAt: toGoalIsoString(goal.updatedAt),
+  };
+}
+
+function toGoalIsoString(value: number | string | null | undefined): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value * 1000).toISOString();
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  return new Date().toISOString();
 }
 
 function shouldResumeMissingThread(error: unknown): boolean {

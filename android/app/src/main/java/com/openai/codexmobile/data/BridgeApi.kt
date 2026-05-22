@@ -2,6 +2,7 @@ package com.openai.codexmobile.data
 
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
+import com.openai.codexmobile.model.SessionGoalSnapshot
 import kotlinx.coroutines.flow.Flow
 
 data class CreateSessionRequest(
@@ -52,6 +53,22 @@ data class UploadedImageAttachment(
         get() = savedPath ?: stagedPath
 }
 
+data class SessionGoalUpdateRequest(
+    val objective: String? = null,
+    val status: String? = null,
+    val tokenBudget: Long? = null,
+)
+
+data class SessionGoalResponse(
+    val capability: String,
+    val goal: SessionGoalSnapshot?,
+)
+
+data class SessionGoalClearResult(
+    val capability: String,
+    val cleared: Boolean,
+)
+
 interface BridgeApi {
     fun updateAuthToken(token: String)
     suspend fun connect(endpoint: String): BridgeConnectionState
@@ -59,6 +76,9 @@ interface BridgeApi {
     suspend fun currentConnection(): BridgeConnectionState
     suspend fun createSession(request: CreateSessionRequest = CreateSessionRequest()): SessionDetail
     suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail
+    suspend fun getSessionGoal(sessionId: String): SessionGoalResponse
+    suspend fun updateSessionGoal(sessionId: String, request: SessionGoalUpdateRequest): SessionGoalResponse
+    suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult
     suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment
     suspend fun sendInput(sessionId: String, request: SendInputRequest)
     suspend fun approveSession(

@@ -1,4 +1,3 @@
-import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
@@ -35,6 +34,11 @@ export interface LineTransport {
   onExit(listener: (code: number | null) => void): void;
 }
 
+export interface CodexLaunchSpec {
+  command: string;
+  args: string[];
+}
+
 export class ChildProcessLineTransport implements LineTransport {
   private child?: ChildProcessWithoutNullStreams;
   private rl?: Interface;
@@ -42,6 +46,7 @@ export class ChildProcessLineTransport implements LineTransport {
   private readonly lineListeners = new Set<(line: string) => void>();
   private readonly stderrLineListeners = new Set<(line: string) => void>();
   private readonly exitListeners = new Set<(code: number | null) => void>();
+  private didExit = false;
 
   constructor(
     private readonly command: string,
@@ -59,6 +64,7 @@ export class ChildProcessLineTransport implements LineTransport {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
+    this.didExit = false;
 
     this.rl = createInterface({ input: this.child.stdout });
     this.rl.on("line", (line) => {
@@ -73,10 +79,15 @@ export class ChildProcessLineTransport implements LineTransport {
       }
     });
 
-    this.child.on("exit", (code) => {
-      for (const listener of this.exitListeners) {
-        listener(code);
+    this.child.on("error", (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      for (const listener of this.stderrLineListeners) {
+        listener(`failed to spawn app-server process: ${message}`);
       }
+      this.emitExit(null);
+    });
+    this.child.on("exit", (code) => {
+      this.emitExit(code);
     });
   }
 
@@ -108,6 +119,17 @@ export class ChildProcessLineTransport implements LineTransport {
   onExit(listener: (code: number | null) => void): void {
     this.exitListeners.add(listener);
   }
+
+  private emitExit(code: number | null): void {
+    if (this.didExit) {
+      return;
+    }
+
+    this.didExit = true;
+    for (const listener of this.exitListeners) {
+      listener(code);
+    }
+  }
 }
 
 interface AppServerClientOptions {
@@ -134,9 +156,10 @@ export class AppServerClient {
   private startPromise?: Promise<void>;
 
   constructor(private readonly options: AppServerClientOptions) {
+    const launchSpec = resolveCodexLaunchSpec();
     this.transport =
       options.transport ??
-      new ChildProcessLineTransport(resolveCodexExecutable(), ["app-server"], options.cwd);
+      new ChildProcessLineTransport(launchSpec.command, launchSpec.args, options.cwd);
     this.logger = options.logger ?? {
       warn: (message: string) => {
         console.warn(message);
@@ -282,20 +305,57 @@ export class AppServerClient {
   }
 }
 
-function resolveCodexExecutable(): string {
-  if (process.env.CODEX_EXECUTABLE && existsSync(process.env.CODEX_EXECUTABLE)) {
-    return process.env.CODEX_EXECUTABLE;
+export function resolveCodexLaunchSpec(
+  env: NodeJS.ProcessEnv = process.env,
+  fileExists: (path: string) => boolean = existsSync,
+  nodePath = process.execPath,
+): CodexLaunchSpec {
+  const configuredExecutable = env.CODEX_EXECUTABLE;
+  if (configuredExecutable && fileExists(configuredExecutable)) {
+    const normalizedExecutable = configuredExecutable.toLowerCase();
+    if (normalizedExecutable.endsWith(".js")) {
+      return {
+        command: nodePath,
+        args: [configuredExecutable, "app-server"],
+      };
+    }
+
+    if (normalizedExecutable.endsWith(".cmd") || normalizedExecutable.endsWith(".bat")) {
+      return {
+        command: "cmd.exe",
+        args: ["/d", "/s", "/c", `"${configuredExecutable}" app-server`],
+      };
+    }
+
+    return {
+      command: configuredExecutable,
+      args: ["app-server"],
+    };
   }
 
-  const appData = process.env.APPDATA;
+  const appData = env.APPDATA;
   if (appData) {
+    const npmCliEntrypoint = `${appData}\\npm\\node_modules\\@openai\\codex\\bin\\codex.js`;
+    if (fileExists(npmCliEntrypoint)) {
+      return {
+        command: nodePath,
+        args: [npmCliEntrypoint, "app-server"],
+      };
+    }
+
     const npmVendor = `${appData}\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex\\codex.exe`;
-    if (existsSync(npmVendor)) {
-      return npmVendor;
+    if (fileExists(npmVendor)) {
+      return {
+        command: npmVendor,
+        args: ["app-server"],
+      };
     }
   }
 
-  return "codex.exe";
+  return {
+    command: "codex.exe",
+    args: ["app-server"],
+  };
 }
 
 function truncateTransportLine(line: string, maxLength = 400): string {

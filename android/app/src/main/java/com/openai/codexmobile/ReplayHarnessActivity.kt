@@ -12,12 +12,16 @@ import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CodexDataProvider
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SendInputRequest
+import com.openai.codexmobile.data.SessionGoalClearResult
+import com.openai.codexmobile.data.SessionGoalResponse
+import com.openai.codexmobile.data.SessionGoalUpdateRequest
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.diagnostics.FileAppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
+import com.openai.codexmobile.model.SessionGoalSnapshot
 import com.openai.codexmobile.model.SessionSummary
 import com.openai.codexmobile.ui.CodexMobileApp
 import com.openai.codexmobile.ui.theme.CodexMobileTheme
@@ -74,6 +78,15 @@ private class InMemoryAppSettingsStore(
 private class DeterministicReplayDataProvider : CodexDataProvider {
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
     private val requestId = BridgeRequestId.Text("instrumentation-request-1")
+    private var goalSnapshot = SessionGoalSnapshot(
+        objective = "检查手机端目标卡片与审批卡片的排版",
+        status = "active",
+        tokenBudget = 120000L,
+        tokensUsed = 3400L,
+        timeUsedSeconds = 180L,
+        createdAt = "2026-05-22T09:00:00Z",
+        updatedAt = "2026-05-22T09:03:00Z",
+    )
     private val session = SessionSummary(
         id = "session-test-001",
         title = "测试会话",
@@ -87,7 +100,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         sandboxMode = "workspace-write",
         status = "idle",
     )
-    private val detail = SessionDetail(
+    private var detail = SessionDetail(
         id = session.id,
         title = session.title,
         subtitle = session.subtitle,
@@ -110,6 +123,8 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         serviceTier = session.serviceTier,
         sandboxMode = session.sandboxMode,
         status = session.status,
+        goal = goalSnapshot,
+        goalCapability = "supported",
     )
     private val longApprovalSummary = buildString {
         appendLine("等待审批：执行测试命令")
@@ -142,13 +157,52 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         sessionId: String,
         update: com.openai.codexmobile.data.SessionConfigUpdate,
     ): SessionDetail {
-        return detail.copy(
+        detail = detail.copy(
             cwd = update.cwd ?: detail.cwd,
             model = update.model ?: detail.model,
             approvalMode = update.approvalMode ?: detail.approvalMode,
             reasoningEffort = update.reasoningEffort ?: detail.reasoningEffort,
             serviceTier = update.serviceTier ?: detail.serviceTier,
             sandboxMode = update.sandboxMode ?: detail.sandboxMode,
+        )
+        return detail
+    }
+
+    override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse {
+        return SessionGoalResponse(
+            capability = "supported",
+            goal = goalSnapshot,
+        )
+    }
+
+    override suspend fun updateSessionGoal(
+        sessionId: String,
+        request: SessionGoalUpdateRequest,
+    ): SessionGoalResponse {
+        goalSnapshot = goalSnapshot.copy(
+            objective = request.objective ?: goalSnapshot.objective,
+            status = request.status ?: goalSnapshot.status,
+            tokenBudget = request.tokenBudget ?: goalSnapshot.tokenBudget,
+            updatedAt = "2026-05-22T09:05:00Z",
+        )
+        detail = detail.copy(
+            goal = goalSnapshot,
+            goalCapability = "supported",
+        )
+        return SessionGoalResponse(
+            capability = "supported",
+            goal = goalSnapshot,
+        )
+    }
+
+    override suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult {
+        detail = detail.copy(
+            goal = null,
+            goalCapability = "supported",
+        )
+        return SessionGoalClearResult(
+            capability = "supported",
+            cleared = true,
         )
     }
 

@@ -5,6 +5,7 @@ export type ApprovalMode = "manual" | "auto";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type ServiceTier = "default" | "fast";
 export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
+export type GoalCapability = "unknown" | "supported" | "unsupported";
 
 export interface CreateSessionInput {
   cwd: string;
@@ -50,8 +51,31 @@ export interface SessionView {
   activeTurnId: string | null;
   lastError: string | null;
   pendingApproval?: PendingApprovalView | null;
+  goal?: SessionGoal | null;
+  goalCapability?: GoalCapability;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SessionGoal {
+  objective: string;
+  status: string;
+  tokenBudget: number | null;
+  tokensUsed: number;
+  timeUsedSeconds: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionGoalState {
+  capability: GoalCapability;
+  goal: SessionGoal | null;
+}
+
+export interface SessionGoalUpdateInput {
+  objective?: string;
+  status?: string;
+  tokenBudget?: number | null;
 }
 
 export interface PendingApprovalView {
@@ -109,6 +133,8 @@ export interface SessionApprovalResult {
 export interface BridgeEvent {
   type:
     | "session.started"
+    | "goal.updated"
+    | "goal.cleared"
     | "bridge.lifecycle"
     | "assistant.delta"
     | "assistant.done"

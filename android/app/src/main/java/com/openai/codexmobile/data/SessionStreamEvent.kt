@@ -1,6 +1,7 @@
 package com.openai.codexmobile.data
 
 import com.openai.codexmobile.model.PendingApprovalSnapshot
+import com.openai.codexmobile.model.SessionGoalSnapshot
 
 sealed interface SessionStreamEvent {
     val sessionId: String
@@ -27,7 +28,22 @@ sealed interface SessionStreamEvent {
         val serviceTier: String?,
         val sandboxMode: String?,
         val threadId: String?,
+        val goal: SessionGoalSnapshot?,
+        val goalCapability: String?,
         val pendingApproval: PendingApprovalSnapshot?,
+        override val timestamp: String?,
+    ) : SessionStreamEvent
+
+    data class GoalUpdated(
+        override val sessionId: String,
+        val goal: SessionGoalSnapshot,
+        val goalCapability: String?,
+        override val timestamp: String?,
+    ) : SessionStreamEvent
+
+    data class GoalCleared(
+        override val sessionId: String,
+        val goalCapability: String?,
         override val timestamp: String?,
     ) : SessionStreamEvent
 

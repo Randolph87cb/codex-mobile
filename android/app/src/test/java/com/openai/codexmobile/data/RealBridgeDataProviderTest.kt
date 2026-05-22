@@ -28,6 +28,32 @@ class RealBridgeDataProviderTest {
     }
 
     @Test
+    fun parseGoalUpdatedEvent() {
+        val event = parseSessionStreamEvent(
+            sessionId = "sess-goal",
+            payload = """{"type":"goal.updated","sessionId":"sess-goal","timestamp":"2026-05-22T09:05:00Z","data":{"goalCapability":"supported","goal":{"objective":"把 goal 模式接进手机端","status":"paused","tokenBudget":120000,"tokensUsed":3400,"timeUsedSeconds":180,"createdAt":"2026-05-22T09:00:00Z","updatedAt":"2026-05-22T09:05:00Z"}}}""",
+        ) as? SessionStreamEvent.GoalUpdated
+
+        assertNotNull(event)
+        assertTrue(event?.goalCapability == "supported")
+        assertTrue(event?.goal?.objective == "把 goal 模式接进手机端")
+        assertTrue(event?.goal?.status == "paused")
+        assertTrue(event?.goal?.tokenBudget == 120000L)
+    }
+
+    @Test
+    fun parseSessionDetailReadsGoalFields() {
+        val detail = JSONObject(
+            """{"id":"sess-goal-detail","title":"目标线程","subtitle":"gpt-5.5 • 自动 • 空闲","lastUpdated":"2026-05-22T09:05:00Z","transcriptPreview":"工作目录：D:\\workspace\\codex-mobile","cwd":"D:\\workspace\\codex-mobile","model":"gpt-5.5","approvalMode":"auto","reasoningEffort":"medium","serviceTier":"default","sandboxMode":"danger-full-access","status":"idle","goalCapability":"supported","goal":{"objective":"把 goal 模式接进手机端","status":"active","tokenBudget":150000,"tokensUsed":4500,"timeUsedSeconds":200,"createdAt":"2026-05-22T09:00:00Z","updatedAt":"2026-05-22T09:05:00Z"}}""",
+        ).toSessionDetail()
+
+        assertTrue(detail.goalCapability == "supported")
+        assertTrue(detail.goal?.objective == "把 goal 模式接进手机端")
+        assertTrue(detail.goal?.tokenBudget == 150000L)
+        assertTrue(detail.goal?.tokensUsed == 4500L)
+    }
+
+    @Test
     fun parseBridgeLifecycleEvent() {
         val event = parseSessionStreamEvent(
             sessionId = "sess-restart",

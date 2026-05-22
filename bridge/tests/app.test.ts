@@ -10,6 +10,8 @@ import type {
   ResolvedSessionInput,
   SessionApprovalInput,
   SessionApprovalResult,
+  SessionGoalState,
+  SessionGoalUpdateInput,
   SessionView,
 } from "../src/types.js";
 
@@ -28,6 +30,34 @@ class TestRunner implements HistoryCapableBridgeRunner {
   readonly interrupt = vi.fn(async () => undefined);
   readonly archiveSession = vi.fn(async (_sessionId: string) => undefined);
   readonly unarchiveSession = vi.fn(async (_sessionId: string) => undefined);
+  readonly getSessionGoal = vi.fn(async (_sessionId: string): Promise<SessionGoalState> => ({
+    capability: "supported",
+    goal: {
+      objective: "把连接重试稳定下来",
+      status: "active",
+      tokenBudget: 200000,
+      tokensUsed: 1200,
+      timeUsedSeconds: 90,
+      createdAt: "2026-05-22T09:00:00.000Z",
+      updatedAt: "2026-05-22T09:01:30.000Z",
+    },
+  }));
+  readonly updateSessionGoal = vi.fn(async (_sessionId: string, input: SessionGoalUpdateInput): Promise<SessionGoalState> => ({
+    capability: "supported",
+    goal: {
+      objective: input.objective ?? "把连接重试稳定下来",
+      status: input.status ?? "active",
+      tokenBudget: input.tokenBudget ?? 200000,
+      tokensUsed: 1200,
+      timeUsedSeconds: 90,
+      createdAt: "2026-05-22T09:00:00.000Z",
+      updatedAt: "2026-05-22T09:02:00.000Z",
+    },
+  }));
+  readonly clearSessionGoal = vi.fn(async () => ({
+    capability: "supported" as const,
+    cleared: true,
+  }));
 
   constructor(protected readonly store: SessionStore) {}
 
@@ -84,6 +114,16 @@ class TestRunner implements HistoryCapableBridgeRunner {
       threadId: "thread-history",
       activeTurnId: null,
       lastError: null,
+      goal: {
+        objective: "把目标模式接进手机端",
+        status: "active",
+        tokenBudget: 120000,
+        tokensUsed: 3400,
+        timeUsedSeconds: 180,
+        createdAt: "2026-05-22T09:00:00.000Z",
+        updatedAt: "2026-05-22T09:03:00.000Z",
+      },
+      goalCapability: "supported",
       pendingApproval: {
         requestId: "req-history",
         method: "item/permissions/requestApproval",
@@ -362,10 +402,47 @@ describe("buildBridgeApp", () => {
     expect(detail.json()).toMatchObject({
       id: "thread-history",
       transcriptPreview: "你：之前说过什么？\n\nCodex：这里是历史回复。",
+      goal: {
+        objective: "把目标模式接进手机端",
+        status: "active",
+      },
+      goalCapability: "supported",
       pendingApproval: {
         requestId: "req-history",
         method: "item/permissions/requestApproval",
       },
+    });
+
+    const goal = await app.inject({ method: "GET", url: "/api/session/thread-history/goal" });
+    expect(goal.statusCode).toBe(200);
+    expect(goal.json()).toMatchObject({
+      capability: "supported",
+      goal: {
+        objective: "把连接重试稳定下来",
+        status: "active",
+      },
+    });
+
+    const updatedGoal = await app.inject({
+      method: "PUT",
+      url: "/api/session/thread-history/goal",
+      payload: {
+        objective: "把目标模式接进手机端",
+        tokenBudget: 180000,
+      },
+    });
+    expect(updatedGoal.statusCode).toBe(200);
+    expect(runner.updateSessionGoal).toHaveBeenCalledWith("thread-history", {
+      objective: "把目标模式接进手机端",
+      tokenBudget: 180000,
+    });
+
+    const clearedGoal = await app.inject({ method: "DELETE", url: "/api/session/thread-history/goal" });
+    expect(clearedGoal.statusCode).toBe(200);
+    expect(clearedGoal.json()).toMatchObject({
+      ok: true,
+      capability: "supported",
+      cleared: true,
     });
 
     const input = await app.inject({

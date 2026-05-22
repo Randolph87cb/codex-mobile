@@ -6,7 +6,7 @@
 
 - 公开健康检查：`GET /health`
 - 会话列表与详情：`GET /api/sessions`、`GET /api/session/:id`
-- 会话创建、配置与归档：`POST /api/session`、`PATCH /api/session/:id/config`、`POST /api/session/:id/archive`、`POST /api/session/:id/unarchive`
+- 会话创建、配置、目标与归档：`POST /api/session`、`PATCH /api/session/:id/config`、`GET /api/session/:id/goal`、`PUT /api/session/:id/goal`、`DELETE /api/session/:id/goal`、`POST /api/session/:id/archive`、`POST /api/session/:id/unarchive`
 - 会话输入与审批：`POST /api/session/:id/input`、`POST /api/session/:id/approve`、`POST /api/session/:id/interrupt`
 - 图片上传与访问：
   - `POST /api/attachment/image`
@@ -188,6 +188,92 @@ Android 客户端当前已经支持在设置页填写并携带 Bearer token。
 
 Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 和详情页状态。
 
+如果底层 runner 支持目标能力，详情响应还会带上：
+
+- `goal`：当前线程目标快照；为空表示当前没有目标
+- `goalCapability`：`supported | unsupported | unknown`
+
+`goal` 响应示例：
+
+```json
+{
+  "goal": {
+    "objective": "把详情页实时流稳定下来",
+    "status": "active",
+    "tokenBudget": 200000,
+    "tokensUsed": 3400,
+    "timeUsedSeconds": 180,
+    "createdAt": "2026-05-22T09:00:00.000Z",
+    "updatedAt": "2026-05-22T09:03:00.000Z"
+  },
+  "goalCapability": "supported"
+}
+```
+
+### `GET /api/session/:id/goal`
+
+读取当前线程的目标状态。
+
+成功响应示例：
+
+```json
+{
+  "capability": "supported",
+  "goal": {
+    "objective": "把详情页实时流稳定下来",
+    "status": "active",
+    "tokenBudget": 200000,
+    "tokensUsed": 3400,
+    "timeUsedSeconds": 180,
+    "createdAt": "2026-05-22T09:00:00.000Z",
+    "updatedAt": "2026-05-22T09:03:00.000Z"
+  }
+}
+```
+
+如果当前 host 不支持目标能力，会返回：
+
+```json
+{
+  "error": "goal-not-supported"
+}
+```
+
+### `PUT /api/session/:id/goal`
+
+创建或更新当前线程目标。
+
+请求体示例：
+
+```json
+{
+  "objective": "把详情页实时流稳定下来",
+  "tokenBudget": 200000
+}
+```
+
+也支持只改状态：
+
+```json
+{
+  "status": "paused"
+}
+```
+
+### `DELETE /api/session/:id/goal`
+
+清除当前线程目标。
+
+成功响应示例：
+
+```json
+{
+  "ok": true,
+  "capability": "supported",
+  "cleared": true
+}
+```
+
 ### `POST /api/session/:id/input`
 
 向会话发送输入。支持纯文本、纯附件、或两者同时存在。
@@ -351,6 +437,8 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 当前已实现的事件类型：
 
 - `session.started`
+- `goal.updated`
+- `goal.cleared`
 - `assistant.delta`
 - `assistant.done`
 - `activity`

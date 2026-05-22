@@ -3,6 +3,8 @@ import type {
   ResolvedSessionInput,
   SessionApprovalInput,
   SessionApprovalResult,
+  SessionGoalState,
+  SessionGoalUpdateInput,
   SessionRecord,
   SessionView,
 } from "./types.js";
@@ -22,6 +24,9 @@ export interface BridgeRunner {
 export interface HistoryCapableBridgeRunner extends BridgeRunner {
   listSessionViews(archived?: boolean): Promise<SessionView[]>;
   getSessionView(sessionId: string): Promise<SessionView | null>;
+  getSessionGoal(sessionId: string): Promise<SessionGoalState>;
+  updateSessionGoal(sessionId: string, input: SessionGoalUpdateInput): Promise<SessionGoalState>;
+  clearSessionGoal(sessionId: string): Promise<{ capability: SessionGoalState["capability"]; cleared: boolean }>;
   attachSession(sessionId: string): Promise<SessionRecord | null>;
   archiveSession(sessionId: string): Promise<void>;
   unarchiveSession(sessionId: string): Promise<void>;
@@ -31,6 +36,9 @@ export function isHistoryCapableRunner(runner: BridgeRunner): runner is HistoryC
   return (
     "listSessionViews" in runner &&
     "getSessionView" in runner &&
+    "getSessionGoal" in runner &&
+    "updateSessionGoal" in runner &&
+    "clearSessionGoal" in runner &&
     "attachSession" in runner &&
     "archiveSession" in runner &&
     "unarchiveSession" in runner

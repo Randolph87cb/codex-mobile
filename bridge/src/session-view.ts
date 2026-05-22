@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { PendingApprovalView, SessionRecord, SessionStatus, SessionView } from "./types.js";
+import type { GoalCapability, PendingApprovalView, SessionRecord, SessionStatus, SessionView } from "./types.js";
 
 interface AppServerThreadStatus {
   type?: string;
@@ -98,6 +98,8 @@ export function buildSessionViewFromRecord(
     activeTurnId: session.activeTurnId,
     lastError: session.lastError,
     pendingApproval,
+    goal: null,
+    goalCapability: deriveGoalCapability(session.threadId),
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -145,9 +147,15 @@ export function buildSessionViewFromThread(
     activeTurnId: session?.activeTurnId ?? null,
     lastError,
     pendingApproval,
+    goal: null,
+    goalCapability: deriveGoalCapability(session?.threadId ?? thread.id),
     createdAt,
     updatedAt,
   };
+}
+
+function deriveGoalCapability(threadId: string | null | undefined): GoalCapability {
+  return threadId ? "unknown" : "unsupported";
 }
 
 export function mapThreadStatus(status: AppServerThreadStatus | undefined): SessionStatus {

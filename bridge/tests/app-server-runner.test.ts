@@ -1087,4 +1087,189 @@ describe("AppServerRunner", () => {
       activeTurnId: null,
     });
   });
+
+  test("reads, updates, and clears thread goals through app-server methods", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: unknown) => {
+      if (method === "thread/goal/get") {
+        expect(params).toEqual({ threadId: "thread-1" });
+        return {
+          goal: {
+            threadId: "thread-1",
+            objective: "把详情页实时流稳定下来",
+            status: "active",
+            tokenBudget: 200000,
+            tokensUsed: 3200,
+            timeUsedSeconds: 240,
+            createdAt: 1776272400,
+            updatedAt: 1776272640,
+          },
+        };
+      }
+
+      if (method === "thread/goal/set") {
+        expect(params).toEqual({
+          threadId: "thread-1",
+          objective: "把详情页实时流稳定下来",
+          tokenBudget: 250000,
+        });
+        return {
+          goal: {
+            threadId: "thread-1",
+            objective: "把详情页实时流稳定下来",
+            status: "active",
+            tokenBudget: 250000,
+            tokensUsed: 3300,
+            timeUsedSeconds: 245,
+            createdAt: 1776272400,
+            updatedAt: 1776272700,
+          },
+        };
+      }
+
+      if (method === "thread/goal/clear") {
+        expect(params).toEqual({ threadId: "thread-1" });
+        return { cleared: true };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await expect(runner.getSessionGoal("sess-1")).resolves.toMatchObject({
+      capability: "supported",
+      goal: {
+        objective: "把详情页实时流稳定下来",
+        status: "active",
+        tokenBudget: 200000,
+        tokensUsed: 3200,
+        timeUsedSeconds: 240,
+      },
+    });
+    await expect(
+      runner.updateSessionGoal("sess-1", {
+        objective: "把详情页实时流稳定下来",
+        tokenBudget: 250000,
+      }),
+    ).resolves.toMatchObject({
+      capability: "supported",
+      goal: {
+        tokenBudget: 250000,
+        tokensUsed: 3300,
+      },
+    });
+    await expect(runner.clearSessionGoal("sess-1")).resolves.toEqual({
+      capability: "supported",
+      cleared: true,
+    });
+  });
+
+  test("downgrades missing thread_goals schema errors to unsupported goal capability", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
+      if (method === "thread/goal/get") {
+        throw new Error("failed to read thread goal: error returned from database: (code: 1) no such table: thread_goals");
+      }
+
+      if (method === "thread/goal/set") {
+        throw new Error("failed to write thread goal: error returned from database: (code: 1) no such table: thread_goals");
+      }
+
+      if (method === "thread/goal/clear") {
+        throw new Error("failed to clear thread goal: error returned from database: (code: 1) no such table: thread_goals");
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+
+    await expect(runner.getSessionGoal("sess-1")).resolves.toEqual({
+      capability: "unsupported",
+      goal: null,
+    });
+    await expect(runner.getSessionView("sess-1")).resolves.toMatchObject({
+      id: "sess-1",
+      goal: null,
+      goalCapability: "unsupported",
+    });
+    await expect(
+      runner.updateSessionGoal("sess-1", {
+        objective: "验证 goal 可用性",
+      }),
+    ).rejects.toThrow("goal-not-supported");
+    await expect(runner.clearSessionGoal("sess-1")).rejects.toThrow("goal-not-supported");
+  });
+
+  test("emits goal updates and clears as bridge events", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    const runner = new AppServerRunner(store, client);
+    const events: BridgeEvent[] = [];
+    runner.subscribe("sess-1", (event) => {
+      events.push(event);
+    });
+
+    client.emitNotification({
+      method: "thread/goal/updated",
+      params: {
+        threadId: "thread-1",
+        goal: {
+          threadId: "thread-1",
+          objective: "把详情页实时流稳定下来",
+          status: "paused",
+          tokenBudget: 200000,
+          tokensUsed: 6400,
+          timeUsedSeconds: 480,
+          createdAt: 1776272400,
+          updatedAt: 1776272880,
+        },
+      },
+    });
+    client.emitNotification({
+      method: "thread/goal/cleared",
+      params: {
+        threadId: "thread-1",
+      },
+    });
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "goal.updated",
+          data: expect.objectContaining({
+            goal: expect.objectContaining({
+              objective: "把详情页实时流稳定下来",
+              status: "paused",
+              tokenBudget: 200000,
+              tokensUsed: 6400,
+            }),
+            goalCapability: "supported",
+          }),
+        }),
+        expect.objectContaining({
+          type: "goal.cleared",
+          data: expect.objectContaining({
+            goalCapability: "supported",
+          }),
+        }),
+      ]),
+    );
+  });
 });

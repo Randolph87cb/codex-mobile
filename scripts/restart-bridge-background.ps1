@@ -18,6 +18,43 @@ $stderrLog = Join-Path $logsDir "bridge-stderr.log"
 $stopScript = Join-Path $PSScriptRoot "stop-bridge-background.ps1"
 $drainGraceMs = 2000
 
+function Resolve-CodexExecutable {
+    if ($env:CODEX_EXECUTABLE -and (Test-Path $env:CODEX_EXECUTABLE)) {
+        return $env:CODEX_EXECUTABLE
+    }
+
+    $appData = $env:APPDATA
+    if ($appData) {
+        $npmCliEntrypoint = Join-Path $appData "npm\node_modules\@openai\codex\bin\codex.js"
+        if (Test-Path $npmCliEntrypoint) {
+            return $npmCliEntrypoint
+        }
+
+        $vendorExecutable = Join-Path $appData "npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\codex\codex.exe"
+        if (Test-Path $vendorExecutable) {
+            return $vendorExecutable
+        }
+    }
+
+    try {
+        $resolvedCodexCmd = (Get-Command codex.cmd -ErrorAction Stop).Source
+        if ($resolvedCodexCmd -and (Test-Path $resolvedCodexCmd)) {
+            return $resolvedCodexCmd
+        }
+    } catch {
+    }
+
+    try {
+        $resolvedCodex = (Get-Command codex.exe -ErrorAction Stop).Source
+        if ($resolvedCodex -and (Test-Path $resolvedCodex)) {
+            return $resolvedCodex
+        }
+    } catch {
+    }
+
+    return $null
+}
+
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 
@@ -55,6 +92,13 @@ try {
     $env:CODEX_MOBILE_RUNNER = $Runner
     $env:HOST = $HostAddress
     $env:PORT = [string]$Port
+    $resolvedCodexExecutable = Resolve-CodexExecutable
+    if ($resolvedCodexExecutable) {
+        $env:CODEX_EXECUTABLE = $resolvedCodexExecutable
+        Write-Host "Resolved codex executable: $resolvedCodexExecutable"
+    } else {
+        Write-Warning "Unable to resolve codex executable explicitly; bridge will fall back to its internal lookup."
+    }
 
     if (Test-Path $stdoutLog) {
         Remove-Item -LiteralPath $stdoutLog -Force
@@ -79,6 +123,7 @@ try {
         Host = $HostAddress
         Port = $Port
         StartedAt = (Get-Date).ToString("o")
+        CodexExecutable = $resolvedCodexExecutable
         StdoutLog = $stdoutLog
         StderrLog = $stderrLog
     }

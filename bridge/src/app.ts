@@ -31,6 +31,22 @@ const updateSessionConfigSchema = z.object({
   sandboxMode: z.enum(["read-only", "workspace-write", "danger-full-access"]).optional(),
 });
 
+const updateSessionGoalSchema = z.object({
+  objective: z.string().trim().min(1).max(2_000).optional(),
+  status: z.string().trim().min(1).max(64).optional(),
+  tokenBudget: z.number().int().min(1).nullable().optional(),
+}).superRefine((value, context) => {
+  if (value.objective !== undefined || value.status !== undefined || value.tokenBudget !== undefined) {
+    return;
+  }
+
+  context.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: "objective, status, or tokenBudget is required",
+    path: ["objective"],
+  });
+});
+
 const inputSchema = z.object({
   text: z.string().optional(),
   attachments: z.array(
@@ -405,6 +421,79 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     return session;
   });
 
+  app.get("/api/session/:id/goal", async (request, reply) => {
+    if (!historyRunner) {
+      return reply.status(501).send({ error: "goal-not-supported" });
+    }
+
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
+    if (!session) {
+      return reply.status(404).send({ error: "session-not-found" });
+    }
+
+    try {
+      const result = await historyRunner.getSessionGoal(session.id);
+      return result;
+    } catch (error) {
+      return sendGoalError(reply, error);
+    }
+  });
+
+  app.put("/api/session/:id/goal", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-goal-update"));
+    }
+    if (!historyRunner) {
+      return reply.status(501).send({ error: "goal-not-supported" });
+    }
+
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    const body = updateSessionGoalSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: body.error.flatten(),
+      });
+    }
+
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
+    if (!session) {
+      return reply.status(404).send({ error: "session-not-found" });
+    }
+
+    try {
+      return await historyRunner.updateSessionGoal(session.id, body.data);
+    } catch (error) {
+      return sendGoalError(reply, error);
+    }
+  });
+
+  app.delete("/api/session/:id/goal", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-goal-clear"));
+    }
+    if (!historyRunner) {
+      return reply.status(501).send({ error: "goal-not-supported" });
+    }
+
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
+    if (!session) {
+      return reply.status(404).send({ error: "session-not-found" });
+    }
+
+    try {
+      const result = await historyRunner.clearSessionGoal(session.id);
+      return {
+        ok: true,
+        ...result,
+      };
+    } catch (error) {
+      return sendGoalError(reply, error);
+    }
+  });
+
   app.post("/api/session/:id/input", async (request, reply) => {
     if (isDraining()) {
       return reply.status(503).send(buildBridgeRestartingError("session-input"));
@@ -604,13 +693,15 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
           model: view?.model ?? session.model,
           approvalMode: view?.approvalMode ?? session.approvalMode,
           reasoningEffort: view?.reasoningEffort ?? session.reasoningEffort,
-          serviceTier: view?.serviceTier ?? session.serviceTier,
-          sandboxMode: view?.sandboxMode ?? session.sandboxMode,
-          status: view?.status ?? session.status,
-          threadId: view?.threadId ?? session.threadId,
-          pendingApproval: view?.pendingApproval ?? null,
-        },
-      }),
+        serviceTier: view?.serviceTier ?? session.serviceTier,
+        sandboxMode: view?.sandboxMode ?? session.sandboxMode,
+        status: view?.status ?? session.status,
+        threadId: view?.threadId ?? session.threadId,
+        pendingApproval: view?.pendingApproval ?? null,
+        goal: view?.goal ?? null,
+        goalCapability: view?.goalCapability ?? "unknown",
+      },
+    }),
     );
     if (isDraining()) {
       socket.send(JSON.stringify(buildBridgeLifecycleEvent(session.id, "restarting", drainReason, drainGraceMs)));
@@ -944,6 +1035,21 @@ async function resolveSessionRecord(
   }
 
   return store.get(sessionId);
+}
+
+function sendGoalError(reply: FastifyReply, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === "goal-not-supported") {
+    return reply.status(501).send({ error: message });
+  }
+  if (message === "goal-session-unavailable") {
+    return reply.status(409).send({ error: message });
+  }
+
+  return reply.status(502).send({
+    error: "session-goal-failed",
+    message,
+  });
 }
 
 function omitUndefinedFields<T extends Record<string, unknown>>(value: T): Partial<T> {

@@ -10,6 +10,9 @@ import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SendInputRequest
 import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.data.SessionConfigUpdate
+import com.openai.codexmobile.data.SessionGoalClearResult
+import com.openai.codexmobile.data.SessionGoalResponse
+import com.openai.codexmobile.data.SessionGoalUpdateRequest
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.data.SessionRepository
@@ -18,6 +21,7 @@ import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionDetail
+import com.openai.codexmobile.model.SessionGoalSnapshot
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -165,6 +169,8 @@ class AppViewModelTest {
                 serviceTier = "fast",
                 sandboxMode = "danger-full-access",
                 threadId = "thread-1",
+                goal = null,
+                goalCapability = null,
                 pendingApproval = null,
                 timestamp = "2026-05-19T10:00:01Z",
             ),
@@ -179,6 +185,88 @@ class AppViewModelTest {
         assertEquals("fast", selected?.serviceTier)
         assertEquals("danger-full-access", selected?.sandboxMode)
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
+    }
+
+    @Test
+    fun goalActionsUpdateSelectedSessionAndCallBridge() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_goal", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_goal")
+        advanceUntilIdle()
+
+        viewModel.updateSelectedSessionGoal("把目标模式接进手机端", 120000L)
+        advanceUntilIdle()
+
+        assertEquals("把目标模式接进手机端", viewModel.uiState.value.selectedSession?.goal?.objective)
+        assertEquals(120000L, viewModel.uiState.value.selectedSession?.goal?.tokenBudget)
+        assertEquals(1, bridgeApi.sessionGoalUpdates.size)
+
+        viewModel.pauseSelectedSessionGoal()
+        advanceUntilIdle()
+        assertEquals("paused", viewModel.uiState.value.selectedSession?.goal?.status)
+
+        viewModel.resumeSelectedSessionGoal()
+        advanceUntilIdle()
+        assertEquals("active", viewModel.uiState.value.selectedSession?.goal?.status)
+
+        viewModel.clearSelectedSessionGoal()
+        advanceUntilIdle()
+        assertEquals(listOf("sess_goal"), bridgeApi.clearedSessionGoals)
+        assertNull(viewModel.uiState.value.selectedSession?.goal)
+    }
+
+    @Test
+    fun goalStreamEventsRefreshSelectedSessionGoal() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_goal_stream", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_goal_stream")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.GoalUpdated(
+                sessionId = "sess_goal_stream",
+                goal = SessionGoalSnapshot(
+                    objective = "保持 bridge 和 Android 目标状态一致",
+                    status = "paused",
+                    tokenBudget = 50000L,
+                    tokensUsed = 2200L,
+                    timeUsedSeconds = 140L,
+                    createdAt = "2026-05-22T09:00:00Z",
+                    updatedAt = "2026-05-22T09:04:00Z",
+                ),
+                goalCapability = "supported",
+                timestamp = "2026-05-22T09:04:00Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("保持 bridge 和 Android 目标状态一致", viewModel.uiState.value.selectedSession?.goal?.objective)
+        assertEquals("paused", viewModel.uiState.value.selectedSession?.goal?.status)
+        assertEquals("目标已更新。", viewModel.uiState.value.sessionRealtimeState.lastEventText)
+
+        bridgeApi.emit(
+            SessionStreamEvent.GoalCleared(
+                sessionId = "sess_goal_stream",
+                goalCapability = "supported",
+                timestamp = "2026-05-22T09:05:00Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedSession?.goal)
+        assertEquals("目标已清除。", viewModel.uiState.value.sessionRealtimeState.lastEventText)
     }
 
     @Test
@@ -1406,6 +1494,8 @@ private class FakeBridgeApi(
     val uploadedImageRequests = mutableListOf<UploadImageAttachmentRequest>()
     val approvalCalls = mutableListOf<ApprovalCall>()
     val sessionConfigUpdates = mutableListOf<SessionConfigUpdate>()
+    val sessionGoalUpdates = mutableListOf<SessionGoalUpdateRequest>()
+    val clearedSessionGoals = mutableListOf<String>()
     var updatedAuthToken: String = ""
     var authTokenAtConnect: String = ""
     var lastCreateSessionRequest: CreateSessionRequest? = null
@@ -1450,6 +1540,49 @@ private class FakeBridgeApi(
             sandboxMode = update.sandboxMode ?: currentDetail.sandboxMode,
         )
         return currentDetail
+    }
+
+    override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse {
+        return SessionGoalResponse(
+            capability = currentDetail.goalCapability,
+            goal = currentDetail.goal,
+        )
+    }
+
+    override suspend fun updateSessionGoal(
+        sessionId: String,
+        request: SessionGoalUpdateRequest,
+    ): SessionGoalResponse {
+        sessionGoalUpdates += request
+        val existingGoal = currentDetail.goal
+        currentDetail = currentDetail.copy(
+            goalCapability = "supported",
+            goal = SessionGoalSnapshot(
+                objective = request.objective ?: existingGoal?.objective ?: "默认目标",
+                status = request.status ?: existingGoal?.status ?: "active",
+                tokenBudget = request.tokenBudget ?: existingGoal?.tokenBudget,
+                tokensUsed = existingGoal?.tokensUsed ?: 0L,
+                timeUsedSeconds = existingGoal?.timeUsedSeconds ?: 0L,
+                createdAt = existingGoal?.createdAt ?: "2026-05-22T09:00:00Z",
+                updatedAt = "2026-05-22T09:05:00Z",
+            ),
+        )
+        return SessionGoalResponse(
+            capability = currentDetail.goalCapability,
+            goal = currentDetail.goal,
+        )
+    }
+
+    override suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult {
+        clearedSessionGoals += sessionId
+        currentDetail = currentDetail.copy(
+            goal = null,
+            goalCapability = "supported",
+        )
+        return SessionGoalClearResult(
+            capability = currentDetail.goalCapability,
+            cleared = true,
+        )
     }
 
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment {

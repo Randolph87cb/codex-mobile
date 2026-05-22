@@ -13,6 +13,7 @@ import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SendInputRequest
 import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.data.SessionConfigUpdate
+import com.openai.codexmobile.data.SessionGoalUpdateRequest
 import com.openai.codexmobile.data.SessionInputAttachmentRef
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
@@ -23,6 +24,7 @@ import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionActivityEntry
 import com.openai.codexmobile.model.SessionDetail
+import com.openai.codexmobile.model.SessionGoalSnapshot
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -1049,6 +1051,164 @@ class AppViewModel(
         }
     }
 
+    fun updateSelectedSessionGoal(
+        objective: String,
+        tokenBudget: Long?,
+    ) {
+        val detail = uiState.value.selectedSession ?: return
+        val normalizedObjective = objective.trim()
+        if (normalizedObjective.isBlank()) {
+            _uiState.update { it.copy(message = "目标内容不能为空。") }
+            return
+        }
+
+        viewModelScope.launch {
+            val now = nowIsoString()
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    message = null,
+                    selectedSession = it.selectedSession?.copy(
+                        goal = SessionGoalSnapshot(
+                            objective = normalizedObjective,
+                            status = it.selectedSession.goal?.status ?: "active",
+                            tokenBudget = tokenBudget ?: it.selectedSession.goal?.tokenBudget,
+                            tokensUsed = it.selectedSession.goal?.tokensUsed ?: 0L,
+                            timeUsedSeconds = it.selectedSession.goal?.timeUsedSeconds ?: 0L,
+                            createdAt = it.selectedSession.goal?.createdAt ?: now,
+                            updatedAt = now,
+                        ),
+                        goalCapability = "supported",
+                    ),
+                )
+            }
+
+            try {
+                val result = bridgeApi.updateSessionGoal(
+                    detail.id,
+                    SessionGoalUpdateRequest(
+                        objective = normalizedObjective,
+                        tokenBudget = tokenBudget,
+                    ),
+                )
+                applySessionGoalResponse(
+                    sessionId = detail.id,
+                    capability = result.capability,
+                    goal = result.goal,
+                    userVisibleMessage = "已更新目标。",
+                    lastEventText = "目标已更新。",
+                )
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "更新会话目标失败：sessionId=${detail.id}", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "更新目标失败。",
+                    )
+                }
+                refreshSessionSnapshot(detail.id)
+                refreshDiagnosticsLog()
+            }
+        }
+    }
+
+    fun pauseSelectedSessionGoal() {
+        updateSelectedSessionGoalStatus("paused", "已暂停目标。", "目标已暂停。")
+    }
+
+    fun resumeSelectedSessionGoal() {
+        updateSelectedSessionGoalStatus("active", "已恢复目标。", "目标已恢复。")
+    }
+
+    fun clearSelectedSessionGoal() {
+        val detail = uiState.value.selectedSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, message = null) }
+            try {
+                val result = bridgeApi.clearSessionGoal(detail.id)
+                _uiState.update {
+                    if (it.selectedSession?.id != detail.id) {
+                        it.copy(isLoading = false)
+                    } else {
+                        it.copy(
+                            isLoading = false,
+                            message = "已清除目标。",
+                            selectedSession = it.selectedSession.copy(
+                                goal = null,
+                                goalCapability = result.capability,
+                            ),
+                            sessionRealtimeState = it.sessionRealtimeState.copy(
+                                lastEventText = "目标已清除。",
+                            ),
+                        )
+                    }
+                }
+                refreshDiagnosticsLog()
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "清除会话目标失败：sessionId=${detail.id}", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "清除目标失败。",
+                    )
+                }
+                refreshSessionSnapshot(detail.id)
+                refreshDiagnosticsLog()
+            }
+        }
+    }
+
+    private fun updateSelectedSessionGoalStatus(
+        status: String,
+        userVisibleMessage: String,
+        lastEventText: String,
+    ) {
+        val detail = uiState.value.selectedSession ?: return
+        val currentGoal = detail.goal ?: run {
+            _uiState.update { it.copy(message = "当前还没有可更新的目标。") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    message = null,
+                    selectedSession = it.selectedSession?.copy(
+                        goal = currentGoal.copy(
+                            status = status,
+                            updatedAt = nowIsoString(),
+                        ),
+                        goalCapability = "supported",
+                    ),
+                )
+            }
+            try {
+                val result = bridgeApi.updateSessionGoal(
+                    detail.id,
+                    SessionGoalUpdateRequest(status = status),
+                )
+                applySessionGoalResponse(
+                    sessionId = detail.id,
+                    capability = result.capability,
+                    goal = result.goal,
+                    userVisibleMessage = userVisibleMessage,
+                    lastEventText = lastEventText,
+                )
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "更新目标状态失败：sessionId=${detail.id}, status=$status", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "更新目标状态失败。",
+                    )
+                }
+                refreshSessionSnapshot(detail.id)
+                refreshDiagnosticsLog()
+            }
+        }
+    }
+
     private fun refreshConnection() {
         viewModelScope.launch {
             val connectionState = bridgeApi.currentConnection()
@@ -1365,6 +1525,36 @@ class AppViewModel(
                     )
                 }
                 maybeAutoApprovePending(sessionId)
+            }
+
+            is SessionStreamEvent.GoalUpdated -> {
+                _uiState.update {
+                    it.copy(
+                        selectedSession = it.selectedSession?.takeIf { detail -> detail.id == sessionId }?.copy(
+                            goal = event.goal,
+                            goalCapability = event.goalCapability ?: "supported",
+                            lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
+                        ),
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            lastEventText = "目标已更新。",
+                        ),
+                    )
+                }
+            }
+
+            is SessionStreamEvent.GoalCleared -> {
+                _uiState.update {
+                    it.copy(
+                        selectedSession = it.selectedSession?.takeIf { detail -> detail.id == sessionId }?.copy(
+                            goal = null,
+                            goalCapability = event.goalCapability ?: "supported",
+                            lastUpdated = event.timestamp ?: it.selectedSession.lastUpdated,
+                        ),
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            lastEventText = "目标已清除。",
+                        ),
+                    )
+                }
             }
 
             is SessionStreamEvent.BridgeLifecycle -> {
@@ -2106,6 +2296,35 @@ class AppViewModel(
         refreshDiagnosticsLog()
     }
 
+    private fun applySessionGoalResponse(
+        sessionId: String,
+        capability: String,
+        goal: SessionGoalSnapshot?,
+        userVisibleMessage: String,
+        lastEventText: String,
+    ) {
+        _uiState.update {
+            if (it.selectedSession?.id != sessionId) {
+                it.copy(isLoading = false, message = userVisibleMessage)
+            } else {
+                it.copy(
+                    isLoading = false,
+                    message = userVisibleMessage,
+                    selectedSession = it.selectedSession.copy(
+                        goal = goal,
+                        goalCapability = capability,
+                        lastUpdated = goal?.updatedAt?.takeIf { updated -> updated.isNotBlank() }
+                            ?: it.selectedSession.lastUpdated,
+                    ),
+                    sessionRealtimeState = it.sessionRealtimeState.copy(
+                        lastEventText = lastEventText,
+                    ),
+                )
+            }
+        }
+        refreshDiagnosticsLog()
+    }
+
     private suspend fun submitInputNow(
         detail: SessionDetail,
         text: String,
@@ -2458,6 +2677,8 @@ private fun buildOrUpdateSessionFromStart(
             serviceTier = serviceTier,
             sandboxMode = sandboxMode,
             status = normalizedStatus,
+            goal = event.goal ?: current.goal,
+            goalCapability = event.goalCapability ?: current.goalCapability,
             pendingApproval = if (normalizedStatus == "awaiting_approval") {
                 event.pendingApproval ?: current.pendingApproval
             } else {
@@ -2495,6 +2716,8 @@ private fun buildOrUpdateSessionFromStart(
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
         status = normalizedStatus,
+        goal = event.goal,
+        goalCapability = event.goalCapability ?: "unknown",
         pendingApproval = event.pendingApproval.takeIf { normalizedStatus == "awaiting_approval" },
     )
 }
@@ -2565,6 +2788,8 @@ private fun mergeSessionDetail(
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
+        goal = incoming.goal ?: current?.goal,
+        goalCapability = incoming.goalCapability.takeUnless { it == "unknown" } ?: current?.goalCapability ?: "unknown",
         pendingApproval = if (status == "awaiting_approval") {
             incoming.pendingApproval ?: current?.pendingApproval
         } else {
@@ -2626,6 +2851,8 @@ private fun mergeSessionConfigUpdateResult(
         reasoningEffort = reasoningEffort,
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
+        goal = incoming.goal ?: existing.goal,
+        goalCapability = incoming.goalCapability.takeUnless { it == "unknown" } ?: existing.goalCapability,
         pendingApproval = if (existing.status == "awaiting_approval") {
             incoming.pendingApproval ?: existing.pendingApproval
         } else {

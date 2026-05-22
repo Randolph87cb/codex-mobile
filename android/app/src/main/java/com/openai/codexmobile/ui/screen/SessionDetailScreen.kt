@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.AlertDialog
@@ -131,6 +133,10 @@ fun SessionDetailScreen(
     onUpdateReasoningEffort: (String) -> Unit,
     onUpdateServiceTier: (String) -> Unit,
     onUpdateSandboxMode: (String) -> Unit,
+    onUpdateGoal: (String, Long?) -> Unit,
+    onPauseGoal: () -> Unit,
+    onResumeGoal: () -> Unit,
+    onClearGoal: () -> Unit,
     onRefreshSession: () -> Unit,
     onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
@@ -144,6 +150,7 @@ fun SessionDetailScreen(
     val currentTranscriptScrollState = transcriptScrollState ?: rememberScrollState()
     var statusExpanded by rememberSaveable { mutableStateOf(false) }
     var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
+    var goalEditorVisible by rememberSaveable { mutableStateOf(false) }
     var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
     var pendingFileDownloadRequest by remember { mutableStateOf<TranscriptFileDownloadRequest?>(null) }
@@ -181,6 +188,17 @@ fun SessionDetailScreen(
         onUpdateServiceTier = onUpdateServiceTier,
         onUpdateSandboxMode = onUpdateSandboxMode,
     )
+
+    if (goalEditorVisible && detail != null && draftSession == null) {
+        GoalEditorDialog(
+            currentGoal = detail.goal,
+            onDismiss = { goalEditorVisible = false },
+            onConfirm = { objective, tokenBudget ->
+                onUpdateGoal(objective, tokenBudget)
+                goalEditorVisible = false
+            },
+        )
+    }
 
     imagePreviewState?.let { preview ->
         ImagePreviewDialog(
@@ -263,6 +281,15 @@ fun SessionDetailScreen(
             onToggleExpanded = { statusExpanded = !statusExpanded },
             onOpenEditor = { activeEditor = it },
             onRefreshSession = onRefreshSession,
+        )
+        GoalCard(
+            detail = detail,
+            isDraft = draftSession != null,
+            isLoading = isLoading,
+            onEditGoal = { goalEditorVisible = true },
+            onPauseGoal = onPauseGoal,
+            onResumeGoal = onResumeGoal,
+            onClearGoal = onClearGoal,
         )
         sessionRealtimeState.pendingApproval?.let { approval ->
             ApprovalActionCard(
@@ -642,6 +669,158 @@ private fun StatusStrip(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GoalCard(
+    detail: SessionDetail?,
+    isDraft: Boolean,
+    isLoading: Boolean,
+    onEditGoal: () -> Unit,
+    onPauseGoal: () -> Unit,
+    onResumeGoal: () -> Unit,
+    onClearGoal: () -> Unit,
+) {
+    if (detail == null) {
+        return
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailGoalCard),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TranscriptLabelChip(
+                    text = "目标",
+                    icon = Icons.Filled.Flag,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Text(
+                    text = when {
+                        isDraft -> "首条消息发送后可设置目标"
+                        detail.goalCapability == "unsupported" -> "当前 host 暂不支持目标模式"
+                        detail.goal == null -> "还没有设置目标"
+                        else -> localizedGoalStatus(detail.goal.status)
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                )
+            }
+
+            when {
+                isDraft -> Text(
+                    text = "先开始一次真实会话，再把长期目标挂到这个线程上。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                detail.goalCapability == "unsupported" -> Text(
+                    text = "bridge 当前连接的 Codex host 没有暴露线程目标接口，手机端暂时只能正常聊天，不能创建或管理目标。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                detail.goal != null -> {
+                    Text(text = detail.goal.objective, style = MaterialTheme.typography.bodyLarge)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        GoalMetricChip("状态 ${localizedGoalStatus(detail.goal.status)}")
+                        GoalMetricChip("已用 ${detail.goal.tokensUsed} tokens")
+                        detail.goal.tokenBudget?.let { budget ->
+                            GoalMetricChip("预算 $budget")
+                        }
+                        GoalMetricChip("耗时 ${formatGoalDuration(detail.goal.timeUsedSeconds)}")
+                    }
+                }
+
+                else -> Text(
+                    text = "给当前线程设一个明确目标后，手机端就能持续看到目标状态和预算变化。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            if (!isDraft && detail.goalCapability != "unsupported") {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onEditGoal,
+                        enabled = !isLoading,
+                        modifier = Modifier.testTag(
+                            if (detail.goal == null) {
+                                TestTags.SessionDetailGoalStartButton
+                            } else {
+                                TestTags.SessionDetailGoalEditButton
+                            },
+                        ),
+                    ) {
+                        Icon(imageVector = Icons.Filled.Flag, contentDescription = null)
+                        Text(
+                            text = if (detail.goal == null) "开始目标" else "编辑目标",
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                    detail.goal?.let { goal ->
+                        val paused = goal.status == "paused"
+                        OutlinedButton(
+                            onClick = if (paused) onResumeGoal else onPauseGoal,
+                            enabled = !isLoading,
+                            modifier = Modifier.testTag(
+                                if (paused) {
+                                    TestTags.SessionDetailGoalResumeButton
+                                } else {
+                                    TestTags.SessionDetailGoalPauseButton
+                                },
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = if (paused) Icons.Filled.Bolt else Icons.Filled.StopCircle,
+                                contentDescription = null,
+                            )
+                            Text(
+                                text = if (paused) "恢复" else "暂停",
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = onClearGoal,
+                            enabled = !isLoading,
+                            modifier = Modifier.testTag(TestTags.SessionDetailGoalClearButton),
+                        ) {
+                            Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
+                            Text(text = "清除", modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GoalMetricChip(text: String) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
 @Composable
 private fun StatusGlyph(
     icon: ImageVector,
@@ -853,6 +1032,56 @@ private fun ChoiceConfigDialog(
             }
         },
         confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
+private fun GoalEditorDialog(
+    currentGoal: com.openai.codexmobile.model.SessionGoalSnapshot?,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Long?) -> Unit,
+) {
+    var objective by remember(currentGoal?.objective) { mutableStateOf(currentGoal?.objective.orEmpty()) }
+    var tokenBudgetInput by remember(currentGoal?.tokenBudget) {
+        mutableStateOf(currentGoal?.tokenBudget?.toString().orEmpty())
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (currentGoal == null) "开始目标" else "编辑目标") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = objective,
+                    onValueChange = { objective = it },
+                    label = { Text("目标内容") },
+                    minLines = 3,
+                    maxLines = 5,
+                )
+                OutlinedTextField(
+                    value = tokenBudgetInput,
+                    onValueChange = { value ->
+                        tokenBudgetInput = value.filter { it.isDigit() }
+                    },
+                    label = { Text("Token 预算（可选）") },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(objective.trim(), tokenBudgetInput.toLongOrNull())
+                },
+            ) {
+                Text("保存")
+            }
+        },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("取消")
@@ -1946,5 +2175,39 @@ private fun localizedStatusLabel(status: String): String {
         "awaiting_approval" -> "待审批"
         "error" -> "出错"
         else -> "空闲"
+    }
+}
+
+private fun localizedGoalStatus(status: String): String {
+    return when (status) {
+        "paused" -> "已暂停"
+        "complete" -> "已完成"
+        "budgetLimited" -> "预算受限"
+        "blocked" -> "已阻塞"
+        "usageLimited" -> "额度受限"
+        else -> "进行中"
+    }
+}
+
+private fun formatGoalDuration(seconds: Long): String {
+    if (seconds <= 0L) {
+        return "0s"
+    }
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val remainSeconds = seconds % 60
+    return buildString {
+        if (hours > 0) {
+            append(hours)
+            append("h")
+        }
+        if (minutes > 0) {
+            append(minutes)
+            append("m")
+        }
+        if (remainSeconds > 0 || length == 0) {
+            append(remainSeconds)
+            append("s")
+        }
     }
 }

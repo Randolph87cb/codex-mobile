@@ -4,6 +4,7 @@ import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionDetail
+import com.openai.codexmobile.model.SessionGoalSnapshot
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.Dispatchers
@@ -146,6 +147,74 @@ class RealBridgeDataProvider(
         }
 
         response.body.toSessionDetail()
+    }
+
+    override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "读取会话目标：sessionId=$sessionId")
+        val response = request(
+            method = "GET",
+            url = "${requireBaseUrl()}/api/session/$sessionId/goal",
+            summary = "get session goal, sessionId=$sessionId",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "读取会话目标失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        response.body.toSessionGoalResponse()
+    }
+
+    override suspend fun updateSessionGoal(
+        sessionId: String,
+        request: SessionGoalUpdateRequest,
+    ): SessionGoalResponse = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "更新会话目标：sessionId=$sessionId, request=$request")
+        val payload = JSONObject()
+        request.objective?.let { payload.put("objective", it) }
+        request.status?.let { payload.put("status", it) }
+        if (request.tokenBudget != null) {
+            payload.put("tokenBudget", request.tokenBudget)
+        }
+        if (request.objective == null && request.status == null && request.tokenBudget == null) {
+            throw IllegalArgumentException("目标更新内容不能为空。")
+        }
+
+        val response = request(
+            method = "PUT",
+            url = "${requireBaseUrl()}/api/session/$sessionId/goal",
+            body = payload.toString(),
+            summary = "update session goal, sessionId=$sessionId",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "更新会话目标失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        response.body.toSessionGoalResponse()
+    }
+
+    override suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "清除会话目标：sessionId=$sessionId")
+        val response = request(
+            method = "DELETE",
+            url = "${requireBaseUrl()}/api/session/$sessionId/goal",
+            summary = "clear session goal, sessionId=$sessionId",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "清除会话目标失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        response.body.toSessionGoalClearResult()
     }
 
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment = withContext(Dispatchers.IO) {
@@ -543,7 +612,25 @@ internal fun parseSessionStreamEvent(
             serviceTier = data.optString("serviceTier").takeIf { it.isNotBlank() },
             sandboxMode = data.optString("sandboxMode").takeIf { it.isNotBlank() },
             threadId = data.optString("threadId").takeIf { it.isNotBlank() },
+            goal = parseSessionGoalSnapshot(data.opt("goal")),
+            goalCapability = data.optString("goalCapability").takeIf { it.isNotBlank() },
             pendingApproval = parsePendingApprovalSnapshot(data.opt("pendingApproval")),
+            timestamp = timestamp,
+        )
+
+        "goal.updated" -> {
+            val goal = parseSessionGoalSnapshot(data.opt("goal")) ?: return null
+            SessionStreamEvent.GoalUpdated(
+                sessionId = eventSessionId,
+                goal = goal,
+                goalCapability = data.optString("goalCapability").takeIf { it.isNotBlank() },
+                timestamp = timestamp,
+            )
+        }
+
+        "goal.cleared" -> SessionStreamEvent.GoalCleared(
+            sessionId = eventSessionId,
+            goalCapability = data.optString("goalCapability").takeIf { it.isNotBlank() },
             timestamp = timestamp,
         )
 
@@ -759,11 +846,11 @@ internal fun JSONObject.toSessionSummary(): SessionSummary {
     )
 }
 
-private fun String.toSessionDetail(): SessionDetail {
+internal fun String.toSessionDetail(): SessionDetail {
     return JSONObject(this).toSessionDetail()
 }
 
-private fun JSONObject.toSessionDetail(): SessionDetail {
+internal fun JSONObject.toSessionDetail(): SessionDetail {
     val id = getString("id")
     val title = optString("title").ifBlank { id }
     val model = optString("model").ifBlank { "未知模型" }
@@ -799,7 +886,31 @@ private fun JSONObject.toSessionDetail(): SessionDetail {
         serviceTier = serviceTier,
         sandboxMode = sandboxMode,
         status = status,
+        goal = parseSessionGoalSnapshot(opt("goal")),
+        goalCapability = optString("goalCapability").ifBlank { "unknown" },
         pendingApproval = parsePendingApprovalSnapshot(opt("pendingApproval")),
+    )
+}
+
+private fun String.toSessionGoalResponse(): SessionGoalResponse {
+    return JSONObject(this).toSessionGoalResponse()
+}
+
+private fun JSONObject.toSessionGoalResponse(): SessionGoalResponse {
+    return SessionGoalResponse(
+        capability = optString("capability").ifBlank { "unknown" },
+        goal = parseSessionGoalSnapshot(opt("goal")),
+    )
+}
+
+private fun String.toSessionGoalClearResult(): SessionGoalClearResult {
+    return JSONObject(this).toSessionGoalClearResult()
+}
+
+private fun JSONObject.toSessionGoalClearResult(): SessionGoalClearResult {
+    return SessionGoalClearResult(
+        capability = optString("capability").ifBlank { "unknown" },
+        cleared = optBoolean("cleared", true),
     )
 }
 
@@ -811,6 +922,34 @@ private fun parsePendingApprovalSnapshot(value: Any?): PendingApprovalSnapshot? 
         paramsSummary = json.optString("paramsSummary").takeIf { it.isNotBlank() },
     ).takeIf {
         it.requestId != null || it.method != null || it.paramsSummary != null
+    }
+}
+
+private fun parseSessionGoalSnapshot(value: Any?): SessionGoalSnapshot? {
+    val json = value as? JSONObject ?: return null
+    val objective = json.optString("objective").takeIf { it.isNotBlank() } ?: return null
+    return SessionGoalSnapshot(
+        objective = objective,
+        status = json.optString("status").ifBlank { "active" },
+        tokenBudget = json.toLongOrNull("tokenBudget"),
+        tokensUsed = json.toLongOrNull("tokensUsed") ?: 0L,
+        timeUsedSeconds = json.toLongOrNull("timeUsedSeconds") ?: 0L,
+        createdAt = json.optString("createdAt"),
+        updatedAt = json.optString("updatedAt"),
+    )
+}
+
+private fun JSONObject.toLongOrNull(name: String): Long? {
+    if (!has(name) || isNull(name)) {
+        return null
+    }
+
+    return when (val value = opt(name)) {
+        is Int -> value.toLong()
+        is Long -> value
+        is Number -> value.toLong()
+        is String -> value.toLongOrNull()
+        else -> null
     }
 }
 
@@ -859,6 +998,8 @@ private fun SessionStreamEvent.toLogSummary(): String {
         is SessionStreamEvent.StreamOpened -> "stream.opened sessionId=$sessionId"
         is SessionStreamEvent.StreamClosed -> "stream.closed sessionId=$sessionId reason=${reason ?: "none"}"
         is SessionStreamEvent.SessionStarted -> "session.started sessionId=$sessionId status=$status"
+        is SessionStreamEvent.GoalUpdated -> "goal.updated sessionId=$sessionId status=${goal.status}"
+        is SessionStreamEvent.GoalCleared -> "goal.cleared sessionId=$sessionId"
         is SessionStreamEvent.BridgeLifecycle -> "bridge.lifecycle sessionId=$sessionId phase=$phase"
         is SessionStreamEvent.AssistantDelta -> "assistant.delta sessionId=$sessionId chars=${text.length}"
         is SessionStreamEvent.AssistantDone -> "assistant.done sessionId=$sessionId status=${turnStatus ?: "unknown"}"
