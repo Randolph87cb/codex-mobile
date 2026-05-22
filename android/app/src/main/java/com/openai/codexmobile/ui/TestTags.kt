@@ -34,6 +34,7 @@ object TestTags {
     const val SessionDetailPendingImageThumbnailPrefix = "session_detail_pending_image_thumbnail_"
     const val SessionDetailPendingImageRetryButtonPrefix = "session_detail_pending_image_retry_button_"
     const val SessionDetailPendingImageStatusPrefix = "session_detail_pending_image_status_"
+    const val SessionDetailPendingImageErrorPrefix = "session_detail_pending_image_error_"
     const val SessionDetailClearImageButton = "session_detail_clear_image_button"
     const val SessionDetailSendButton = "session_detail_send_button"
     const val SessionDetailBackButton = "session_detail_back_button"

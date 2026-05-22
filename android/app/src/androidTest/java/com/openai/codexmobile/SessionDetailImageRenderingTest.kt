@@ -166,6 +166,9 @@ class SessionDetailImageRenderingTest {
         composeRule.onNodeWithTag(
             TestTags.SessionDetailPendingImageRetryButtonPrefix + "pending-failed",
         ).assertIsDisplayed()
+        composeRule.onNodeWithTag(
+            TestTags.SessionDetailPendingImageErrorPrefix + "pending-failed",
+        ).assertIsDisplayed()
     }
 
     @Test

@@ -649,6 +649,41 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("returns a friendly error when uploaded image exceeds request size limit", async () => {
+    const originalBodyLimit = process.env.BRIDGE_BODY_LIMIT_MB;
+    process.env.BRIDGE_BODY_LIMIT_MB = "1";
+    let app: Awaited<ReturnType<typeof buildBridgeApp>> | null = null;
+
+    try {
+      const store = new SessionStore();
+      const runner = new TestRunner(store);
+      app = await buildBridgeApp({ store, runner });
+      const payload = Buffer.alloc(1_200_000, 0x61);
+      const multipart = await buildMultipartUploadPayload("too-large.jpg", "image/jpeg", payload);
+
+      const upload = await app.inject({
+        method: "POST",
+        url: "/api/attachment/image",
+        headers: multipart.headers,
+        payload: multipart.body,
+      });
+
+      expect(upload.statusCode).toBe(413);
+      expect(upload.json()).toMatchObject({
+        error: "image-too-large",
+        maxMegabytes: 1,
+        message: "图片过大，当前上限 1 MB。",
+      });
+    } finally {
+      await app?.close();
+      if (originalBodyLimit == null) {
+        delete process.env.BRIDGE_BODY_LIMIT_MB;
+      } else {
+        process.env.BRIDGE_BODY_LIMIT_MB = originalBodyLimit;
+      }
+    }
+  });
+
   test("updates persisted session config through patch route", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);

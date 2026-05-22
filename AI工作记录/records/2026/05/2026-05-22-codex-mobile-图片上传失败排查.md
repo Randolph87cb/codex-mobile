@@ -66,3 +66,37 @@
 - 已完成：代码链路与现有日志交叉排查。
 - 未执行：业务代码修改、自动化测试、真机复现。
 - 风险：当前这一轮日志没有直接打印 413，因此“当前这两张图是否正好超过 32MB”仍需配合手机端应用日志或原图文件大小做最终确认。
+
+## 已实施修复
+
+- Android：
+  - `RealBridgeDataProvider` 为图片上传改用独立 `OkHttpClient`，拉长 `connect/write/read/call timeout`，降低慢网路或大图上传时的客户端超时概率。
+  - 图片上传失败时不再直接抛出原始 HTTP 异常文本，而是转换成中文可读错误，例如：
+    - `图片过大，当前上限 xx MB。`
+    - `图片上传超时，请检查当前网络后重试。`
+    - `图片上传连接中断，请稍后重试。`
+  - 详情页失败卡片直接展示 `uploadError`，不再只有“失败/重试”。
+  - `SessionDetailScreen` 的 goal 回调补默认值，恢复现有 `androidTest` 编译。
+- bridge：
+  - `/api/attachment/image` 超限时统一返回 `413 image-too-large`，附带 `maxBytes`、`maxMegabytes` 和中文提示。
+  - 默认 `bodyLimit` / multipart `fileSize` 从 `32MB` 提高到 `64MB`，降低大图被 bridge 直接拒绝的概率。
+- 测试：
+  - 补了 bridge 侧“超限返回友好 413”的测试。
+  - 补了 Android 侧上传失败消息转换的单元测试。
+  - 补了详情页失败卡片展示错误文案的仪表测试断言。
+
+## 实施后验证
+
+- bridge：
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+  - 结果：通过
+- Android：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - `cd android`
+  - `gradlew.bat testDebugUnitTest`
+  - `gradlew.bat compileDebugAndroidTestKotlin`
+  - 结果：通过
+- 未完成：
+  - 真机或模拟器执行 `connectedDebugAndroidTest` 未做，本次只验证到 `androidTest` 可编译。

@@ -121,9 +121,10 @@ interface SessionSocket {
 }
 
 export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promise<FastifyInstance> {
+  const uploadBodyLimitBytes = resolveBridgeBodyLimitBytes();
   const app = Fastify({
     logger: true,
-    bodyLimit: resolveBridgeBodyLimitBytes(),
+    bodyLimit: uploadBodyLimitBytes,
   });
   const store = options.store ?? new SessionStore();
   const attachmentStore = new AttachmentStore();
@@ -141,9 +142,18 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   await app.register(websocket);
   await app.register(multipart, {
     limits: {
-      fileSize: resolveBridgeBodyLimitBytes(),
+      fileSize: uploadBodyLimitBytes,
       files: 1,
     },
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    const pathname = new URL(request.raw.url ?? "/", "http://bridge.local").pathname;
+    if ((error as { code?: string }).code === "FST_ERR_CTP_BODY_TOO_LARGE" && pathname === "/api/attachment/image") {
+      return reply.status(413).send(buildImageTooLargeError(uploadBodyLimitBytes));
+    }
+
+    return reply.send(error);
   });
 
   app.addHook("onClose", async () => {
@@ -263,6 +273,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
         createdAt: attachment.createdAt,
       });
     } catch (error) {
+      if (isImageUploadTooLargeError(error)) {
+        return reply.status(413).send(buildImageTooLargeError(uploadBodyLimitBytes));
+      }
       return reply.status(400).send({
         error: "invalid-image-upload",
         message: error instanceof Error ? error.message : String(error),
@@ -855,7 +868,7 @@ async function parseJsonImageUpload(
 
 function resolveBridgeBodyLimitBytes(): number {
   const configuredMb = Number.parseInt(process.env.BRIDGE_BODY_LIMIT_MB ?? "", 10);
-  const limitMb = Number.isFinite(configuredMb) && configuredMb > 0 ? configuredMb : 32;
+  const limitMb = Number.isFinite(configuredMb) && configuredMb > 0 ? configuredMb : 64;
   return limitMb * 1024 * 1024;
 }
 
@@ -864,6 +877,16 @@ function buildBridgeRestartingError(action: string) {
     error: "bridge-restarting",
     action,
     message: "bridge is restarting and temporarily not accepting new mutating requests",
+  };
+}
+
+function buildImageTooLargeError(limitBytes: number) {
+  const maxMegabytes = Math.max(1, Math.round(limitBytes / (1024 * 1024)));
+  return {
+    error: "image-too-large",
+    maxBytes: limitBytes,
+    maxMegabytes,
+    message: `图片过大，当前上限 ${maxMegabytes} MB。`,
   };
 }
 
@@ -1056,6 +1079,16 @@ function omitUndefinedFields<T extends Record<string, unknown>>(value: T): Parti
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined),
   ) as Partial<T>;
+}
+
+function isImageUploadTooLargeError(error: unknown): boolean {
+  const code = error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code ?? "")
+    : "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return code === "FST_ERR_CTP_BODY_TOO_LARGE"
+    || code === "FST_REQ_FILE_TOO_LARGE"
+    || message === "request file too large";
 }
 
 function createRunner(store: SessionStore): BridgeRunner {

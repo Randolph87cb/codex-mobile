@@ -27,6 +27,7 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
@@ -40,6 +41,13 @@ class RealBridgeDataProvider(
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
     private val webSocketClient = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
+        .build()
+    private val uploadHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .callTimeout(150, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     override fun updateAuthToken(token: String) {
@@ -224,20 +232,33 @@ class RealBridgeDataProvider(
         )
         val uploadUrl = "${requireBaseUrl()}/api/attachment/image"
         val response = try {
-            uploadMultipartImageAttachment(uploadUrl, request)
+            uploadMultipartImageAttachmentWithRetry(uploadUrl, request)
+        } catch (error: IllegalStateException) {
+            throw error
+        } catch (error: SocketTimeoutException) {
+            appLogger.warn(
+                "BridgeApi",
+                "图片上传超时：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+            )
+            throw IllegalStateException("图片上传超时，请检查当前网络后重试。", error)
         } catch (error: SocketException) {
             appLogger.warn(
                 "BridgeApi",
-                "图片上传遇到 SocketException，准备重试一次：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+                "图片上传连接中断：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
             )
-            uploadMultipartImageAttachment(uploadUrl, request)
+            throw IllegalStateException("图片上传连接中断，请稍后重试。", error)
         }
         if (response.statusCode !in 200..299) {
             appLogger.warn(
                 "BridgeApi",
                 "上传图片附件失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
             )
-            throw BridgeRequestException(response.statusCode, response.body)
+            throw IllegalStateException(
+                buildUploadImageFailureMessage(
+                    statusCode = response.statusCode,
+                    payload = response.body,
+                ),
+            )
         }
 
         parseUploadedImageAttachmentResponse(
@@ -341,7 +362,7 @@ class RealBridgeDataProvider(
             "BridgeApi",
             "HTTP 请求：POST $url (upload image attachment, displayName=${request.displayName}, sessionId=${request.sessionId ?: "none"})",
         )
-        webSocketClient.newCall(requestBuilder.build()).execute().use { response ->
+        uploadHttpClient.newCall(requestBuilder.build()).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             appLogger.debug(
                 "BridgeApi",
@@ -351,6 +372,43 @@ class RealBridgeDataProvider(
                 statusCode = response.code,
                 body = payload,
             )
+        }
+    }
+
+    private fun uploadMultipartImageAttachmentWithRetry(
+        url: String,
+        request: UploadImageAttachmentRequest,
+    ): HttpResponse {
+        return try {
+            uploadMultipartImageAttachment(url, request)
+        } catch (error: SocketTimeoutException) {
+            appLogger.warn(
+                "BridgeApi",
+                "图片上传遇到 SocketTimeoutException，准备重试一次：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+            )
+            retryUploadMultipartImageAttachment(url, request, error)
+        } catch (error: SocketException) {
+            appLogger.warn(
+                "BridgeApi",
+                "图片上传遇到 SocketException，准备重试一次：displayName=${request.displayName}, error=${error.message ?: "unknown"}",
+            )
+            retryUploadMultipartImageAttachment(url, request, error)
+        }
+    }
+
+    private fun retryUploadMultipartImageAttachment(
+        url: String,
+        request: UploadImageAttachmentRequest,
+        firstError: Exception,
+    ): HttpResponse {
+        return try {
+            uploadMultipartImageAttachment(url, request)
+        } catch (retryError: SocketTimeoutException) {
+            throw IllegalStateException("图片上传超时，请检查当前网络后重试。", retryError)
+        } catch (retryError: SocketException) {
+            throw IllegalStateException("图片上传连接中断，请稍后重试。", retryError)
+        } catch (retryError: Exception) {
+            throw retryError
         }
     }
 
@@ -747,6 +805,30 @@ internal fun parseUploadedImageAttachmentResponse(
         stagedPath = stagedPath,
         savedPath = savedPath,
     )
+}
+
+internal fun buildUploadImageFailureMessage(
+    statusCode: Int,
+    payload: String,
+): String {
+    val parsedBody = payload.takeIf { it.isNotBlank() }?.let {
+        runCatching { JSONObject(it) }.getOrNull()
+    }
+    val errorCode = parsedBody?.optString("error")?.takeIf { it.isNotBlank() }
+    val message = parsedBody?.optString("message")?.takeIf { it.isNotBlank() }
+    val maxMegabytes = parsedBody?.takeIf { it.has("maxMegabytes") && !it.isNull("maxMegabytes") }?.optInt("maxMegabytes")
+
+    return when {
+        errorCode == "image-too-large" && !message.isNullOrBlank() -> message
+        errorCode == "image-too-large" && maxMegabytes != null && maxMegabytes > 0 -> "图片过大，当前上限 ${maxMegabytes} MB。"
+        errorCode == "image-too-large" -> "图片过大，超过 bridge 上传上限。"
+        errorCode == "bridge-restarting" -> "bridge 正在重启，暂时无法上传图片。"
+        errorCode == "session-not-found" -> "图片所属会话不存在，请刷新后重试。"
+        errorCode == "invalid-image-upload" && message == "unsupported-image-mime-type" -> "当前只支持 JPG、PNG、WEBP、GIF、BMP 图片。"
+        !message.isNullOrBlank() -> message
+        statusCode == 413 -> "图片过大，超过 bridge 上传上限。"
+        else -> "图片上传失败（HTTP $statusCode）。"
+    }
 }
 
 private fun parseRequestId(value: Any?): BridgeRequestId? {

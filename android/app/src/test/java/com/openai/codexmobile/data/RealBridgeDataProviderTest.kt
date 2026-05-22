@@ -105,4 +105,24 @@ class RealBridgeDataProviderTest {
         assertTrue(uploaded.savedPath == null)
         assertTrue(uploaded.attachmentPath == "D:\\bridge\\staged\\legacy.png")
     }
+
+    @Test
+    fun buildUploadImageFailureMessagePrefersFriendlyBridgeMessage() {
+        val message = buildUploadImageFailureMessage(
+            statusCode = 413,
+            payload = """{"error":"image-too-large","maxMegabytes":64,"message":"图片过大，当前上限 64 MB。"}""",
+        )
+
+        assertTrue(message == "图片过大，当前上限 64 MB。")
+    }
+
+    @Test
+    fun buildUploadImageFailureMessageFallsBackForUnsupportedMimeType() {
+        val message = buildUploadImageFailureMessage(
+            statusCode = 400,
+            payload = """{"error":"invalid-image-upload","message":"unsupported-image-mime-type"}""",
+        )
+
+        assertTrue(message == "当前只支持 JPG、PNG、WEBP、GIF、BMP 图片。")
+    }
 }

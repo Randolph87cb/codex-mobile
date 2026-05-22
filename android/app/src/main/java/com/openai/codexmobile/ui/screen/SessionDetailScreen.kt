@@ -133,10 +133,10 @@ fun SessionDetailScreen(
     onUpdateReasoningEffort: (String) -> Unit,
     onUpdateServiceTier: (String) -> Unit,
     onUpdateSandboxMode: (String) -> Unit,
-    onUpdateGoal: (String, Long?) -> Unit,
-    onPauseGoal: () -> Unit,
-    onResumeGoal: () -> Unit,
-    onClearGoal: () -> Unit,
+    onUpdateGoal: (String, Long?) -> Unit = { _, _ -> },
+    onPauseGoal: () -> Unit = {},
+    onResumeGoal: () -> Unit = {},
+    onClearGoal: () -> Unit = {},
     onRefreshSession: () -> Unit,
     onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
@@ -554,6 +554,16 @@ private fun PendingImageThumbnailCard(
                 }
             }
             if (attachment.uploadState == PendingImageUploadState.Failed) {
+                attachment.uploadError?.takeIf { it.isNotBlank() }?.let { uploadError ->
+                    Text(
+                        text = uploadError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag(TestTags.SessionDetailPendingImageErrorPrefix + attachment.localId),
+                    )
+                }
                 TextButton(
                     onClick = onRetry,
                     modifier = Modifier
