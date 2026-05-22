@@ -666,16 +666,35 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过
   - `cd android; .\gradlew.bat installDebug`：通过，但随后 `am start` 仍会命中设备侧旧问题
-  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：首轮因设备侧安装态崩溃失败，手工重装后通过
   - `adb install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
   - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`；这轮截图继续使用手工 `adb install -r`，并在 `adb shell am start` 后额外等待 5 秒，避开 splash 首屏。
 
 ## 最新截图
 
 - 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
-- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v51b.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v52.png`
 
 ## 本轮说明
 
 - 本轮继续收的是顶部两块的横向比例：状态条四列指标的最小高度、内边距、箭头尺寸和分隔线高度都再压了一层，整条卡片不再那么“厚”和“均分感太强”。
 - 目标卡也同步收口：圆角和横向 padding 更小，状态文字从偏重标题收成更轻的 `labelLarge`，右侧箭头也再缩了一层，所以目标行和状态条的视觉重心比上一版更接近参考图。
+
+- 发送图片区继续收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：首轮 instrumentation 崩溃，`adb install -r` 后重跑通过
+  - `adb install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - 说明：这轮继续沿用手工 `adb install -r` + `adb shell am start` + 等待 5 秒的截图方式，避免模拟器偶发落在 splash。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v52.png`
+
+## 本轮说明
+
+- 本轮继续压的是发送图片区本体：附件托盘外层圆角、头部 icon 块、卡片内边距和横向间距都更小了，首屏纵向占用明显下降。
+- 每张图片卡也同步收了一层：固定预览窗从 `98x84dp` 压到 `92x80dp`，状态图标和底部状态行更轻，但“固定大小预览窗 + 点图看原图”的行为完全没变。

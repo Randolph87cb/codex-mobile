@@ -127,8 +127,8 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 98.dp
-private val PendingImagePreviewHeight = 84.dp
+private val PendingImagePreviewWidth = 92.dp
+private val PendingImagePreviewHeight = 80.dp
 private val TranscriptBodyTextStyle = TextStyle(
     fontSize = 14.sp,
     lineHeight = 18.sp,
@@ -468,27 +468,27 @@ private fun PendingImageAttachmentTray(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 9.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(13.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(7.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
@@ -510,7 +510,7 @@ private fun PendingImageAttachmentTray(
             }
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -538,12 +538,12 @@ private fun PendingImageThumbnailCard(
 ) {
     Surface(
         modifier = Modifier.width(PendingImagePreviewWidth),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FixedPreviewImageCard(
                 source = attachment.previewSource,
@@ -565,19 +565,19 @@ private fun PendingImageThumbnailCard(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier
                         .weight(1f)
                         .testTag(TestTags.SessionDetailPendingImageStatusPrefix + attachment.localId),
                 ) {
                     when (attachment.uploadState) {
                         PendingImageUploadState.Uploading -> {
-                            CircularProgressIndicator(modifier = Modifier.size(11.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(10.dp), strokeWidth = 2.dp)
                             Text("上传中", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
 
@@ -585,7 +585,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.CheckCircle,
                                 contentDescription = null,
-                                modifier = Modifier.size(13.dp),
+                                modifier = Modifier.size(12.dp),
                             )
                             Text("已就绪", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
@@ -594,7 +594,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.Error,
                                 contentDescription = null,
-                                modifier = Modifier.size(13.dp),
+                                modifier = Modifier.size(12.dp),
                             )
                             Text(
                                 "失败",
