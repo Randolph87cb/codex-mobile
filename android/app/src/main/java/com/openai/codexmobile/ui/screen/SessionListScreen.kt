@@ -451,26 +451,28 @@ private fun SessionDirectoryCard(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(13.dp),
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Filled.Folder,
                         contentDescription = null,
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
             Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(bottom = 1.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -484,7 +486,7 @@ private fun SessionDirectoryCard(
                 ) {
                     Text(
                         text = group.sessions.size.toString(),
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
@@ -493,13 +495,13 @@ private fun SessionDirectoryCard(
                 Row(
                     modifier = Modifier
                         .testTag(TestTags.SessionListFolderCreatePrefix + group.cwd)
-                        .padding(end = 1.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        .padding(end = 1.dp, bottom = 1.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = "新建",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium,
                         color = if (isLoading) {
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f)
@@ -512,7 +514,7 @@ private fun SessionDirectoryCard(
                         imageVector = Icons.Filled.KeyboardArrowDown,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(17.dp),
                     )
                 }
             } else {
@@ -520,7 +522,9 @@ private fun SessionDirectoryCard(
                     imageVector = Icons.Filled.KeyboardArrowDown,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier
+                        .padding(bottom = 1.dp)
+                        .size(17.dp),
                 )
             }
         }
