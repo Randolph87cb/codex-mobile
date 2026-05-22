@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -1470,7 +1471,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.62f else 0.67f
+        val bubbleWidthFraction = if (isUser) 0.58f else 0.64f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1545,39 +1546,111 @@ private fun TranscriptBubbleCard(
                     }
                 }
             } else {
-                TranscriptExternalHeader(
-                    bubble = bubble,
-                    copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
-                    alignEnd = isUser,
-                    onCopy = { onCopyText(bubble.copyText) },
-                )
-                Card(
-                    shape = RoundedCornerShape(
-                        topStart = 12.dp,
-                        topEnd = 12.dp,
-                        bottomStart = if (isUser) 12.dp else 6.dp,
-                        bottomEnd = if (isUser) 6.dp else 12.dp,
-                    ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = backgroundColor,
-                        contentColor = contentColor,
-                    ),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+                    verticalAlignment = Alignment.Top,
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                    if (!isUser) {
+                        ConversationSpeakerBadge(
+                            bubble = bubble,
+                            isUser = false,
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(bubbleWidthFraction),
+                        shape = RoundedCornerShape(
+                            topStart = 12.dp,
+                            topEnd = 12.dp,
+                            bottomStart = if (isUser) 12.dp else 6.dp,
+                            bottomEnd = if (isUser) 6.dp else 12.dp,
+                        ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = backgroundColor,
+                            contentColor = contentColor,
+                        ),
                     ) {
-                        TranscriptPartsColumn(
-                            parts = bubble.parts,
-                            bridgeEndpoint = bridgeEndpoint,
-                            bridgeAuthToken = bridgeAuthToken,
-                            onShowMessage = onShowMessage,
-                            onFileDownloadRequest = onFileDownloadRequest,
-                            testTagPrefix = toggleTag,
-                            onCopyCode = onCopyCode,
-                            onOpenImagePreview = onOpenImagePreview,
+                        Box(
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                        ) {
+                            IconButton(
+                                onClick = { onCopyText(bubble.copyText) },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(14.dp)
+                                    .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ContentCopy,
+                                    contentDescription = "复制消息",
+                                    modifier = Modifier.size(8.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                                )
+                            }
+                            Column(
+                                modifier = Modifier.padding(end = 14.dp),
+                            ) {
+                                TranscriptPartsColumn(
+                                    parts = bubble.parts,
+                                    bridgeEndpoint = bridgeEndpoint,
+                                    bridgeAuthToken = bridgeAuthToken,
+                                    onShowMessage = onShowMessage,
+                                    onFileDownloadRequest = onFileDownloadRequest,
+                                    testTagPrefix = toggleTag,
+                                    onCopyCode = onCopyCode,
+                                    onOpenImagePreview = onOpenImagePreview,
+                                )
+                            }
+                        }
+                    }
+                    if (isUser) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        ConversationSpeakerBadge(
+                            bubble = bubble,
+                            isUser = true,
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationSpeakerBadge(
+    bubble: TranscriptBubble,
+    isUser: Boolean,
+) {
+    Surface(
+        shape = CircleShape,
+        color = if (isUser) {
+            MaterialTheme.colorScheme.secondary
+        } else {
+            MaterialTheme.colorScheme.primary
+        },
+        contentColor = if (isUser) {
+            MaterialTheme.colorScheme.onSecondary
+        } else {
+            MaterialTheme.colorScheme.onPrimary
+        },
+        modifier = Modifier.size(18.dp),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (isUser) {
+                Text(
+                    text = "你",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            } else {
+                Text(
+                    text = ">",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
             }
         }
     }

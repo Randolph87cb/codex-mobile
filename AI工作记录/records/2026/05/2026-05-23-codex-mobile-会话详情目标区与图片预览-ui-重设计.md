@@ -976,6 +976,28 @@
 - 本轮继续压的是首屏正文密度：消息正文字级、行高、气泡宽度和内边距都更轻了一层，用户/助手两侧卡片比上一版更接近参考稿。
 - 顶栏和输入条也同步再减重，所以 `v65` 比 `v64` 的整体观感更接近参考稿那种薄型、内容优先的控制台排布。
 
+- 普通消息骨架改成“侧边徽标 + 气泡”并重新执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行；截图导出前先清理设备侧目录，导出结果已重新拉回工作区核对 `v72`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v72.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v72.png`
+
+## 本轮说明
+
+- 本轮不再只是继续压尺寸，而是把普通消息从“头部在上、气泡在下”改成了更接近参考稿的“侧边徽标 + 气泡”结构：助手消息左侧是紧凑 `>` 徽标，用户消息右侧是紧凑 `你` 徽标。
+- 同时普通消息宽度又收窄了一层，所以 `v72` 比 `v71` 更接近参考稿那种“角色标识退到侧边、正文主体居中”的消息区骨架；发送图片区仍然保持固定尺寸预览窗。
+
 - 继续压缩状态条、目标卡和消息头部后重新执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
