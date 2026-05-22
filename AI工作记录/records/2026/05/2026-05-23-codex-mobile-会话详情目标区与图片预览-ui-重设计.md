@@ -451,3 +451,20 @@
 
 - 本轮只继续收紧详情页消息区横向比例：普通消息气泡宽度由用户 `0.9f / 助手 0.95f` 收成 `0.84f / 0.9f`，执行过程卡宽度由 `0.95f` 收成 `0.9f`。
 - 目的不是再压缩整页外边距，而是让消息区和顶部状态卡、目标卡形成更接近参考图的宽度层次。
+
+- 消息区外层层级继续收口后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v41.png`
+
+## 本轮说明
+
+- 本轮继续收的是消息区外层层级，不再让 transcript 被一整块独立白卡包住；改成直接在页面背景上承载消息流，只保留极薄的内部留白。
+- 目标是把详情页首屏更接近参考图那种“状态区之后直接进入消息内容”的结构，同时继续保留固定尺寸发送图片预览窗和现有点击看原图行为。

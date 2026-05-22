@@ -324,17 +324,15 @@ fun SessionDetailScreen(
         if (queuedInputs.isNotEmpty()) {
             QueuedInputCard(messages = queuedInputs)
         }
-        Card(
+        Box(
             modifier = Modifier
                 .testTag(TestTags.SessionDetailTranscript)
                 .fillMaxWidth()
                 .weight(1f, fill = false),
-            shape = RoundedCornerShape(26.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .padding(horizontal = 2.dp, vertical = 2.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
