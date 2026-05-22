@@ -42,6 +42,33 @@
 - 保持现有“先暂存再引用”，新增独立接口，例如 `POST /api/attachment/image/:id/save`，由手机端在需要时触发保存。
 - 如果需要最小风险和更清晰语义，优先方案 B；如果目标是“发图后电脑端总能立刻看到正式文件”，优先方案 A。
 
+## 用户选择
+
+- 用户已选择方案 A：上传即保存。
+
+## 方案 A 改造建议
+
+- 保持现有上传入口 `POST /api/attachment/image` 不变，但扩展请求字段，允许客户端携带会话上下文，例如 `sessionId`。
+- bridge 在接收图片后继续先写临时附件目录，随后基于 `sessionId` 找到会话 `cwd`，再把文件复制到 `<cwd>/mobile_uploads/`。
+- `mobile_uploads/` 由 bridge 自动创建；同名文件采用去重规则，避免覆盖。
+- 上传接口响应增加 `savedPath`、`savedRelativePath`，让 Android 后续优先引用正式保存路径，而不是临时路径。
+- `POST /api/session/:id/input` 保持兼容；Android 改为优先提交 `savedPath`，没有时再回退到临时 `stagedPath`。
+- 为了降低风险，保存目标不允许由手机端任意指定，只允许 bridge 根据会话 `cwd` 固定推导。
+
+## 预期改动面
+
+- bridge:
+  - `bridge/src/types.ts`
+  - `bridge/src/app.ts`
+  - `bridge/src/attachment-store.ts`
+  - `bridge/src/session-store.ts` 或会话查询相关代码
+  - `bridge/tests/app.test.ts`
+- android:
+  - `android/app/src/main/java/com/openai/codexmobile/data/BridgeApi.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/data/RealBridgeDataProvider.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+  - 对应单元测试
+
 ## 关键约束与风险
 
 - 保存目标目录不能让手机端任意指定，必须由 bridge 校验并限制在 `allowedCwds`、会话 `cwd` 子目录或显式配置白名单内。
