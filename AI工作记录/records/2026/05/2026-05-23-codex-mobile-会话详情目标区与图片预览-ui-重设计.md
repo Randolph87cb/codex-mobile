@@ -38,6 +38,7 @@
 - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
   - 改成“顶部标题 + 会话统计 + 目录分组标题 + 轻量卡片列表 + 右下角新建”的结构。
   - 压缩会话卡信息层级，减少每条会话对垂直空间的占用。
+  - 第二轮继续压缩卡片高度、缩小归档动作权重，并把视觉重心拉回到标题 / 状态 / 时间三要素。
 - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
   - 连接页和会话列表页移除重复顶栏。
   - 会话详情顶栏改成更接近参考图的标题 + 在线状态样式。
@@ -69,10 +70,14 @@
   - 展示连接页重构后的主视觉和输入区布局。
 - `./.tmp/ui-screenshots/sessions-showcase-v3.png`
   - 展示会话列表的分组结构、轻量会话卡和浮动新建按钮。
+- `./.tmp/ui-screenshots/sessions-showcase-v5.png`
+  - 会话列表第二轮截图，卡片密度进一步压缩，更接近参考稿。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
   - 会话详情页第二轮截图，包含新的顶栏样式。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
   - 会话详情页第二轮消息图窗截图。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v7.png`
+  - 会话详情页第三轮截图，顶部状态条和目标卡进一步收瘦。
 
 ## 验证结果
 
@@ -85,6 +90,11 @@
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailConfigIsolationTest'`：通过
+- 第三轮密度微调后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
 
 ## 备注
 

@@ -282,7 +282,7 @@ fun SessionListScreen(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(bottom = 96.dp),
             ) {
                 if (groups.isEmpty()) {
@@ -392,7 +392,7 @@ private fun SessionDirectoryCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionListFolderPrefix + group.cwd),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -453,30 +453,30 @@ private fun SessionDirectoryCard(
                     .fillMaxWidth()
                     .testTag(TestTags.SessionListItemPrefix + session.id)
                     .clickable { onOpenSession(session.id) },
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Code,
                             contentDescription = null,
-                            modifier = Modifier.padding(10.dp),
+                            modifier = Modifier.padding(9.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                         Text(
                             text = session.title,
@@ -494,7 +494,7 @@ private fun SessionDirectoryCard(
                     }
                     Column(
                         horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         SessionStatusBadge(status = session.status)
                         Text(
@@ -504,43 +504,40 @@ private fun SessionDirectoryCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = {
-                                    if (showArchivedSessions) {
-                                        onUnarchiveSession(session.id)
-                                    } else {
-                                        onArchiveSession(session)
-                                    }
-                                },
-                                enabled = !isLoading,
-                                modifier = Modifier.testTag(
+                        FilledTonalIconButton(
+                            onClick = {
+                                if (showArchivedSessions) {
+                                    onUnarchiveSession(session.id)
+                                } else {
+                                    onArchiveSession(session)
+                                }
+                            },
+                            enabled = !isLoading,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag(
                                     if (showArchivedSessions) {
                                         TestTags.SessionListUnarchiveButtonPrefix + session.id
                                     } else {
                                         TestTags.SessionListArchiveButtonPrefix + session.id
                                     },
                                 ),
-                            ) {
-                                Icon(
-                                    imageVector = if (showArchivedSessions) {
-                                        Icons.Filled.Unarchive
-                                    } else {
-                                        Icons.Filled.Archive
-                                    },
-                                    contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
-                                )
-                            }
+                        ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                imageVector = if (showArchivedSessions) {
+                                    Icons.Filled.Unarchive
+                                } else {
+                                    Icons.Filled.Archive
+                                },
+                                contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
                             )
                         }
                     }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
