@@ -210,6 +210,7 @@ Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 
 - 当前 Android 客户端发送的是 `attachments[].path`
 - bridge 仍兼容旧格式 `attachments[].id`
 - `path` 只能引用 bridge 已暂存过的附件路径，不能伪造任意主机文件
+- 如果该附件此前已经被 bridge 正式保存过，bridge 会优先把 `savedPath` 提交给 runner，即使客户端仍传的是旧的暂存路径
 
 成功时返回 `202 Accepted`。
 
@@ -279,6 +280,19 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 - 带 `sessionId`：在暂存后继续保存到 `<cwd>/mobile_uploads/`。
 - 正式保存目录由 bridge 根据会话 `cwd` 固定推导，客户端不能直接指定主机路径。
 - 如果有同名文件，bridge 会自动去重，不覆盖现有文件。
+- 如果 `sessionId` 对应的会话不存在，返回 `404`：
+
+```json
+{
+  "error": "session-not-found"
+}
+```
+
+链路补充：
+
+- Android 在已选中的正式会话里上传图片时，会直接附带 `sessionId`，因此通常会一次上传同时完成正式保存。
+- Android 在草稿会话里先选图、再发送首条消息时，首次预上传还拿不到 `sessionId`；等真实会话创建完成后，会再补一次带 `sessionId` 的上传，以拿到正式保存路径。
+- 旧 bridge 只返回 `path` 时，Android 会继续回退到原有暂存路径链路，不影响兼容。
 
 成功响应：
 

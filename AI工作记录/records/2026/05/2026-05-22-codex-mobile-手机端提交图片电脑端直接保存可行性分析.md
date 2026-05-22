@@ -138,3 +138,10 @@
   - 对话输入 -> runner：优先提交正式保存后的图片路径；
   - UI / transcript：仍然表现为“有图”，不是裸路径文本。
 
+## 后续文档补充
+
+- README 新增“图片上传即保存”小节，明确说明真实图片上传、正式保存目录、重名去重、草稿会话补传和旧链路兼容行为。
+- `docs/api.md` 补充了两处关键说明：
+  - `/api/session/:id/input` 会优先把附件的 `savedPath` 送给 runner；
+  - `/api/attachment/image` 增加 `session-not-found` 错误示例，并写明草稿会话首条带图时的补传链路与旧 bridge 回退行为。
+
