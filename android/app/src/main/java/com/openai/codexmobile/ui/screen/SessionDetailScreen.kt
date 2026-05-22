@@ -129,11 +129,11 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 70.dp
-private val PendingImagePreviewHeight = 56.dp
+private val PendingImagePreviewWidth = 64.dp
+private val PendingImagePreviewHeight = 50.dp
 private val PendingAttachmentMetaTextStyle = TextStyle(
-    fontSize = 10.sp,
-    lineHeight = 12.sp,
+    fontSize = 9.sp,
+    lineHeight = 11.sp,
 )
 private val TranscriptBodyTextStyle = TextStyle(
     fontSize = 12.sp,
@@ -385,27 +385,27 @@ fun SessionDetailScreen(
             )
         }
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(11.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 2.dp, vertical = 2.dp),
+                    .padding(horizontal = 1.dp, vertical = 1.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 FilledTonalIconButton(
                     onClick = onPickImage,
                     enabled = !isLoading && detail != null,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(30.dp)
                         .testTag(TestTags.SessionDetailAttachImageButton),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = "添加图片",
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(11.dp),
                     )
                 }
                 OutlinedTextField(
@@ -413,7 +413,7 @@ fun SessionDetailScreen(
                     onValueChange = onDraftMessageChange,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 32.dp)
+                        .heightIn(min = 30.dp)
                         .testTag(TestTags.SessionDetailDraftField),
                     placeholder = {
                         Text(
@@ -425,7 +425,7 @@ fun SessionDetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     },
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(9.dp),
                     maxLines = 3,
                 )
                 Button(
@@ -435,21 +435,21 @@ fun SessionDetailScreen(
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
                     modifier = Modifier
-                        .defaultMinSize(minWidth = 32.dp, minHeight = 32.dp)
+                        .defaultMinSize(minWidth = 30.dp, minHeight = 30.dp)
                         .testTag(TestTags.SessionDetailSendButton),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(9.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(10.dp),
+                            modifier = Modifier.size(9.dp),
                             strokeWidth = 2.dp,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = if (draftSession != null) "开始" else "发送",
-                            modifier = Modifier.size(12.dp),
+                            modifier = Modifier.size(11.dp),
                         )
                     }
                 }
@@ -474,37 +474,37 @@ private fun PendingImageAttachmentTray(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
-        shape = RoundedCornerShape(11.dp),
+        shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 4.dp, vertical = 2.dp)
+                .padding(horizontal = 3.dp, vertical = 2.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(5.dp),
+                    shape = RoundedCornerShape(4.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
-                        modifier = Modifier.padding(2.dp).size(11.dp),
+                        modifier = Modifier.padding(1.dp).size(10.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
                 ) {
                     Text(
                         text = "已附加图片（${attachments.size}）",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                     Text(
                         text = when {
@@ -519,7 +519,7 @@ private fun PendingImageAttachmentTray(
             }
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -547,12 +547,12 @@ private fun PendingImageThumbnailCard(
 ) {
     Surface(
         modifier = Modifier.width(PendingImagePreviewWidth),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(7.dp),
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 2.dp, vertical = 1.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            modifier = Modifier.padding(horizontal = 1.dp, vertical = 1.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             FixedPreviewImageCard(
                 source = attachment.previewSource,
@@ -571,7 +571,9 @@ private fun PendingImageThumbnailCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 1.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
