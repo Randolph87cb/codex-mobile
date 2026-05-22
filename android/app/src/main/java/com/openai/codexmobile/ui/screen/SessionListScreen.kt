@@ -546,15 +546,15 @@ private fun SessionDirectoryCard(
                     verticalAlignment = Alignment.Top,
                 ) {
                     Surface(
-                        modifier = Modifier.size(54.dp),
-                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.size(50.dp),
+                        shape = RoundedCornerShape(15.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Filled.Code,
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(22.dp),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -562,8 +562,8 @@ private fun SessionDirectoryCard(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(top = 2.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                            .padding(top = 1.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                         Text(
                             text = session.title,
@@ -580,7 +580,7 @@ private fun SessionDirectoryCard(
                         )
                     }
                     Column(
-                        modifier = Modifier.padding(top = 2.dp),
+                        modifier = Modifier.padding(top = 1.dp),
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -614,7 +614,7 @@ private fun SessionDirectoryCard(
                         },
                         enabled = !isLoading,
                         modifier = Modifier
-                            .padding(top = 38.dp)
+                            .padding(top = 35.dp)
                             .size(24.dp)
                             .testTag(
                                 if (showArchivedSessions) {

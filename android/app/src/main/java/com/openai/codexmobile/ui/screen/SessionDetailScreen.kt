@@ -843,7 +843,7 @@ private fun GoalCard(
                 )
                 Text(
                     text = primaryStatusText,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2315,17 +2315,17 @@ private fun TranscriptLabelChip(
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = if (compact) 8.dp else 10.dp,
-                vertical = if (compact) 5.dp else 6.dp,
+                horizontal = if (compact) 7.dp else 10.dp,
+                vertical = if (compact) 4.dp else 6.dp,
             ),
-            horizontalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(if (compact) 13.dp else 14.dp),
+                    modifier = Modifier.size(if (compact) 12.dp else 14.dp),
                 )
             }
             Text(
