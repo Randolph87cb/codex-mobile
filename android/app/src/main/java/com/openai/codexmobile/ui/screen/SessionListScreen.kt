@@ -29,11 +29,11 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -264,16 +264,18 @@ fun SessionListScreen(
                     enabled = !isLoading,
                     modifier = Modifier.testTag(TestTags.SessionListFilterCurrentButton),
                     shape = RoundedCornerShape(999.dp),
+                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 ) {
-                    Text("当前")
+                    Text("当前", style = MaterialTheme.typography.labelLarge)
                 }
                 FilledTonalButton(
                     onClick = { },
                     enabled = false,
                     modifier = Modifier.testTag(TestTags.SessionListFilterArchivedButton),
                     shape = RoundedCornerShape(999.dp),
+                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 ) {
-                    Text("已归档")
+                    Text("已归档", style = MaterialTheme.typography.labelLarge)
                 }
             } else {
                 FilledTonalButton(
@@ -281,16 +283,18 @@ fun SessionListScreen(
                     enabled = false,
                     modifier = Modifier.testTag(TestTags.SessionListFilterCurrentButton),
                     shape = RoundedCornerShape(999.dp),
+                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 ) {
-                    Text("当前")
+                    Text("当前", style = MaterialTheme.typography.labelLarge)
                 }
                 OutlinedButton(
                     onClick = { onShowArchivedSessionsChange(true) },
                     enabled = !isLoading,
                     modifier = Modifier.testTag(TestTags.SessionListFilterArchivedButton),
                     shape = RoundedCornerShape(999.dp),
+                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 ) {
-                    Text("已归档")
+                    Text("已归档", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -524,7 +528,7 @@ private fun SessionDirectoryCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        FilledTonalIconButton(
+                        IconButton(
                             onClick = {
                                 if (showArchivedSessions) {
                                     onUnarchiveSession(session.id)
@@ -534,7 +538,7 @@ private fun SessionDirectoryCard(
                             },
                             enabled = !isLoading,
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(28.dp)
                                 .testTag(
                                     if (showArchivedSessions) {
                                         TestTags.SessionListUnarchiveButtonPrefix + session.id
@@ -550,6 +554,7 @@ private fun SessionDirectoryCard(
                                     Icons.Filled.Archive
                                 },
                                 contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                             )
                         }
                     }
