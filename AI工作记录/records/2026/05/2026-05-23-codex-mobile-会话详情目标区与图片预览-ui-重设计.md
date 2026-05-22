@@ -125,6 +125,8 @@
   - 会话列表第十五轮截图，目录头左侧文件夹块、目录名与 `新建` trailing 组进一步弱化并压紧。
 - `./.tmp/ui-screenshots/sessions-showcase-v19.png`
   - 会话列表第十六轮截图，会话卡左侧图标块与标题首行高度关系继续向参考稿收口。
+- `./.tmp/ui-screenshots/sessions-showcase-v20.png`
+  - 会话列表第十七轮截图，右侧状态 badge 与时间行的纵向关系继续向参考稿收口。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
   - 会话详情页第二轮截图，包含新的顶栏样式。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
@@ -157,6 +159,8 @@
   - 会话详情页第十五轮截图，目标卡标题行和正文/chip 节奏继续向参考稿收口。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v20.png`
   - 会话详情页第十六轮截图，目标卡第一行 `目标` 标签与状态文字占比继续向参考稿收口。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v21.png`
+  - 会话详情页第十七轮截图，目标卡正文和 chip 行的右边界继续收整。
 
 ## 验证结果
 
@@ -255,6 +259,11 @@
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
   - 说明：由于并发运行 Gradle 任务会踩到同一份 Kotlin 增量缓存，这轮最终验证改为串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'` 后稳定通过。
+- 右侧状态区与目标卡右边界继续收口后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`，避免再次触发 Kotlin 增量缓存冲突。
 
 ## 备注
 

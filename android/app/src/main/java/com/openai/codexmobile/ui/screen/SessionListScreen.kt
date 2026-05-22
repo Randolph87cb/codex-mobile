@@ -582,11 +582,11 @@ private fun SessionDirectoryCard(
                     Column(
                         modifier = Modifier.padding(top = 1.dp),
                         horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         SessionStatusBadge(status = session.status)
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -599,7 +599,7 @@ private fun SessionDirectoryCard(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(17.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -614,7 +614,7 @@ private fun SessionDirectoryCard(
                         },
                         enabled = !isLoading,
                         modifier = Modifier
-                            .padding(top = 35.dp)
+                            .padding(top = 33.dp)
                             .size(24.dp)
                             .testTag(
                                 if (showArchivedSessions) {

@@ -858,13 +858,14 @@ private fun GoalCard(
             }
             Text(
                 text = objectiveText,
+                modifier = Modifier.padding(end = 36.dp),
                 style = if (detail.goal != null) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
                 maxLines = if (expanded) 4 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
             detail.goal?.let { goal ->
                 FlowRow(
-                    modifier = Modifier.padding(top = 1.dp),
+                    modifier = Modifier.padding(top = 1.dp, end = 36.dp),
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
