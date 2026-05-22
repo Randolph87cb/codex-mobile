@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -366,15 +367,19 @@ private fun AppTopBar(
         title = {
             if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
                 Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
-                    Text(text = resolvedTitle)
+                    Text(
+                        text = resolvedTitle,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
                     Row(
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(5.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {
                         androidx.compose.foundation.Canvas(
                             modifier = Modifier
-                                .padding(top = 1.dp)
-                                .size(8.dp),
+                                .size(7.dp),
                         ) {
                             drawCircle(
                                 color = sessionStatusDotColor,
@@ -383,7 +388,7 @@ private fun AppTopBar(
                         }
                         Text(
                             text = sessionStatusText,
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -394,38 +399,46 @@ private fun AppTopBar(
         },
         navigationIcon = {
             if (isSessionDetailRoute || currentRoute == Routes.Settings) {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier.size(40.dp),
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             }
         },
         actions = {
             if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
-                IconButton(onClick = {}) {
+                IconButton(onClick = {}, modifier = Modifier.size(40.dp)) {
                     Icon(
                         imageVector = Icons.Filled.Refresh,
                         contentDescription = "刷新",
+                        modifier = Modifier.size(22.dp),
                     )
                 }
-                IconButton(onClick = {}) {
+                IconButton(onClick = {}, modifier = Modifier.size(40.dp)) {
                     Icon(
                         imageVector = Icons.Filled.OpenInFull,
                         contentDescription = "展开",
+                        modifier = Modifier.size(22.dp),
                     )
                 }
-                IconButton(onClick = {}) {
+                IconButton(onClick = {}, modifier = Modifier.size(40.dp)) {
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,
                         contentDescription = "复制",
+                        modifier = Modifier.size(22.dp),
                     )
                 }
-                IconButton(onClick = {}) {
+                IconButton(onClick = {}, modifier = Modifier.size(40.dp)) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "更多",
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
