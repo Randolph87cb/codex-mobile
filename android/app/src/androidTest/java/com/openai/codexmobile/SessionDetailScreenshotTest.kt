@@ -103,6 +103,8 @@ class SessionDetailScreenshotTest {
                             subtitle = "修复支付回调签名失败并验证图片上传链路",
                             lastUpdated = "10:17 更新",
                             transcriptPreview = """
+                                Codex：已连接到项目环境。
+
                                 你：请帮我排查支付回调失败，并确认这几张图片的上传展示不要再挡住消息。
 
                                 Codex：我先接入项目环境，再把图片预览改成固定窗口。

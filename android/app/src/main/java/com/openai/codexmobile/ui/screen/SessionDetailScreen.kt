@@ -347,7 +347,7 @@ fun SessionDetailScreen(
                     .padding(horizontal = 1.dp, vertical = 0.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),

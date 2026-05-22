@@ -1020,6 +1020,28 @@
 - 本轮把普通消息进一步收成更接近参考稿的“头部行 + 偏移气泡”结构：助手消息是 `>` 圆徽标加 `Codex` 文本，用户消息是 `你` 文本加纯头像点，消息气泡再相对头像做侧向偏移。
 - 相比 `v72`，`v74` 的左右消息落点关系更接近参考稿；发送图片区仍然保持固定尺寸预览窗，点缩略图看原图的行为没变。
 
+- 调整截图样本顺序和消息列表起点后重新执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行；除真实页面继续压缩消息列表间距外，还把截图样本顺序调整为“助手开场 -> 用户提问 -> 助手回复”，最终以 `v75` 为准。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v75.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v75.png`
+
+## 本轮说明
+
+- 本轮主要收的是首屏消息区的起点：真实页面把 transcript 列表项间距再压了一层，减少目标卡和消息流之间的松散感。
+- 同时截图验证样本改成更接近参考稿的消息顺序，所以 `v75` 比 `v74` 更接近“助手先开场、用户消息居中插入、下方再继续助手回复”的首屏结构；发送图片区仍然保持固定尺寸预览窗。
+
 - 继续压缩状态条、目标卡和消息头部后重新执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
