@@ -826,8 +826,8 @@ private fun GoalCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -865,7 +865,7 @@ private fun GoalCard(
             )
             detail.goal?.let { goal ->
                 FlowRow(
-                    modifier = Modifier.padding(top = 1.dp, end = 36.dp),
+                    modifier = Modifier.padding(end = 36.dp),
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {

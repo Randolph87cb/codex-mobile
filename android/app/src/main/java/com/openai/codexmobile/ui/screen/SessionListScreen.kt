@@ -568,13 +568,14 @@ private fun SessionDirectoryCard(
                         Text(
                             text = session.title,
                             style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = "会话 ID: ${session.id}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.84f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
