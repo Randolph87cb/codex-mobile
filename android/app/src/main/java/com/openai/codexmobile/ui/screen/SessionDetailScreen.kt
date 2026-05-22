@@ -703,7 +703,7 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(11.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
@@ -756,13 +756,13 @@ private fun StatusStrip(
                     onClick = onToggleExpanded,
                     modifier = Modifier
                         .padding(start = 0.dp)
-                        .size(15.dp),
+                        .size(14.dp),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                         contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(9.dp),
+                        modifier = Modifier.size(8.dp),
                     )
                 }
             }
@@ -840,7 +840,7 @@ private fun GoalCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(11.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
@@ -877,13 +877,13 @@ private fun GoalCard(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(start = 4.dp)
-                        .size(12.dp),
+                        .size(11.dp),
                 )
             }
             Text(
                 text = objectiveText,
                 modifier = Modifier.padding(end = 20.dp),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.labelLarge,
                 maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1016,7 +1016,7 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 30.dp)
+            .defaultMinSize(minHeight = 28.dp)
             .padding(horizontal = 2.dp, vertical = 1.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1024,7 +1024,7 @@ private fun SessionStatusMetric(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(7.dp),
+            modifier = Modifier.size(6.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
@@ -1048,7 +1048,7 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(18.dp)
+            .height(16.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.07f)),
     )
 }
@@ -1483,7 +1483,7 @@ private fun TranscriptBubbleCard(
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(if (isUser) 0.68f else 0.73f),
+                .fillMaxWidth(if (isUser) 0.66f else 0.71f),
             shape = RoundedCornerShape(
                 topStart = 14.dp,
                 topEnd = 14.dp,
@@ -1496,7 +1496,7 @@ private fun TranscriptBubbleCard(
             ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 if (isCollapsible) {
@@ -1555,13 +1555,13 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.73f),
+                .fillMaxWidth(0.71f),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(7.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier.padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 TranscriptToggleHeader(
                     bubble = null,
@@ -1577,7 +1577,7 @@ private fun ExecutionProcessCard(
                 )
 
                 if (expanded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         group.activities.forEachIndexed { activityIndex, bubble ->
                             ExecutionActivityCard(
                                 toggleTag = TestTags.SessionDetailExecutionEntryTogglePrefix + "${index}_${activityIndex}",
@@ -1614,11 +1614,11 @@ private fun ExecutionActivityCard(
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(13.dp),
     ) {
         Column(
-            modifier = Modifier.padding(7.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             TranscriptToggleHeader(
                 bubble = bubble,
@@ -1660,7 +1660,7 @@ private fun TranscriptToggleHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -1682,7 +1682,7 @@ private fun TranscriptToggleHeader(
             )
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1690,13 +1690,13 @@ private fun TranscriptToggleHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(20.dp)
+                .size(18.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(12.dp),
+                modifier = Modifier.size(11.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
@@ -1707,7 +1707,7 @@ private fun TranscriptToggleHeader(
                 Icons.Default.KeyboardArrowDown
             },
             contentDescription = if (expanded) "收起消息" else "展开消息",
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(13.dp),
         )
     }
 }
@@ -1722,12 +1722,12 @@ private fun TranscriptStaticHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
@@ -1740,7 +1740,7 @@ private fun TranscriptStaticHeader(
             title?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1749,13 +1749,13 @@ private fun TranscriptStaticHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(22.dp)
+                .size(18.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(13.dp),
+                modifier = Modifier.size(11.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
