@@ -853,6 +853,7 @@ private fun GoalCard(
                     imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起目标详情" else "展开目标详情",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 6.dp),
                 )
             }
             Text(

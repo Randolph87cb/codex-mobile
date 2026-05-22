@@ -37,6 +37,7 @@
   - 第八轮继续压缩目标卡外形和屏内纵向节奏，让目标卡与下方消息卡的关系更接近参考稿。
   - 第九轮继续缩小目标卡指标 chip 的尺寸和间距，让整行更接近参考稿的轻量状态标签。
   - 第十轮继续弱化标题行里的“目标”标签，让标签和状态文字的相对比例更接近参考稿。
+  - 第十一轮继续调整目标卡标题行右侧展开箭头的留白，让右侧呼吸感更接近参考稿。
 - `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
   - 按参考稿改成浅色背景 + 蓝色主状态卡 + 单一主按钮结构。
   - 桥接地址输入区改成更接近参考稿的图标前缀和圆角描边框。
@@ -51,6 +52,7 @@
   - 第八轮缩小会话卡左侧图标块并重新校正文字起点，继续向参考稿的横向比例靠拢。
   - 第九轮继续收紧标题统计区和顶部分段胶囊，让横向关系更接近参考稿。
   - 第十轮继续缩小目录头里的文件夹图标块，让分组头部更接近参考稿的轻量感。
+  - 第十一轮继续收紧会话卡右侧状态 badge 的尺寸，减少与参考稿之间的厚重感差异。
 - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
   - 连接页和会话列表页移除重复顶栏。
   - 会话详情顶栏改成更接近参考图的标题 + 在线状态样式。
@@ -105,6 +107,8 @@
   - 会话列表第九轮截图，标题区和分段胶囊的横向关系进一步收紧。
 - `./.tmp/ui-screenshots/sessions-showcase-v13.png`
   - 会话列表第十轮截图，目录头文件夹图标块继续收小。
+- `./.tmp/ui-screenshots/sessions-showcase-v14.png`
+  - 会话列表第十一轮截图，右侧状态 badge 继续收小。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
   - 会话详情页第二轮截图，包含新的顶栏样式。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
@@ -125,6 +129,8 @@
   - 会话详情页第九轮截图，目标卡指标 chip 更小更紧凑。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v14.png`
   - 会话详情页第十轮截图，目标卡标题行里标签与状态文字的比例继续向参考稿靠拢。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v15.png`
+  - 会话详情页第十一轮截图，目标卡标题行右侧箭头留白继续收口。
 
 ## 验证结果
 
@@ -183,6 +189,12 @@
   - `cd android; .\gradlew.bat installDebug`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
 - 目录头图标块与目标标题行比例继续收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+- 状态 badge 与目标标题行右侧留白继续收口后再次执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过
