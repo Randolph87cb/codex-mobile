@@ -862,8 +862,8 @@ private fun GoalCard(
             )
             detail.goal?.let { goal ->
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     GoalMetricChip(
                         text = primaryStatusText,
@@ -971,7 +971,7 @@ private fun GoalMetricChip(
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
         )
     }

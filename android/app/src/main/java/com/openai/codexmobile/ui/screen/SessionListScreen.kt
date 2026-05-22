@@ -235,12 +235,12 @@ fun SessionListScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -254,8 +254,8 @@ fun SessionListScreen(
                 ) {
                     Text(
                         text = sessions.size.toString(),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }
@@ -264,8 +264,8 @@ fun SessionListScreen(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SessionListFilterChip(
@@ -380,19 +380,19 @@ private fun SessionListFilterChip(
     ) {
         Box(
             modifier = Modifier
-                .defaultMinSize(minWidth = 68.dp, minHeight = 34.dp)
+                .defaultMinSize(minWidth = 64.dp, minHeight = 32.dp)
                 .border(
                     width = if (selected) 1.dp else 0.dp,
                     color = borderColor,
                     shape = RoundedCornerShape(999.dp),
                 )
                 .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 7.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = if (selected) {
                     MaterialTheme.colorScheme.onSurface
                 } else {
