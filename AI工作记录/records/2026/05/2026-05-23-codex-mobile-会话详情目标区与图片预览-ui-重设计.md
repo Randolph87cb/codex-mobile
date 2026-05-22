@@ -33,6 +33,7 @@
   - 将发送区附件托盘改成统一卡片样式和固定预览窗，避免竖图撑高。
   - 调整输入区、卡片圆角和留白，让整体更接近用户给出的浅色参考风格。
   - 第六轮把目标卡首行的重复状态胶囊移到底部指标区，首行收成更接近参考稿的“标签 + 状态 + 展开”关系。
+  - 第七轮把状态条改成单外框四列指标 + 细分隔线，缩小外层与列间边距，继续贴近参考稿。
 - `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
   - 按参考稿改成浅色背景 + 蓝色主状态卡 + 单一主按钮结构。
   - 桥接地址输入区改成更接近参考稿的图标前缀和圆角描边框。
@@ -43,6 +44,7 @@
   - 第三轮继续把右侧归档动作弱化成更轻的 icon，进一步贴近参考稿里“卡片主体优先、动作退后”的视觉关系。
   - 第四轮把“当前 / 已归档”改成真正的分段胶囊，缩小高宽比并统一选中态层级，继续往参考稿靠。
   - 第六轮继续收紧目录头，把右侧“新建 / 展开”区改成更轻的文字+箭头关系，减少按钮感。
+  - 第七轮继续收右侧信息列，把状态、时间、进入箭头和归档动作拆成更接近参考稿的上下节奏，减轻右侧纵向拥挤。
 - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
   - 连接页和会话列表页移除重复顶栏。
   - 会话详情顶栏改成更接近参考图的标题 + 在线状态样式。
@@ -89,6 +91,8 @@
   - 会话列表第五轮截图，顶部“当前 / 已归档”已改成更接近参考稿的分段胶囊。
 - `./.tmp/ui-screenshots/sessions-showcase-v9.png`
   - 会话列表第六轮截图，目录头右侧动作区进一步轻量化。
+- `./.tmp/ui-screenshots/sessions-showcase-v10.png`
+  - 会话列表第七轮截图，卡片右侧状态列进一步收紧。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
   - 会话详情页第二轮截图，包含新的顶栏样式。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
@@ -101,6 +105,8 @@
   - 会话详情页第五轮截图，状态条四个指标块进一步统一，目标卡与图片托盘继续保持紧凑布局。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v10.png`
   - 会话详情页第六轮截图，目标卡首行比例继续向参考稿收拢。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v11.png`
+  - 会话详情页第七轮截图，状态条改成更接近参考稿的单外框四列结构。
 
 ## 验证结果
 
@@ -135,6 +141,12 @@
   - `cd android; .\gradlew.bat installDebugAndroidTest`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
 - 目录头与目标卡首行微调后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+- 右侧状态列与状态条外框进一步拟真后再次执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过

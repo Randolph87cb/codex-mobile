@@ -527,7 +527,7 @@ private fun SessionDirectoryCard(
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                 ) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -559,52 +559,61 @@ private fun SessionDirectoryCard(
                         )
                     }
                     Column(
+                        modifier = Modifier.padding(top = 2.dp),
                         horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         SessionStatusBadge(status = session.status)
-                        Text(
-                            text = session.lastUpdated,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        IconButton(
-                            onClick = {
-                                if (showArchivedSessions) {
-                                    onUnarchiveSession(session.id)
-                                } else {
-                                    onArchiveSession(session)
-                                }
-                            },
-                            enabled = !isLoading,
-                            modifier = Modifier
-                                .size(28.dp)
-                                .testTag(
-                                    if (showArchivedSessions) {
-                                        TestTags.SessionListUnarchiveButtonPrefix + session.id
-                                    } else {
-                                        TestTags.SessionListArchiveButtonPrefix + session.id
-                                    },
-                                ),
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            Text(
+                                text = session.lastUpdated,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             Icon(
-                                imageVector = if (showArchivedSessions) {
-                                    Icons.Filled.Unarchive
-                                } else {
-                                    Icons.Filled.Archive
-                                },
-                                contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    IconButton(
+                        onClick = {
+                            if (showArchivedSessions) {
+                                onUnarchiveSession(session.id)
+                            } else {
+                                onArchiveSession(session)
+                            }
+                        },
+                        enabled = !isLoading,
+                        modifier = Modifier
+                            .padding(top = 38.dp)
+                            .size(24.dp)
+                            .testTag(
+                                if (showArchivedSessions) {
+                                    TestTags.SessionListUnarchiveButtonPrefix + session.id
+                                } else {
+                                    TestTags.SessionListArchiveButtonPrefix + session.id
+                                },
+                            ),
+                    ) {
+                        Icon(
+                            imageVector = if (showArchivedSessions) {
+                                Icons.Filled.Unarchive
+                            } else {
+                                Icons.Filled.Archive
+                            },
+                            contentDescription = if (showArchivedSessions) "恢复归档" else "归档",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.56f),
+                        )
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
 package com.openai.codexmobile.ui.screen
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ScrollState
@@ -682,15 +683,15 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -698,7 +699,7 @@ private fun StatusStrip(
                     .testTag(TestTags.SessionDetailStatusButton)
                     .clickable { onToggleExpanded() },
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 SessionStatusMetric(
                     label = "会话",
@@ -706,18 +707,21 @@ private fun StatusStrip(
                     icon = statusIcon,
                     modifier = Modifier.weight(1f),
                 )
+                StatusMetricDivider()
                 SessionStatusMetric(
                     label = "连接",
                     value = if (isDraft) "草稿" else if (sessionRealtimeState.isConnected) "已连接" else "快照",
                     icon = connectionIcon,
                     modifier = Modifier.weight(1f),
                 )
+                StatusMetricDivider()
                 SessionStatusMetric(
                     label = "排队",
                     value = if (queuedInputs.isEmpty()) "无排队" else "${queuedInputs.size} 条",
                     icon = queueIcon,
                     modifier = Modifier.weight(1f),
                 )
+                StatusMetricDivider()
                 SessionStatusMetric(
                     label = "审批",
                     value = if (sessionRealtimeState.pendingApproval != null) "待处理" else "正常",
@@ -730,7 +734,9 @@ private fun StatusStrip(
                 )
                 IconButton(
                     onClick = onToggleExpanded,
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .size(30.dp),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
@@ -978,38 +984,42 @@ private fun SessionStatusMetric(
     icon: ImageVector,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.background,
+    Column(
+        modifier = modifier
+            .defaultMinSize(minHeight = 62.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier
-                .defaultMinSize(minHeight = 64.dp)
-                .padding(horizontal = 7.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(15.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
+}
+
+@Composable
+private fun StatusMetricDivider() {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(44.dp)
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)),
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
