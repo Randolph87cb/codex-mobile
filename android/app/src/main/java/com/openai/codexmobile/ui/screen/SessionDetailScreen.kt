@@ -1473,12 +1473,12 @@ private fun TranscriptBubbleCard(
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(if (isUser) 0.84f else 0.9f),
+                .fillMaxWidth(if (isUser) 0.82f else 0.88f),
             shape = RoundedCornerShape(
-                topStart = 20.dp,
-                topEnd = 20.dp,
-                bottomStart = if (isUser) 20.dp else 9.dp,
-                bottomEnd = if (isUser) 9.dp else 20.dp,
+                topStart = 18.dp,
+                topEnd = 18.dp,
+                bottomStart = if (isUser) 18.dp else 8.dp,
+                bottomEnd = if (isUser) 8.dp else 18.dp,
             ),
             colors = CardDefaults.cardColors(
                 containerColor = backgroundColor,
@@ -1486,8 +1486,8 @@ private fun TranscriptBubbleCard(
             ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 if (isCollapsible) {
                     TranscriptToggleHeader(
@@ -1545,13 +1545,13 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.9f),
-            shape = RoundedCornerShape(24.dp),
+                .fillMaxWidth(0.88f),
+            shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
             ) {
                 TranscriptToggleHeader(
                     bubble = null,

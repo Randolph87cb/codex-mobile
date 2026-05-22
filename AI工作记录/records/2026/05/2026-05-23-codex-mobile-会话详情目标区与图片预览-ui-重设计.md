@@ -605,3 +605,20 @@
 
 - 本轮没有再动消息正文宽度和字号，只继续弱化复制按钮本身：从带底色的 `FilledTonalIconButton` 收成了更轻的透明 `IconButton`。
 - 这样能继续保留复制能力和测试标记，但右上角动作不再像一个显眼按钮，更接近参考图里“动作退后”的感觉。
+
+- 消息卡本体继续压缩后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v48.png`
+
+## 本轮说明
+
+- 本轮继续压的是消息卡本体：用户/助手消息宽度从 `0.84/0.90` 收成 `0.82/0.88`，气泡圆角和内边距也同步缩小。
+- 执行过程卡也跟着收成更窄更薄，目的是把消息流整体拉回更接近参考稿那种轻薄、留白更多的比例。
