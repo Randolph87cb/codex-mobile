@@ -840,12 +840,12 @@ private fun GoalCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(horizontal = 11.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TranscriptLabelChip(
@@ -873,36 +873,38 @@ private fun GoalCard(
             Text(
                 text = objectiveText,
                 modifier = Modifier.padding(end = 36.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (expanded) 4 else 1,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            detail.goal?.let { goal ->
-                FlowRow(
-                    modifier = Modifier.padding(end = 36.dp),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    GoalMetricChip(
-                        text = primaryStatusText,
-                        containerColor = when (primaryStatusText) {
-                            "进行中" -> MaterialTheme.colorScheme.primaryContainer
-                            "已完成" -> MaterialTheme.colorScheme.tertiaryContainer
-                            "待开始", "未设置" -> MaterialTheme.colorScheme.surfaceVariant
-                            else -> MaterialTheme.colorScheme.secondaryContainer
-                        },
-                        contentColor = when (primaryStatusText) {
-                            "进行中" -> MaterialTheme.colorScheme.onPrimaryContainer
-                            "已完成" -> MaterialTheme.colorScheme.onTertiaryContainer
-                            "待开始", "未设置" -> MaterialTheme.colorScheme.onSurfaceVariant
-                            else -> MaterialTheme.colorScheme.onSecondaryContainer
-                        },
-                    )
-                    GoalMetricChip(text = formatTokenUsage(goal.tokensUsed))
-                    goal.tokenBudget?.let { budget ->
-                        GoalMetricChip(text = "预算 $budget")
+            if (expanded) {
+                detail.goal?.let { goal ->
+                    FlowRow(
+                        modifier = Modifier.padding(end = 36.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        GoalMetricChip(
+                            text = primaryStatusText,
+                            containerColor = when (primaryStatusText) {
+                                "进行中" -> MaterialTheme.colorScheme.primaryContainer
+                                "已完成" -> MaterialTheme.colorScheme.tertiaryContainer
+                                "待开始", "未设置" -> MaterialTheme.colorScheme.surfaceVariant
+                                else -> MaterialTheme.colorScheme.secondaryContainer
+                            },
+                            contentColor = when (primaryStatusText) {
+                                "进行中" -> MaterialTheme.colorScheme.onPrimaryContainer
+                                "已完成" -> MaterialTheme.colorScheme.onTertiaryContainer
+                                "待开始", "未设置" -> MaterialTheme.colorScheme.onSurfaceVariant
+                                else -> MaterialTheme.colorScheme.onSecondaryContainer
+                            },
+                        )
+                        GoalMetricChip(text = formatTokenUsage(goal.tokensUsed))
+                        goal.tokenBudget?.let { budget ->
+                            GoalMetricChip(text = "预算 $budget")
+                        }
+                        GoalMetricChip(text = formatGoalDuration(goal.timeUsedSeconds))
                     }
-                    GoalMetricChip(text = formatGoalDuration(goal.timeUsedSeconds))
                 }
             }
 

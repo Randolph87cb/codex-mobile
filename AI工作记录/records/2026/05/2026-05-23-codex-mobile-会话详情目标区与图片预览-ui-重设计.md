@@ -486,3 +486,20 @@
 
 - 本轮继续压发送图片区本身，不改固定预览窗和点开原图能力：缩略卡宽高从 `106x92dp` 收成 `98x84dp`，头部图标块、容器圆角和内边距同步收小。
 - 失败态去掉了单独占一行的重复“上传失败”文案，只保留行内 `失败 / 重试`，并把原测试 tag 保留在失败状态文字上，兼顾首屏高度和现有 UI 测试稳定性。
+
+- 目标卡默认态继续压缩后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v43.png`
+
+## 本轮说明
+
+- 本轮继续压缩目标卡默认态，不再默认显示 `token / 预算 / 耗时` 这排指标，只保留标题状态和一行目标内容；完整指标仍保留在展开态。
+- 同时把目标卡正文从 `bodyMedium` 收成 `bodySmall`，整体 padding 和行间距再压一层，目的就是进一步减少它对首屏消息区的遮挡。
