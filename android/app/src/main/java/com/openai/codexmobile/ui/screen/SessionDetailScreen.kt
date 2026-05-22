@@ -333,11 +333,6 @@ fun SessionDetailScreen(
                     .verticalScroll(currentTranscriptScrollState),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                ConversationHeader(
-                    detail = detail,
-                    sessionRealtimeState = sessionRealtimeState,
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
                     liveActivities = sessionRealtimeState.liveExecutionActivities,
@@ -827,7 +822,7 @@ private fun GoalCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 5.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
@@ -1847,29 +1842,22 @@ private fun TranscriptImageGallery(
     testTagPrefix: String,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(items = images, key = { it.index }) { image ->
-                FixedPreviewImageCard(
-                    source = image.part.source,
-                    title = image.part.altText,
-                    bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
-                    previewHeight = TranscriptInlineImageHeight,
-                    modifier = Modifier
-                        .width(TranscriptInlineImageWidth)
-                        .testTag(TestTags.SessionDetailTranscriptImagePrefix + "${testTagPrefix}_${image.index}"),
-                    onOpen = { onOpenImagePreview(image.part.altText, image.part.source) },
-                    showTitle = false,
-                    containerColor = MaterialTheme.colorScheme.background,
-                )
-            }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(items = images, key = { it.index }) { image ->
+            FixedPreviewImageCard(
+                source = image.part.source,
+                title = image.part.altText,
+                bridgeEndpoint = bridgeEndpoint,
+                bridgeAuthToken = bridgeAuthToken,
+                previewHeight = TranscriptInlineImageHeight,
+                modifier = Modifier
+                    .width(TranscriptInlineImageWidth)
+                    .testTag(TestTags.SessionDetailTranscriptImagePrefix + "${testTagPrefix}_${image.index}"),
+                onOpen = { onOpenImagePreview(image.part.altText, image.part.source) },
+                showTitle = false,
+                containerColor = MaterialTheme.colorScheme.background,
+            )
         }
-        Text(
-            text = "点击查看原图",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

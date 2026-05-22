@@ -335,6 +335,21 @@
 
 - 会话列表：`.tmp/ui-screenshots/sessions-showcase-v27.png`
 - 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v29.png`
+- 首屏留白 / 断开按钮降权与详情页 transcript 精简后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 本轮截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v34.png`
+
+## 当前残余
+
+- 详情页 showcase 的 transcript 卡顶部仍会露出一条浅色顶边，属于当前回放样本视角问题，不影响发送图片区固定窗口本身；后续如果继续追像素级，需要再单独收这块验证视角。
 
 ## 备注
 

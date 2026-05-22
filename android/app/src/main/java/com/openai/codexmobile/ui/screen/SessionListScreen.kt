@@ -183,7 +183,7 @@ fun SessionListScreen(
             .fillMaxSize()
             .padding(paddingValues)
             .padding(horizontal = 24.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -357,15 +357,24 @@ fun SessionListScreen(
             }
         }
 
-        OutlinedButton(
+        TextButton(
             onClick = onDisconnect,
             modifier = Modifier
                 .align(Alignment.End)
+                .padding(end = 2.dp)
                 .testTag(TestTags.SessionListDisconnectButton),
-            shape = RoundedCornerShape(999.dp),
         ) {
-            Icon(imageVector = Icons.Filled.PowerSettingsNew, contentDescription = null)
-            Text("断开连接", modifier = Modifier.padding(start = 8.dp))
+            Icon(
+                imageVector = Icons.Filled.PowerSettingsNew,
+                contentDescription = null,
+                modifier = Modifier.size(17.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "断开连接",
+                modifier = Modifier.padding(start = 6.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

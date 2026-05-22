@@ -165,11 +165,6 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
         transcriptPreview = """
             你：请帮我排查支付回调失败，并确认这几张图片的上传展示不要再挡住消息。
 
-            Codex：我先接入项目环境，再把图片预览改成固定窗口。
-            ![立绘]($portraitImage)
-            ![侧脸]($squareImage)
-            ![横图]($landscapeImage)
-
             Codex：已定位到签名串拼接顺序不一致，接下来调整回调验签并复测上传链路。
         """.trimIndent(),
         cwd = "D:\\workspace\\codex-mobile",
