@@ -125,8 +125,8 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 110.dp
-private val PendingImagePreviewHeight = 88.dp
+private val PendingImagePreviewWidth = 106.dp
+private val PendingImagePreviewHeight = 92.dp
 
 @Composable
 fun SessionDetailScreen(
@@ -455,46 +455,44 @@ private fun PendingImageAttachmentTray(
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 14.dp, vertical = 11.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(15.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
-                        modifier = Modifier.padding(10.dp),
+                        modifier = Modifier.padding(9.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
                     Text(text = "已附加图片（${attachments.size}）", style = MaterialTheme.typography.titleSmall)
                     Text(
                         text = when {
-                            failedCount > 0 -> "有 $failedCount 张上传失败，请重试或移除。"
-                            uploadingCount > 0 -> "原图预上传中，还剩 $uploadingCount 张。"
-                            else -> "原图已预上传，发送时只引用 bridge 路径。"
+                            failedCount > 0 -> "$failedCount 张待处理，点缩略图看原图。"
+                            uploadingCount > 0 -> "$uploadingCount 张上传中，发送前会自动就绪。"
+                            else -> "固定预览窗，点缩略图看原图。"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            GoalMetricChip(
-                text = "固定预览窗，点击查看原图",
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -522,12 +520,12 @@ private fun PendingImageThumbnailCard(
 ) {
     Surface(
         modifier = Modifier.width(PendingImagePreviewWidth),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             FixedPreviewImageCard(
                 source = attachment.previewSource,
@@ -543,13 +541,13 @@ private fun PendingImageThumbnailCard(
             Text(
                 text = attachment.displayName,
                 style = MaterialTheme.typography.labelMedium,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
@@ -586,7 +584,7 @@ private fun PendingImageThumbnailCard(
                 }
                 Text(
                     text = if (attachment.uploadState == PendingImageUploadState.Failed) "重试" else "移除",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .clickable(
@@ -596,13 +594,19 @@ private fun PendingImageThumbnailCard(
                                 onRemove
                             },
                         )
-                        .testTag(TestTags.SessionDetailClearImageButton + "_" + attachment.localId),
+                        .testTag(
+                            if (attachment.uploadState == PendingImageUploadState.Failed) {
+                                TestTags.SessionDetailPendingImageRetryButtonPrefix + attachment.localId
+                            } else {
+                                TestTags.SessionDetailClearImageButton + "_" + attachment.localId
+                            },
+                        ),
                 )
             }
             if (attachment.uploadState == PendingImageUploadState.Failed) {
-                attachment.uploadError?.takeIf { it.isNotBlank() }?.let { uploadError ->
+                attachment.uploadError?.takeIf { it.isNotBlank() }?.let {
                     Text(
-                        text = uploadError,
+                        text = "上传失败",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                         maxLines = 1,
