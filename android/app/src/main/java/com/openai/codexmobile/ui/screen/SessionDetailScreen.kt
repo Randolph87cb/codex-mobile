@@ -127,8 +127,8 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 86.dp
-private val PendingImagePreviewHeight = 74.dp
+private val PendingImagePreviewWidth = 84.dp
+private val PendingImagePreviewHeight = 72.dp
 private val TranscriptBodyTextStyle = TextStyle(
     fontSize = 14.sp,
     lineHeight = 18.sp,
@@ -299,8 +299,8 @@ fun SessionDetailScreen(
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 11.dp, vertical = 5.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         StatusStrip(
             detail = detail,
@@ -338,10 +338,10 @@ fun SessionDetailScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 2.dp, vertical = 2.dp)
+                    .padding(horizontal = 1.dp, vertical = 1.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
@@ -379,27 +379,27 @@ fun SessionDetailScreen(
             )
         }
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(15.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 5.dp, vertical = 5.dp),
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 FilledTonalIconButton(
                     onClick = onPickImage,
                     enabled = !isLoading && detail != null,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(39.dp)
                         .testTag(TestTags.SessionDetailAttachImageButton),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = "添加图片",
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(15.dp),
                     )
                 }
                 OutlinedTextField(
@@ -407,7 +407,7 @@ fun SessionDetailScreen(
                     onValueChange = onDraftMessageChange,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 40.dp)
+                        .heightIn(min = 39.dp)
                         .testTag(TestTags.SessionDetailDraftField),
                     placeholder = {
                         Text(
@@ -419,7 +419,7 @@ fun SessionDetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(13.dp),
                     maxLines = 3,
                 )
                 Button(
@@ -429,21 +429,21 @@ fun SessionDetailScreen(
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
                     modifier = Modifier
-                        .defaultMinSize(minWidth = 40.dp, minHeight = 40.dp)
+                        .defaultMinSize(minWidth = 39.dp, minHeight = 39.dp)
                         .testTag(TestTags.SessionDetailSendButton),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(13.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(13.dp),
                             strokeWidth = 2.dp,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = if (draftSession != null) "开始" else "发送",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(15.dp),
                         )
                     }
                 }
@@ -468,27 +468,27 @@ private fun PendingImageAttachmentTray(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .padding(horizontal = 7.dp, vertical = 5.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(9.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
-                        modifier = Modifier.padding(5.dp).size(15.dp),
+                        modifier = Modifier.padding(4.dp).size(14.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
@@ -500,7 +500,7 @@ private fun PendingImageAttachmentTray(
                     Text(
                         text = when {
                             failedCount > 0 -> "$failedCount 张待处理，点缩略图看原图。"
-                            uploadingCount > 0 -> "$uploadingCount 张上传中，发送前会自动就绪。"
+                            uploadingCount > 0 -> "$uploadingCount 张上传中。"
                             else -> "点缩略图看原图。"
                         },
                         style = MaterialTheme.typography.labelSmall,
@@ -510,7 +510,7 @@ private fun PendingImageAttachmentTray(
             }
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -538,12 +538,12 @@ private fun PendingImageThumbnailCard(
 ) {
     Surface(
         modifier = Modifier.width(PendingImagePreviewWidth),
-        shape = RoundedCornerShape(13.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             FixedPreviewImageCard(
                 source = attachment.previewSource,
@@ -565,7 +565,7 @@ private fun PendingImageThumbnailCard(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
@@ -577,7 +577,7 @@ private fun PendingImageThumbnailCard(
                 ) {
                     when (attachment.uploadState) {
                         PendingImageUploadState.Uploading -> {
-                            CircularProgressIndicator(modifier = Modifier.size(10.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(9.dp), strokeWidth = 2.dp)
                             Text("上传中", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
 
@@ -585,7 +585,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.CheckCircle,
                                 contentDescription = null,
-                                modifier = Modifier.size(12.dp),
+                                modifier = Modifier.size(11.dp),
                             )
                             Text("已就绪", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
@@ -594,7 +594,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.Error,
                                 contentDescription = null,
-                                modifier = Modifier.size(12.dp),
+                                modifier = Modifier.size(11.dp),
                             )
                             Text(
                                 "失败",
@@ -702,14 +702,14 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 1.dp, vertical = 1.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Row(
@@ -755,13 +755,13 @@ private fun StatusStrip(
                     onClick = onToggleExpanded,
                     modifier = Modifier
                         .padding(start = 0.dp)
-                        .size(20.dp),
+                        .size(18.dp),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                         contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(11.dp),
                     )
                 }
             }
@@ -839,19 +839,19 @@ private fun GoalCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 8.dp, vertical = 2.dp),
+                .padding(horizontal = 7.dp, vertical = 1.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TranscriptLabelChip(
@@ -863,7 +863,7 @@ private fun GoalCard(
                 )
                 Text(
                     text = primaryStatusText,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f),
                     maxLines = 1,
@@ -876,12 +876,12 @@ private fun GoalCard(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(start = 4.dp)
-                        .size(16.dp),
+                        .size(14.dp),
                 )
             }
             Text(
                 text = objectiveText,
-                modifier = Modifier.padding(end = 28.dp),
+                modifier = Modifier.padding(end = 24.dp),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
@@ -889,9 +889,9 @@ private fun GoalCard(
             if (expanded) {
                 detail.goal?.let { goal ->
                     FlowRow(
-                        modifier = Modifier.padding(end = 28.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(end = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                         GoalMetricChip(
                             text = primaryStatusText,
@@ -1000,7 +1000,7 @@ private fun GoalMetricChip(
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
         )
     }
@@ -1015,15 +1015,15 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 37.dp)
-            .padding(horizontal = 3.dp, vertical = 1.dp),
+            .defaultMinSize(minHeight = 35.dp)
+            .padding(horizontal = 2.dp, vertical = 1.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(10.dp),
+            modifier = Modifier.size(9.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
@@ -1033,7 +1033,7 @@ private fun SessionStatusMetric(
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 2,
@@ -1047,7 +1047,7 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(24.dp)
+            .height(22.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.07f)),
     )
 }
@@ -1482,12 +1482,12 @@ private fun TranscriptBubbleCard(
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(if (isUser) 0.77f else 0.82f),
+                .fillMaxWidth(if (isUser) 0.75f else 0.8f),
             shape = RoundedCornerShape(
-                topStart = 15.dp,
-                topEnd = 15.dp,
-                bottomStart = if (isUser) 15.dp else 7.dp,
-                bottomEnd = if (isUser) 7.dp else 15.dp,
+                topStart = 14.dp,
+                topEnd = 14.dp,
+                bottomStart = if (isUser) 14.dp else 6.dp,
+                bottomEnd = if (isUser) 6.dp else 14.dp,
             ),
             colors = CardDefaults.cardColors(
                 containerColor = backgroundColor,
@@ -1495,8 +1495,8 @@ private fun TranscriptBubbleCard(
             ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 if (isCollapsible) {
                     TranscriptToggleHeader(
@@ -1554,13 +1554,13 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.82f),
-            shape = RoundedCornerShape(18.dp),
+                .fillMaxWidth(0.8f),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(9.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TranscriptToggleHeader(
                     bubble = null,
@@ -1576,7 +1576,7 @@ private fun ExecutionProcessCard(
                 )
 
                 if (expanded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         group.activities.forEachIndexed { activityIndex, bubble ->
                             ExecutionActivityCard(
                                 toggleTag = TestTags.SessionDetailExecutionEntryTogglePrefix + "${index}_${activityIndex}",
@@ -1613,11 +1613,11 @@ private fun ExecutionActivityCard(
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(14.dp),
     ) {
         Column(
-            modifier = Modifier.padding(9.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             TranscriptToggleHeader(
                 bubble = bubble,
@@ -1659,7 +1659,7 @@ private fun TranscriptToggleHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -1667,7 +1667,7 @@ private fun TranscriptToggleHeader(
                 .weight(1f)
                 .testTag(toggleTag)
                 .clickable(onClick = onToggle),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
@@ -1689,13 +1689,13 @@ private fun TranscriptToggleHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(22.dp)
+                .size(20.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(13.dp),
+                modifier = Modifier.size(12.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
@@ -1706,7 +1706,7 @@ private fun TranscriptToggleHeader(
                 Icons.Default.KeyboardArrowDown
             },
             contentDescription = if (expanded) "收起消息" else "展开消息",
-            modifier = Modifier.size(15.dp),
+            modifier = Modifier.size(14.dp),
         )
     }
 }

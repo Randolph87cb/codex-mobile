@@ -821,3 +821,25 @@
 
 - 本轮继续收的是整页默认态密度：状态条、目标卡、消息卡、发送图片区和输入条都再压了一层，首屏让给消息区的空间又多了一点，整体更接近参考稿的轻薄比例。
 - 发送图片区继续保持固定尺寸预览窗，但托盘外层、头部 icon 块、卡片间距和单卡窗口都更薄；消息卡宽度也继续收窄，所以整页横向和纵向重心都比 `v59` 更稳。
+
+- 详情页默认态继续压缩并导出新图后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行，并沿用仓库内 `platform-tools\adb.exe`；截图前先清空设备侧导出目录，确保拉回的是本轮最新图片。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v61.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v61.png`
+
+## 本轮说明
+
+- 本轮继续压的是详情页默认态最显眼的几块：状态条、目标卡、消息卡、发送图片区和输入条都再薄了一层，首屏消息区的视觉占比继续提高。
+- 发送图片区仍然保持固定尺寸预览窗，但托盘头部、单卡圆角、底部状态/操作行和缩略窗口都进一步收紧；消息气泡和执行过程卡也同步变窄，所以 `v61` 比 `v60` 更接近参考稿那种轻量控制台比例。
