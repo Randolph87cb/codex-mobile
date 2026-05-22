@@ -799,3 +799,25 @@
 
 - 本轮把截图验证从“内容区局部图”补成了“带顶栏的整页图”，所以 `v59` 现在能直接对应参考稿里的会话详情整页构图，验证信号比前几轮更强。
 - 真实详情页里也继续把整页节奏和输入区收了一层：外层留白更小，输入条圆角、按钮尺寸和内部间距都更薄，首屏更接近参考图那种轻薄控制台比例。
+
+- 整页默认态继续收紧并导出新图后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行，并统一使用仓库内 `platform-tools\adb.exe`；导图前先清空设备侧 `/sdcard/Download/codex-mobile-ui/*.png`，确保拉回的是本轮新截图。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v60.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v60.png`
+
+## 本轮说明
+
+- 本轮继续收的是整页默认态密度：状态条、目标卡、消息卡、发送图片区和输入条都再压了一层，首屏让给消息区的空间又多了一点，整体更接近参考稿的轻薄比例。
+- 发送图片区继续保持固定尺寸预览窗，但托盘外层、头部 icon 块、卡片间距和单卡窗口都更薄；消息卡宽度也继续收窄，所以整页横向和纵向重心都比 `v59` 更稳。
