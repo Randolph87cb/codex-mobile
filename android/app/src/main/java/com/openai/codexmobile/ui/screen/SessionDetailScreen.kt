@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Speed
@@ -1458,8 +1459,8 @@ private fun TranscriptBubbleCard(
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
         val backgroundColor = when (bubble.speaker) {
-            TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
-            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.surfaceVariant
+            TranscriptSpeaker.User -> MaterialTheme.colorScheme.secondaryContainer
+            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.primaryContainer
             TranscriptSpeaker.System -> when (bubble.kind) {
                 TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
                 TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.secondaryContainer
@@ -1469,8 +1470,8 @@ private fun TranscriptBubbleCard(
             }
         }
         val contentColor = when (bubble.speaker) {
-            TranscriptSpeaker.User -> MaterialTheme.colorScheme.onPrimaryContainer
-            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onSurfaceVariant
+            TranscriptSpeaker.User -> MaterialTheme.colorScheme.onSecondaryContainer
+            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onPrimaryContainer
             TranscriptSpeaker.System -> when (bubble.kind) {
                 TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.onTertiaryContainer
                 TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.onSecondaryContainer
@@ -1482,7 +1483,7 @@ private fun TranscriptBubbleCard(
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(if (isUser) 0.75f else 0.8f),
+                .fillMaxWidth(if (isUser) 0.71f else 0.77f),
             shape = RoundedCornerShape(
                 topStart = 14.dp,
                 topEnd = 14.dp,
@@ -1495,7 +1496,7 @@ private fun TranscriptBubbleCard(
             ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 if (isCollapsible) {
@@ -1554,13 +1555,13 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.8f),
+                .fillMaxWidth(0.77f),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(7.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 TranscriptToggleHeader(
                     bubble = null,
@@ -1576,7 +1577,7 @@ private fun ExecutionProcessCard(
                 )
 
                 if (expanded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         group.activities.forEachIndexed { activityIndex, bubble ->
                             ExecutionActivityCard(
                                 toggleTag = TestTags.SessionDetailExecutionEntryTogglePrefix + "${index}_${activityIndex}",
@@ -1616,8 +1617,8 @@ private fun ExecutionActivityCard(
         shape = RoundedCornerShape(14.dp),
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.padding(7.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TranscriptToggleHeader(
                 bubble = bubble,
@@ -2348,17 +2349,17 @@ private fun TranscriptLabelChip(
 ) {
     if (plain) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(if (compact) 11.dp else 12.dp),
-                    tint = contentColor.copy(alpha = 0.78f),
-                )
-            }
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(if (compact) 10.dp else 12.dp),
+                tint = contentColor.copy(alpha = 0.78f),
+            )
+        }
             Text(
                 text = text,
                 style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelSmall,
@@ -2397,7 +2398,7 @@ private fun TranscriptLabelChip(
 
 private fun TranscriptBubble.headerIcon(): ImageVector {
     return when (speaker) {
-        TranscriptSpeaker.User -> Icons.Filled.Work
+        TranscriptSpeaker.User -> Icons.Filled.Person
         TranscriptSpeaker.Assistant -> Icons.Filled.Bolt
         TranscriptSpeaker.System -> when (kind) {
             TranscriptBubbleKind.ToolRequest -> Icons.Filled.HourglassTop
@@ -2411,8 +2412,8 @@ private fun TranscriptBubble.headerIcon(): ImageVector {
 
 @Composable
 private fun TranscriptBubble.headerContainerColor() = when (speaker) {
-    TranscriptSpeaker.User -> MaterialTheme.colorScheme.primaryContainer
-    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.secondaryContainer
+    TranscriptSpeaker.User -> MaterialTheme.colorScheme.secondaryContainer
+    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.primaryContainer
     TranscriptSpeaker.System -> when (kind) {
         TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
         TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.secondaryContainer
@@ -2424,8 +2425,8 @@ private fun TranscriptBubble.headerContainerColor() = when (speaker) {
 
 @Composable
 private fun TranscriptBubble.headerContentColor() = when (speaker) {
-    TranscriptSpeaker.User -> MaterialTheme.colorScheme.onPrimaryContainer
-    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onSecondaryContainer
+    TranscriptSpeaker.User -> MaterialTheme.colorScheme.onSecondaryContainer
+    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onPrimaryContainer
     TranscriptSpeaker.System -> when (kind) {
         TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.onTertiaryContainer
         TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.onSecondaryContainer
