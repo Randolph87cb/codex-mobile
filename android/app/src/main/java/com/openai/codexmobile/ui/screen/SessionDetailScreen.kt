@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,6 +53,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,13 +74,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.openai.codexmobile.DraftSessionUiState
@@ -109,6 +116,16 @@ private data class FileDownloadDialogState(
     val resultMessage: String? = null,
     val errorMessage: String? = null,
 )
+
+private data class IndexedTranscriptImage(
+    val index: Int,
+    val part: TranscriptPart.Image,
+)
+
+private val TranscriptInlineImageWidth = 92.dp
+private val TranscriptInlineImageHeight = 118.dp
+private val PendingImagePreviewWidth = 112.dp
+private val PendingImagePreviewHeight = 84.dp
 
 @Composable
 fun SessionDetailScreen(
@@ -269,8 +286,8 @@ fun SessionDetailScreen(
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         StatusStrip(
             detail = detail,
@@ -305,29 +322,21 @@ fun SessionDetailScreen(
                 .testTag(TestTags.SessionDetailTranscript)
                 .fillMaxWidth()
                 .weight(1f),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = detail?.title ?: "等待会话",
-                    style = MaterialTheme.typography.titleMedium,
+                ConversationHeader(
+                    detail = detail,
+                    sessionRealtimeState = sessionRealtimeState,
                 )
-                Text(
-                    text = detail?.subtitle ?: "请先从会话列表中选择一个会话。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    text = detail?.lastUpdated ?: "等待会话元数据",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
                     liveActivities = sessionRealtimeState.liveExecutionActivities,
@@ -364,15 +373,15 @@ fun SessionDetailScreen(
             )
         }
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 FilledTonalIconButton(
                     onClick = onPickImage,
@@ -387,7 +396,7 @@ fun SessionDetailScreen(
                     modifier = Modifier
                         .weight(1f)
                         .testTag(TestTags.SessionDetailDraftField),
-                    label = {
+                    placeholder = {
                         Text(
                             if (draftSession != null) {
                                 "首条消息发送后才真正创建线程"
@@ -396,7 +405,8 @@ fun SessionDetailScreen(
                             },
                         )
                     },
-                    maxLines = 4,
+                    shape = RoundedCornerShape(22.dp),
+                    maxLines = 3,
                 )
                 Button(
                     onClick = onSend,
@@ -404,7 +414,9 @@ fun SessionDetailScreen(
                         detail != null &&
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
-                    modifier = Modifier.testTag(TestTags.SessionDetailSendButton),
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 56.dp, minHeight = 56.dp)
+                        .testTag(TestTags.SessionDetailSendButton),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
@@ -432,24 +444,36 @@ private fun PendingImageAttachmentTray(
 ) {
     val uploadingCount = attachments.count { it.uploadState == PendingImageUploadState.Uploading }
     val failedCount = attachments.count { it.uploadState == PendingImageUploadState.Failed }
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(imageVector = Icons.Filled.Image, contentDescription = null)
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Image,
+                        contentDescription = null,
+                        modifier = Modifier.padding(10.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "已附加图片（${attachments.size}）", style = MaterialTheme.typography.labelLarge)
+                    Text(text = "已附加图片（${attachments.size}）", style = MaterialTheme.typography.titleSmall)
                     Text(
                         text = when {
                             failedCount > 0 -> "有 $failedCount 张上传失败，请重试或移除。"
@@ -457,12 +481,18 @@ private fun PendingImageAttachmentTray(
                             else -> "原图已预上传，发送时只引用 bridge 路径。"
                         },
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
+            GoalMetricChip(
+                text = "固定预览窗，点击查看原图",
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -488,21 +518,25 @@ private fun PendingImageThumbnailCard(
     onRetry: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.width(104.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    Surface(
+        modifier = Modifier.width(PendingImagePreviewWidth),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.background,
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            TranscriptImageThumbnail(
+            FixedPreviewImageCard(
                 source = attachment.previewSource,
                 title = attachment.displayName,
                 bridgeEndpoint = bridgeEndpoint,
                 bridgeAuthToken = bridgeAuthToken,
-                modifier = Modifier.testTag(TestTags.SessionDetailPendingImageThumbnailPrefix + attachment.localId),
+                previewHeight = PendingImagePreviewHeight,
+                modifier = Modifier
+                    .testTag(TestTags.SessionDetailPendingImageThumbnailPrefix + attachment.localId),
                 onOpen = onOpen,
+                showTitle = false,
             )
             Text(
                 text = attachment.displayName,
@@ -513,18 +547,19 @@ private fun PendingImageThumbnailCard(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.testTag(TestTags.SessionDetailPendingImageStatusPrefix + attachment.localId),
+                    modifier = Modifier.weight(1f)
+                        .testTag(TestTags.SessionDetailPendingImageStatusPrefix + attachment.localId),
                 ) {
                     when (attachment.uploadState) {
                         PendingImageUploadState.Uploading -> {
                             CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
-                            Text("上传中", style = MaterialTheme.typography.labelSmall)
+                            Text("上传中", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
 
                         PendingImageUploadState.Uploaded -> {
@@ -533,7 +568,7 @@ private fun PendingImageThumbnailCard(
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                             )
-                            Text("已就绪", style = MaterialTheme.typography.labelSmall)
+                            Text("就绪", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
 
                         PendingImageUploadState.Failed -> {
@@ -542,37 +577,81 @@ private fun PendingImageThumbnailCard(
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                             )
-                            Text("失败", style = MaterialTheme.typography.labelSmall)
+                            Text("失败", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
                     }
                 }
                 TextButton(
-                    onClick = onRemove,
+                    onClick = if (attachment.uploadState == PendingImageUploadState.Failed) onRetry else onRemove,
                     modifier = Modifier.testTag(TestTags.SessionDetailClearImageButton + "_" + attachment.localId),
                 ) {
-                    Text("移除")
+                    Text(if (attachment.uploadState == PendingImageUploadState.Failed) "重试" else "移除")
                 }
             }
             if (attachment.uploadState == PendingImageUploadState.Failed) {
                 attachment.uploadError?.takeIf { it.isNotBlank() }?.let { uploadError ->
                     Text(
                         text = uploadError,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
-                        maxLines = 3,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag(TestTags.SessionDetailPendingImageErrorPrefix + attachment.localId),
                     )
                 }
-                TextButton(
-                    onClick = onRetry,
+                Text(
+                    text = "可重试",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.End,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(TestTags.SessionDetailPendingImageRetryButtonPrefix + attachment.localId),
-                ) {
-                    Text("重试")
-                }
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun ConversationHeader(
+    detail: SessionDetail?,
+    sessionRealtimeState: SessionRealtimeUiState,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = detail?.title ?: "等待会话",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = detail?.subtitle ?: "请先从会话列表中选择一个会话。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GoalMetricChip(
+                text = if (sessionRealtimeState.isConnected) "在线" else "快照",
+                containerColor = if (sessionRealtimeState.isConnected) {
+                    MaterialTheme.colorScheme.tertiaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+                contentColor = if (sessionRealtimeState.isConnected) {
+                    MaterialTheme.colorScheme.onTertiaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Text(
+                text = detail?.lastUpdated ?: "等待会话元数据",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -603,15 +682,15 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -619,18 +698,36 @@ private fun StatusStrip(
                     .testTag(TestTags.SessionDetailStatusButton)
                     .clickable { onToggleExpanded() },
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                StatusGlyph(icon = statusIcon, label = localizedStatusLabel(detail?.status ?: "idle"))
-                StatusGlyph(
-                    icon = connectionIcon,
-                    label = if (isDraft) "草稿" else if (sessionRealtimeState.isConnected) "实时流" else "快照",
+                SessionStatusMetric(
+                    label = "会话",
+                    value = localizedStatusLabel(detail?.status ?: "idle"),
+                    icon = statusIcon,
+                    modifier = Modifier.weight(1f),
                 )
-                StatusGlyph(icon = queueIcon, label = if (queuedInputs.isEmpty()) "无排队" else "排队 ${queuedInputs.size}")
-                if (sessionRealtimeState.pendingApproval != null) {
-                    StatusGlyph(icon = Icons.Filled.HourglassTop, label = "待审批")
-                }
-                Box(modifier = Modifier.weight(1f))
+                SessionStatusMetric(
+                    label = "连接",
+                    value = if (isDraft) "草稿" else if (sessionRealtimeState.isConnected) "已连接" else "快照",
+                    icon = connectionIcon,
+                    modifier = Modifier.weight(1f),
+                )
+                SessionStatusMetric(
+                    label = "排队",
+                    value = if (queuedInputs.isEmpty()) "无排队" else "${queuedInputs.size} 条",
+                    icon = queueIcon,
+                    modifier = Modifier.weight(1f),
+                )
+                SessionStatusMetric(
+                    label = "审批",
+                    value = if (sessionRealtimeState.pendingApproval != null) "待处理" else "正常",
+                    icon = if (sessionRealtimeState.pendingApproval != null) {
+                        Icons.Filled.HourglassTop
+                    } else {
+                        Icons.Filled.CheckCircle
+                    },
+                    modifier = Modifier.weight(1f),
+                )
                 IconButton(onClick = onToggleExpanded) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
@@ -643,8 +740,9 @@ private fun StatusStrip(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(TestTags.SessionDetailStatusDetails),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
                     Text(text = "连接：${sessionRealtimeState.connectionText}", style = MaterialTheme.typography.bodyMedium)
                     Text(text = "状态：${sessionRealtimeState.statusText}", style = MaterialTheme.typography.bodyMedium)
                     Text(
@@ -693,19 +791,36 @@ private fun GoalCard(
     if (detail == null) {
         return
     }
+    var expanded by rememberSaveable(detail.id, detail.goal?.objective, isDraft) { mutableStateOf(false) }
+    val primaryStatusText = when {
+        isDraft -> "待开始"
+        detail.goalCapability == "unsupported" -> "不支持"
+        detail.goal == null -> "未设置"
+        else -> localizedGoalStatus(detail.goal.status)
+    }
+    val objectiveText = when {
+        isDraft -> "先开始一次真实会话，再把长期目标挂到这个线程上。"
+        detail.goalCapability == "unsupported" -> "当前 host 暂不支持目标模式。"
+        detail.goal == null -> "给当前线程设一个明确目标后，手机端就能持续看到目标状态和预算变化。"
+        else -> detail.goal.objective
+    }
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -716,49 +831,53 @@ private fun GoalCard(
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 Text(
-                    text = when {
-                        isDraft -> "首条消息发送后可设置目标"
-                        detail.goalCapability == "unsupported" -> "当前 host 暂不支持目标模式"
-                        detail.goal == null -> "还没有设置目标"
-                        else -> localizedGoalStatus(detail.goal.status)
-                    },
+                    text = primaryStatusText,
                     style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                GoalMetricChip(
+                    text = primaryStatusText,
+                    containerColor = when (primaryStatusText) {
+                        "进行中" -> MaterialTheme.colorScheme.primaryContainer
+                        "已完成" -> MaterialTheme.colorScheme.tertiaryContainer
+                        "待开始", "未设置" -> MaterialTheme.colorScheme.surfaceVariant
+                        else -> MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    contentColor = when (primaryStatusText) {
+                        "进行中" -> MaterialTheme.colorScheme.onPrimaryContainer
+                        "已完成" -> MaterialTheme.colorScheme.onTertiaryContainer
+                        "待开始", "未设置" -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> MaterialTheme.colorScheme.onSecondaryContainer
+                    },
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (expanded) "收起目标详情" else "展开目标详情",
                 )
             }
-
-            when {
-                isDraft -> Text(
-                    text = "先开始一次真实会话，再把长期目标挂到这个线程上。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-
-                detail.goalCapability == "unsupported" -> Text(
-                    text = "bridge 当前连接的 Codex host 没有暴露线程目标接口，手机端暂时只能正常聊天，不能创建或管理目标。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-
-                detail.goal != null -> {
-                    Text(text = detail.goal.objective, style = MaterialTheme.typography.bodyLarge)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        GoalMetricChip("状态 ${localizedGoalStatus(detail.goal.status)}")
-                        GoalMetricChip("已用 ${detail.goal.tokensUsed} tokens")
-                        detail.goal.tokenBudget?.let { budget ->
-                            GoalMetricChip("预算 $budget")
-                        }
-                        GoalMetricChip("耗时 ${formatGoalDuration(detail.goal.timeUsedSeconds)}")
+            Text(
+                text = objectiveText,
+                style = if (detail.goal != null) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
+                maxLines = if (expanded) 4 else 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            detail.goal?.let { goal ->
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    GoalMetricChip(text = formatTokenUsage(goal.tokensUsed))
+                    goal.tokenBudget?.let { budget ->
+                        GoalMetricChip(text = "预算 $budget")
                     }
+                    GoalMetricChip(text = formatGoalDuration(goal.timeUsedSeconds))
                 }
-
-                else -> Text(
-                    text = "给当前线程设一个明确目标后，手机端就能持续看到目标状态和预算变化。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
             }
 
-            if (!isDraft && detail.goalCapability != "unsupported") {
+            if (expanded && !isDraft && detail.goalCapability != "unsupported") {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -818,10 +937,25 @@ private fun GoalCard(
 }
 
 @Composable
-private fun GoalMetricChip(text: String) {
+private fun GoalMetricChip(
+    text: String,
+    containerColor: Color = Color.Unspecified,
+    contentColor: Color = Color.Unspecified,
+) {
+    val resolvedContainerColor = if (containerColor == Color.Unspecified) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        containerColor
+    }
+    val resolvedContentColor = if (contentColor == Color.Unspecified) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        contentColor
+    }
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = resolvedContainerColor,
+        contentColor = resolvedContentColor,
     ) {
         Text(
             text = text,
@@ -832,26 +966,43 @@ private fun GoalMetricChip(text: String) {
 }
 
 @Composable
-private fun StatusGlyph(
-    icon: ImageVector,
+private fun SessionStatusMetric(
     label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surface,
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.background,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.primary,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Text(text = label, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -881,6 +1032,7 @@ private fun SessionConfigRow(
             Text(
                 text = "目录",
                 modifier = Modifier.padding(start = 8.dp),
+                maxLines = 1,
             )
         }
         OutlinedButton(
@@ -891,6 +1043,7 @@ private fun SessionConfigRow(
             Text(
                 text = detail.model,
                 modifier = Modifier.padding(start = 8.dp),
+                maxLines = 1,
             )
         }
         OutlinedButton(
@@ -901,6 +1054,7 @@ private fun SessionConfigRow(
             Text(
                 text = "推理 ${localizedReasoning(detail.reasoningEffort)}",
                 modifier = Modifier.padding(start = 8.dp),
+                maxLines = 1,
             )
         }
         OutlinedButton(
@@ -911,6 +1065,16 @@ private fun SessionConfigRow(
             Text(
                 text = "速度 ${localizedService(detail.serviceTier)}",
                 modifier = Modifier.padding(start = 8.dp),
+                maxLines = 1,
+            )
+        }
+        OutlinedButton(
+            onClick = { onOpenEditor(SessionConfigEditor.SandboxMode) },
+            modifier = Modifier.testTag(TestTags.SessionDetailConfigSandboxButton),
+        ) {
+            Text(
+                text = "权限 ${localizedSandbox(detail.sandboxMode)}",
+                maxLines = 1,
             )
         }
     }
@@ -981,7 +1145,19 @@ private fun ConfigEditorDialogs(
             },
         )
 
-        SessionConfigEditor.SandboxMode -> Unit
+        SessionConfigEditor.SandboxMode -> ChoiceConfigDialog(
+            title = "选择文件权限",
+            options = listOf(
+                "read-only" to "只读",
+                "workspace-write" to "工作区可写",
+                "danger-full-access" to "完全访问",
+            ),
+            onDismiss = onDismiss,
+            onChoose = {
+                onUpdateSandboxMode(it)
+                onDismiss()
+            },
+        )
         null -> Unit
     }
 }
@@ -1538,7 +1714,9 @@ private fun TranscriptPartsColumn(
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
-    parts.forEachIndexed { index, part ->
+    var index = 0
+    while (index < parts.size) {
+        val part = parts[index]
         when (part) {
             is TranscriptPart.Text -> {
                 MarkdownTextBlock(
@@ -1548,19 +1726,29 @@ private fun TranscriptPartsColumn(
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                 )
+                index += 1
             }
 
             is TranscriptPart.Image -> {
-                TranscriptImageThumbnail(
-                    source = part.source,
-                    title = part.altText,
+                val images = buildList {
+                    var nextIndex = index
+                    while (nextIndex < parts.size) {
+                        val nextPart = parts[nextIndex]
+                        if (nextPart !is TranscriptPart.Image) {
+                            break
+                        }
+                        add(IndexedTranscriptImage(index = nextIndex, part = nextPart))
+                        nextIndex += 1
+                    }
+                }
+                TranscriptImageGallery(
+                    images = images,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
-                    modifier = Modifier.testTag(TestTags.SessionDetailTranscriptImagePrefix + "${testTagPrefix}_$index"),
-                    onOpen = {
-                        onOpenImagePreview(part.altText, part.source)
-                    },
+                    testTagPrefix = testTagPrefix,
+                    onOpenImagePreview = onOpenImagePreview,
                 )
+                index += images.size
             }
 
             is TranscriptPart.CodeBlock -> {
@@ -1569,6 +1757,7 @@ private fun TranscriptPartsColumn(
                     copyTag = TestTags.SessionDetailCodeBlockCopyPrefix + "${testTagPrefix}_$index",
                     onCopyCode = onCopyCode,
                 )
+                index += 1
             }
         }
     }
@@ -1630,14 +1819,56 @@ private fun SpacerWidth() {
 }
 
 @Composable
-private fun TranscriptImageThumbnail(
+private fun TranscriptImageGallery(
+    images: List<IndexedTranscriptImage>,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    testTagPrefix: String,
+    onOpenImagePreview: (String, String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(items = images, key = { it.index }) { image ->
+                FixedPreviewImageCard(
+                    source = image.part.source,
+                    title = image.part.altText,
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    previewHeight = TranscriptInlineImageHeight,
+                    modifier = Modifier
+                        .width(TranscriptInlineImageWidth)
+                        .testTag(TestTags.SessionDetailTranscriptImagePrefix + "${testTagPrefix}_${image.index}"),
+                    onOpen = { onOpenImagePreview(image.part.altText, image.part.source) },
+                    showTitle = false,
+                    containerColor = MaterialTheme.colorScheme.background,
+                )
+            }
+        }
+        Text(
+            text = "点击查看原图",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun FixedPreviewImageCard(
     source: String,
     title: String,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    previewHeight: Dp,
     modifier: Modifier = Modifier,
     onOpen: () -> Unit,
+    showTitle: Boolean = true,
+    containerColor: Color = Color.Unspecified,
 ) {
+    val resolvedContainerColor = if (containerColor == Color.Unspecified) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        containerColor
+    }
     val imageState = rememberTranscriptImageState(
         source = source,
         bridgeEndpoint = bridgeEndpoint,
@@ -1650,7 +1881,7 @@ private fun TranscriptImageThumbnail(
             .fillMaxWidth()
             .clickable(onClick = onOpen),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = resolvedContainerColor),
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -1661,7 +1892,7 @@ private fun TranscriptImageThumbnail(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 96.dp),
+                            .height(previewHeight),
                         contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
@@ -1672,7 +1903,7 @@ private fun TranscriptImageThumbnail(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 96.dp),
+                            .height(previewHeight),
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(
@@ -1694,17 +1925,19 @@ private fun TranscriptImageThumbnail(
                         contentDescription = title,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 96.dp, max = 220.dp),
+                            .height(previewHeight),
                         contentScale = ContentScale.Crop,
                     )
                 }
             }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (showTitle) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -2196,6 +2429,17 @@ private fun localizedGoalStatus(status: String): String {
         "blocked" -> "已阻塞"
         "usageLimited" -> "额度受限"
         else -> "进行中"
+    }
+}
+
+private fun formatTokenUsage(tokens: Long): String {
+    return when {
+        tokens >= 10_000 -> {
+            val display = tokens / 1000.0 / 10.0
+            "${display}万 tokens"
+        }
+
+        else -> "$tokens tokens"
     }
 }
 

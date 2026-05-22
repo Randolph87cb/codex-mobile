@@ -38,10 +38,10 @@ class ReplayHarnessActivity : ComponentActivity() {
                 authToken = "",
                 cwd = "D:\\workspace\\codex-mobile",
                 model = "gpt-5.5",
-                approvalMode = "manual",
+                approvalMode = "auto",
                 reasoningEffort = "medium",
                 serviceTier = "default",
-                sandboxMode = "workspace-write",
+                sandboxMode = "danger-full-access",
             ),
         )
         val dataProvider = DeterministicReplayDataProvider()
@@ -94,10 +94,10 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         lastUpdated = "刚刚更新",
         cwd = "D:\\workspace\\codex-mobile",
         model = "gpt-5.5",
-        approvalMode = "manual",
+        approvalMode = "auto",
         reasoningEffort = "medium",
         serviceTier = "default",
-        sandboxMode = "workspace-write",
+        sandboxMode = "danger-full-access",
         status = "idle",
     )
     private var detail = SessionDetail(

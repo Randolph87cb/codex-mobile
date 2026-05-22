@@ -3,6 +3,7 @@ package com.openai.codexmobile
 import android.content.Intent
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -44,6 +45,8 @@ class SessionDetailReplayTest {
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigModelButton).assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigReasoningButton).assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigServiceTierButton).assertIsDisplayed()
+        composeRule.onNodeWithTag(TestTags.SessionDetailConfigSandboxButton)
+            .assertTextContains("权限 完全访问")
         composeRule.onAllNodesWithTag(TestTags.SessionDetailTranscript).assertCountEquals(1)
         composeRule.onAllNodesWithText("kotlin").assertCountEquals(1)
         composeRule.onAllNodesWithText("println(\"hello from test\")").assertCountEquals(1)
@@ -51,9 +54,7 @@ class SessionDetailReplayTest {
         composeRule.onAllNodesWithText("历史工具结果").assertCountEquals(0)
         composeRule.onAllNodesWithText("这条记录用于校验工具结果渲染。").assertCountEquals(0)
 
-        waitForTag(TestTags.SessionDetailApprovalCard)
-        waitForText("执行测试命令", substring = true)
-        composeRule.onNodeWithTag(TestTags.SessionDetailApproveButton).performClick()
+        waitForText("自动授予当前会话权限", substring = true)
         waitUntilTagMissing(TestTags.SessionDetailApprovalCard)
     }
 

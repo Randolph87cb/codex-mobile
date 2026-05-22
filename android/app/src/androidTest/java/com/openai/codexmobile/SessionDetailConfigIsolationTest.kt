@@ -41,7 +41,7 @@ class SessionDetailConfigIsolationTest {
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigReasoningButton)
             .assertTextContains("推理 高")
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigSandboxButton)
-            .assertTextContains("权限 工作区可写")
+            .assertTextContains("权限 完全访问")
 
         composeRule.onNodeWithTag(TestTags.SessionDetailConfigSandboxButton).performClick()
         composeRule.onNodeWithText("完全访问").performClick()

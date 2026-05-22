@@ -55,9 +55,10 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun CodexMobileTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors
+    val colorScheme = if (darkTheme) DarkColors else LightColors
     MaterialTheme(
         colorScheme = colorScheme,
         typography = CodexTypography,

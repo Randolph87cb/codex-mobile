@@ -2246,6 +2246,9 @@ class AppViewModel(
         if (detail.status != "awaiting_approval") {
             return
         }
+        if (detail.approvalMode != ManagedApprovalMode) {
+            return
+        }
 
         submitApprovalForPending(
             detail = detail,
