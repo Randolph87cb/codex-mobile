@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import type { HistoryCapableBridgeRunner } from "../src/bridge-runner.js";
@@ -437,6 +437,99 @@ describe("buildBridgeApp", () => {
       displayName: "sample.png",
       mimeType: "image/png",
     });
+
+    await app.close();
+  });
+
+  test("saves uploaded images into the session workspace when sessionId is provided", async () => {
+    const sessionRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-session-upload-"));
+    tempDirs.push(sessionRoot);
+    const store = new SessionStore();
+    const session = store.create({
+      cwd: sessionRoot,
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const payload = Buffer.from("png-image-content-save");
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      payload: {
+        displayName: "sample.png",
+        mimeType: "image/png",
+        contentBase64: payload.toString("base64"),
+        sessionId: session.id,
+      },
+    });
+
+    expect(upload.statusCode).toBe(201);
+    const uploaded = upload.json<{ path: string; savedPath?: string; savedRelativePath?: string }>();
+    expect(uploaded.path).not.toBe(uploaded.savedPath);
+    expect(uploaded.savedRelativePath).toBe("mobile_uploads/sample.png");
+    expect(uploaded.savedPath).toBe(path.join(sessionRoot, "mobile_uploads", "sample.png"));
+    expect(await readFile(uploaded.savedPath!, "utf8")).toBe(payload.toString());
+
+    await app.close();
+  });
+
+  test("prefers the saved image path when submitting uploaded attachments", async () => {
+    const sessionRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-session-input-"));
+    tempDirs.push(sessionRoot);
+    const store = new SessionStore();
+    const session = store.create({
+      cwd: sessionRoot,
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const payload = Buffer.from("png-image-content-submit");
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/image",
+      payload: {
+        displayName: "sample.png",
+        mimeType: "image/png",
+        contentBase64: payload.toString("base64"),
+        sessionId: session.id,
+      },
+    });
+    const uploaded = upload.json<{ path: string; savedPath: string }>();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        text: "请查看图片",
+        attachments: [
+          {
+            path: uploaded.path,
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(runner.submitInput).toHaveBeenCalledWith(
+      session.id,
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({
+            path: uploaded.savedPath,
+          }),
+        ],
+      }),
+    );
 
     await app.close();
   });

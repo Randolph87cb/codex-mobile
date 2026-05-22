@@ -254,20 +254,31 @@ Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 
 
 向 bridge 预上传一张图片，供后续会话输入引用。
 
+如果请求里带上 `sessionId`，bridge 会在暂存成功后，继续把图片保存到该会话 `cwd` 下的 `mobile_uploads/` 目录，并在响应里返回正式保存路径。
+
 当前支持两种上传格式：
 
 1. 推荐：`multipart/form-data`
    - `displayName`
    - `mimeType`
    - `file`
+   - `sessionId`（可选）
 2. 兼容旧链路：`application/json`
    - `displayName`
    - `mimeType`
    - `contentBase64`
+   - `sessionId`（可选）
 
 Android 当前实际使用的是 `multipart/form-data`，这是为了避免 `JSON + Base64` 在 Cloudflare 等代理链路上把大图请求体放大。
 
 bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIMIT_MB` 覆盖。
+
+保存规则：
+
+- 不带 `sessionId`：只暂存到 bridge 附件目录，兼容旧客户端。
+- 带 `sessionId`：在暂存后继续保存到 `<cwd>/mobile_uploads/`。
+- 正式保存目录由 bridge 根据会话 `cwd` 固定推导，客户端不能直接指定主机路径。
+- 如果有同名文件，bridge 会自动去重，不覆盖现有文件。
 
 成功响应：
 
@@ -275,6 +286,8 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 {
   "id": "att_xxx",
   "path": "C:\\Users\\...\\Temp\\codex-mobile-bridge\\attachments\\att_xxx.png",
+  "savedPath": "D:\\workspace\\project\\mobile_uploads\\sample.png",
+  "savedRelativePath": "mobile_uploads/sample.png",
   "kind": "image",
   "displayName": "sample.png",
   "mimeType": "image/png",

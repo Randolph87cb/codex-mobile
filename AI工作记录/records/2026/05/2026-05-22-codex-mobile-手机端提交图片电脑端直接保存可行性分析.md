@@ -13,7 +13,7 @@
 
 ## 当前状态
 
-- 仅做只读检查，尚未修改代码。
+- 已完成 bridge 与 Android 端到端改造，并完成主要验证。
 
 ## 初步计划
 
@@ -84,4 +84,57 @@
 - session input 只引用附件 `id/path`：`bridge/src/types.ts`、`bridge/src/app.ts`
 - runner 将图片转成 `localImage`：`bridge/src/app-server-runner.ts`
 - 协议文档已明确“预上传后引用暂存路径”：`docs/api.md`
+
+## 实际改动
+
+- bridge 上传接口 `POST /api/attachment/image` 新增可选 `sessionId`；如果能解析到会话，就把图片在暂存后正式保存到 `<cwd>/mobile_uploads/`。
+- bridge 上传响应新增 `savedPath`、`savedRelativePath`，同时保留旧字段 `path` 兼容旧客户端。
+- bridge 在处理 `/api/session/:id/input` 的附件路径时，会优先把已知附件的 `savedPath` 送给 runner，避免 Android 仍传暂存路径时丢失正式保存语义。
+- `AttachmentStore` 新增正式保存能力，负责建目录、同名去重、复制文件，以及把暂存路径和正式保存路径都映射回同一附件元数据。
+- Android 侧上传图片时会在已选正式会话下附带 `sessionId`。
+- Android 侧解析上传响应时兼容三种返回：新 bridge 的 `savedPath` / `stagedPath`，以及旧 bridge 的 `path`。
+- Android 侧发送会话输入、图片预览和 transcript 回显，都会优先使用 `savedPath`，没有时再回退 `stagedPath`。
+- 补了草稿会话首条消息带图的缺口：如果图片是在还没有真实 `sessionId` 时先上传的，创建会话后会补一次带 `sessionId` 的上传，以拿到正式保存路径。
+- 文档与 README 已同步说明自动保存到 `mobile_uploads/` 的新行为。
+
+## 主要改动文件
+
+- bridge:
+  - `bridge/src/app.ts`
+  - `bridge/src/attachment-store.ts`
+  - `bridge/src/types.ts`
+  - `bridge/tests/app.test.ts`
+- android:
+  - `android/app/src/main/java/com/openai/codexmobile/data/BridgeApi.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/data/RealBridgeDataProvider.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+  - `android/app/src/test/java/com/openai/codexmobile/data/RealBridgeDataProviderTest.kt`
+  - `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+- 文档：
+  - `docs/api.md`
+  - `README.md`
+
+## 验证结果
+
+- bridge：
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+  - 结果：通过。
+- android 单测：
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过。
+- Android 构建：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 首次执行遇到 Gradle / Kotlin 增量缓存与资源中间目录异常；停止 daemon、清理 `android/app/build` 后重试通过。
+  - 最终结果：标准脚本入口通过。
+
+## 当前结论
+
+- 现在的链路已经变成：
+  - 手机 -> bridge：上传真实图片二进制；
+  - bridge -> 电脑工作区：按会话 `cwd` 自动正式保存到 `mobile_uploads/`；
+  - 对话输入 -> runner：优先提交正式保存后的图片路径；
+  - UI / transcript：仍然表现为“有图”，不是裸路径文本。
 

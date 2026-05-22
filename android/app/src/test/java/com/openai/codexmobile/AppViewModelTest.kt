@@ -94,6 +94,51 @@ class AppViewModelTest {
     }
 
     @Test
+    fun draftSessionImageAttachmentsAreSavedAfterSessionIsCreated() = runTest(dispatcher.scheduler) {
+        val createdDetail = sampleDetail(
+            id = "sess_draft_image",
+            cwd = "D:\\workspace\\project-a",
+            model = "gpt-5.5",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = createdDetail,
+            returnSavedPathForUploads = true,
+        )
+        val repository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap())
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.startDraftSession("D:\\workspace\\project-a")
+        advanceUntilIdle()
+        viewModel.attachPreparedImages(
+            listOf(
+                UploadImageAttachmentRequest(
+                    displayName = "draft.png",
+                    mimeType = "image/png",
+                    contentBytes = "hello".toByteArray(),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(listOf<String?>(null), bridgeApi.uploadedImageRequests.map { it.sessionId })
+
+        viewModel.updateDraftMessage("首条带图")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(listOf<String?>(null, "sess_draft_image"), bridgeApi.uploadedImageRequests.map { it.sessionId })
+        assertEquals(
+            listOf("D:\\bridge\\saved\\uploaded-2.png"),
+            bridgeApi.sendInputRequests.single().attachments.map { it.stagedPath },
+        )
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
+                "![draft.png](bridge-file://D%3A%5Cbridge%5Csaved%5Cuploaded-2.png)",
+            ) == true,
+        )
+    }
+
+    @Test
     fun sessionStartedEventUpdatesConfigFields() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_stream", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -946,9 +991,12 @@ class AppViewModelTest {
     }
 
     @Test
-    fun imageAttachmentsUploadBeforeSendingInput() = runTest(dispatcher.scheduler) {
+    fun imageAttachmentsPreferSavedPathWhenBridgeReturnsIt() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_image", status = "idle")
-        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail,
+            returnSavedPathForUploads = true,
+        )
         val repository = FakeSessionRepository(
             sessionSummaries = listOf(detail.toSummary()),
             detailsById = mapOf(detail.id to detail),
@@ -974,9 +1022,12 @@ class AppViewModelTest {
         advanceUntilIdle()
 
         assertEquals(2, bridgeApi.uploadedImageRequests.size)
+        assertEquals(listOf("sess_image", "sess_image"), bridgeApi.uploadedImageRequests.map { it.sessionId })
         assertTrue(
             viewModel.uiState.value.pendingImageAttachments.all {
-                it.uploadState == PendingImageUploadState.Uploaded && it.stagedPath != null
+                it.uploadState == PendingImageUploadState.Uploaded &&
+                    it.stagedPath != null &&
+                    it.savedPath != null
             },
         )
 
@@ -988,18 +1039,99 @@ class AppViewModelTest {
         assertEquals(1, bridgeApi.sendInputRequests.size)
         assertEquals("帮我看看", bridgeApi.sendInputRequests.single().text)
         assertEquals(
-            listOf("D:\\bridge\\staged\\uploaded-1.png", "D:\\bridge\\staged\\uploaded-2.png"),
+            listOf("D:\\bridge\\saved\\uploaded-1.png", "D:\\bridge\\saved\\uploaded-2.png"),
             bridgeApi.sendInputRequests.single().attachments.map { it.stagedPath },
         )
         assertTrue(viewModel.uiState.value.pendingImageAttachments.isEmpty())
         assertTrue(
             viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
-                "![screen.png](bridge-file://D%3A%5Cbridge%5Cstaged%5Cuploaded-1.png)",
+                "![screen.png](bridge-file://D%3A%5Cbridge%5Csaved%5Cuploaded-1.png)",
             ) == true,
         )
         assertTrue(
             viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
-                "![diagram.webp](bridge-file://D%3A%5Cbridge%5Cstaged%5Cuploaded-2.png)",
+                "![diagram.webp](bridge-file://D%3A%5Cbridge%5Csaved%5Cuploaded-2.png)",
+            ) == true,
+        )
+    }
+
+    @Test
+    fun draftSessionImageAttachmentsAreReuploadedWithSessionIdBeforeFirstSend() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_draft_image", status = "idle")
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail,
+            returnSavedPathForUploads = true,
+        )
+        val repository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap())
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.startDraftSession("D:\\workspace\\project-a")
+        advanceUntilIdle()
+        viewModel.attachPreparedImages(
+            listOf(
+                UploadImageAttachmentRequest(
+                    displayName = "draft.png",
+                    mimeType = "image/png",
+                    contentBytes = "hello".toByteArray(),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf<String?>(null), bridgeApi.uploadedImageRequests.map { it.sessionId })
+        assertEquals(null, viewModel.uiState.value.pendingImageAttachments.single().savedPath)
+
+        viewModel.updateDraftMessage("首条带图消息")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(listOf<String?>(null, "sess_draft_image"), bridgeApi.uploadedImageRequests.map { it.sessionId })
+        assertEquals(1, bridgeApi.sendInputRequests.size)
+        assertEquals(
+            listOf("D:\\bridge\\saved\\uploaded-2.png"),
+            bridgeApi.sendInputRequests.single().attachments.map { it.stagedPath },
+        )
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
+                "![draft.png](bridge-file://D%3A%5Cbridge%5Csaved%5Cuploaded-2.png)",
+            ) == true,
+        )
+    }
+
+    @Test
+    fun imageAttachmentsFallBackToStagedPathWhenBridgeDoesNotReturnSavedPath() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_image_legacy", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_image_legacy")
+        advanceUntilIdle()
+        viewModel.attachPreparedImages(
+            listOf(
+                UploadImageAttachmentRequest(
+                    displayName = "legacy.png",
+                    mimeType = "image/png",
+                    contentBytes = "hello".toByteArray(),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        viewModel.updateDraftMessage("兼容旧桥接")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(listOf("sess_image_legacy"), bridgeApi.uploadedImageRequests.map { it.sessionId })
+        assertEquals(
+            listOf("D:\\bridge\\staged\\uploaded-1.png"),
+            bridgeApi.sendInputRequests.single().attachments.map { it.stagedPath },
+        )
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
+                "![legacy.png](bridge-file://D%3A%5Cbridge%5Cstaged%5Cuploaded-1.png)",
             ) == true,
         )
     }
@@ -1263,6 +1395,7 @@ private class FakeBridgeApi(
     private val createdDetail: SessionDetail,
     private val uploadDelayMs: Long = 0L,
     private var failUploadsRemaining: Int = 0,
+    private val returnSavedPathForUploads: Boolean = false,
 ) : BridgeApi {
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     private var currentDetail: SessionDetail = createdDetail
@@ -1333,6 +1466,11 @@ private class FakeBridgeApi(
             displayName = request.displayName,
             mimeType = request.mimeType,
             stagedPath = "D:\\bridge\\staged\\uploaded-${uploadedImageRequests.size}.png",
+            savedPath = if (returnSavedPathForUploads && !request.sessionId.isNullOrBlank()) {
+                "D:\\bridge\\saved\\uploaded-${uploadedImageRequests.size}.png"
+            } else {
+                null
+            },
         )
     }
 

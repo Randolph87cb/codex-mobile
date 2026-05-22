@@ -51,4 +51,32 @@ class RealBridgeDataProviderTest {
         assertTrue(summary.archived)
         assertTrue(summary.id == "thread-archived")
     }
+
+    @Test
+    fun parseUploadedImageAttachmentResponsePrefersSavedPath() {
+        val uploaded = parseUploadedImageAttachmentResponse(
+            payload = """{"id":"att-1","displayName":"screen.png","mimeType":"image/png","stagedPath":"D:\\bridge\\staged\\screen.png","savedPath":"D:\\bridge\\saved\\screen.png"}""",
+            fallbackDisplayName = "fallback.png",
+            fallbackMimeType = "image/jpeg",
+        )
+
+        assertTrue(uploaded.stagedPath == "D:\\bridge\\staged\\screen.png")
+        assertTrue(uploaded.savedPath == "D:\\bridge\\saved\\screen.png")
+        assertTrue(uploaded.attachmentPath == "D:\\bridge\\saved\\screen.png")
+    }
+
+    @Test
+    fun parseUploadedImageAttachmentResponseFallsBackToLegacyPathField() {
+        val uploaded = parseUploadedImageAttachmentResponse(
+            payload = """{"id":"att-legacy","path":"D:\\bridge\\staged\\legacy.png"}""",
+            fallbackDisplayName = "legacy.png",
+            fallbackMimeType = "image/png",
+        )
+
+        assertTrue(uploaded.displayName == "legacy.png")
+        assertTrue(uploaded.mimeType == "image/png")
+        assertTrue(uploaded.stagedPath == "D:\\bridge\\staged\\legacy.png")
+        assertTrue(uploaded.savedPath == null)
+        assertTrue(uploaded.attachmentPath == "D:\\bridge\\staged\\legacy.png")
+    }
 }

@@ -24,7 +24,10 @@ data class SessionConfigUpdate(
 
 data class SessionInputAttachmentRef(
     val stagedPath: String,
-)
+) {
+    val path: String
+        get() = stagedPath
+}
 
 data class SendInputRequest(
     val text: String? = null,
@@ -35,6 +38,7 @@ data class UploadImageAttachmentRequest(
     val displayName: String,
     val mimeType: String,
     val contentBytes: ByteArray,
+    val sessionId: String? = null,
 )
 
 data class UploadedImageAttachment(
@@ -42,7 +46,11 @@ data class UploadedImageAttachment(
     val displayName: String,
     val mimeType: String,
     val stagedPath: String,
-)
+    val savedPath: String? = null,
+) {
+    val attachmentPath: String
+        get() = savedPath ?: stagedPath
+}
 
 interface BridgeApi {
     fun updateAuthToken(token: String)

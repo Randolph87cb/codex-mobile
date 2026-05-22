@@ -151,7 +151,7 @@ class RealBridgeDataProvider(
     override suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment = withContext(Dispatchers.IO) {
         appLogger.info(
             "BridgeApi",
-            "上传图片附件：displayName=${request.displayName}, mimeType=${request.mimeType}, byteLength=${request.contentBytes.size}",
+            "上传图片附件：displayName=${request.displayName}, mimeType=${request.mimeType}, byteLength=${request.contentBytes.size}, sessionId=${request.sessionId ?: "none"}",
         )
         val uploadUrl = "${requireBaseUrl()}/api/attachment/image"
         val response = try {
@@ -171,14 +171,11 @@ class RealBridgeDataProvider(
             throw BridgeRequestException(response.statusCode, response.body)
         }
 
-        JSONObject(response.body).let { json ->
-            UploadedImageAttachment(
-                id = json.optString("id").ifBlank { error("bridge 未返回附件 ID。") },
-                displayName = json.optString("displayName").ifBlank { request.displayName },
-                mimeType = json.optString("mimeType").ifBlank { request.mimeType },
-                stagedPath = json.optString("path").ifBlank { error("bridge 未返回暂存路径。") },
-            )
-        }
+        parseUploadedImageAttachmentResponse(
+            payload = response.body,
+            fallbackDisplayName = request.displayName,
+            fallbackMimeType = request.mimeType,
+        )
     }
 
     override suspend fun sendInput(sessionId: String, request: SendInputRequest) = withContext(Dispatchers.IO) {
@@ -191,7 +188,7 @@ class RealBridgeDataProvider(
         if (request.attachments.isNotEmpty()) {
             val attachments = JSONArray()
             request.attachments.forEach { attachment ->
-                attachments.put(JSONObject().put("path", attachment.stagedPath))
+                attachments.put(JSONObject().put("path", attachment.path))
             }
             payload.put("attachments", attachments)
         }
@@ -261,14 +258,20 @@ class RealBridgeDataProvider(
                 request.displayName,
                 request.contentBytes.toRequestBody(request.mimeType.toMediaTypeOrNull()),
             )
-            .build()
+        request.sessionId
+            ?.takeIf { it.isNotBlank() }
+            ?.let { body.addFormDataPart("sessionId", it) }
+        val requestBody = body.build()
         val requestBuilder = Request.Builder()
             .url(url)
-            .post(body)
+            .post(requestBody)
             .header("Accept", "application/json")
             .header("Connection", "close")
         authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
-        appLogger.debug("BridgeApi", "HTTP 请求：POST $url (upload image attachment, displayName=${request.displayName})")
+        appLogger.debug(
+            "BridgeApi",
+            "HTTP 请求：POST $url (upload image attachment, displayName=${request.displayName}, sessionId=${request.sessionId ?: "none"})",
+        )
         webSocketClient.newCall(requestBuilder.build()).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             appLogger.debug(
@@ -638,6 +641,26 @@ private data class ParsedBridgeStreamError(
     val message: String?,
     val willRetry: Boolean,
 )
+
+internal fun parseUploadedImageAttachmentResponse(
+    payload: String,
+    fallbackDisplayName: String,
+    fallbackMimeType: String,
+): UploadedImageAttachment {
+    val json = JSONObject(payload)
+    val stagedPath = json.optString("stagedPath")
+        .ifBlank { json.optString("path") }
+        .ifBlank { json.optString("savedPath") }
+        .ifBlank { error("bridge 未返回附件路径。") }
+    val savedPath = json.optString("savedPath").takeIf { it.isNotBlank() }
+    return UploadedImageAttachment(
+        id = json.optString("id").ifBlank { error("bridge 未返回附件 ID。") },
+        displayName = json.optString("displayName").ifBlank { fallbackDisplayName },
+        mimeType = json.optString("mimeType").ifBlank { fallbackMimeType },
+        stagedPath = stagedPath,
+        savedPath = savedPath,
+    )
+}
 
 private fun parseRequestId(value: Any?): BridgeRequestId? {
     return when (value) {

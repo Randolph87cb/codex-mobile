@@ -67,6 +67,7 @@ const uploadImageSchema = z.object({
   displayName: z.string().trim().min(1),
   mimeType: z.string().trim().min(1),
   contentBase64: z.string().trim().min(1),
+  sessionId: z.string().trim().min(1).optional(),
 });
 
 const imageFileQuerySchema = z.object({
@@ -206,15 +207,43 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       return reply.status(503).send(buildBridgeRestartingError("attachment-upload"));
     }
     try {
-      const attachment = request.isMultipart()
+      const upload = request.isMultipart()
         ? await parseMultipartImageUpload(request, attachmentStore)
         : await parseJsonImageUpload(request.body, attachmentStore);
+      const session = upload.sessionId
+        ? await resolveSessionRecord(upload.sessionId, store, historyRunner)
+        : undefined;
+      if (upload.sessionId && !session) {
+        return reply.status(404).send({
+          error: "session-not-found",
+        });
+      }
+
+      let attachment = upload.kind === "multipart"
+        ? await attachmentStore.createImage({
+          displayName: upload.displayName,
+          mimeType: upload.mimeType,
+          content: upload.content,
+        })
+        : await attachmentStore.createImageFromBase64({
+          displayName: upload.displayName,
+          mimeType: upload.mimeType,
+          contentBase64: upload.contentBase64,
+        });
+
+      if (session) {
+        const saveRoot = resolveSessionImageSaveRoot(session.cwd, security);
+        attachment = await attachmentStore.saveImageToDirectory(attachment, saveRoot.targetDir, saveRoot.cwd);
+      }
+
       return reply.status(201).send({
         id: attachment.id,
         path: attachment.path,
         kind: attachment.kind,
         displayName: attachment.displayName,
         mimeType: attachment.mimeType,
+        savedPath: attachment.savedPath,
+        savedRelativePath: attachment.savedRelativePath,
         createdAt: attachment.createdAt,
       });
     } catch (error) {
@@ -411,7 +440,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
         return {
           id: uploaded.id,
           kind: uploaded.kind,
-          path: uploaded.path,
+          path: uploaded.savedPath ?? uploaded.path,
           displayName: uploaded.displayName,
           mimeType: uploaded.mimeType,
         } as const;
@@ -666,9 +695,11 @@ async function parseMultipartImageUpload(
   request: FastifyRequest,
   attachmentStore: AttachmentStore,
 ) {
+  void attachmentStore;
   let fileBuffer: Buffer | null = null;
   let displayName = "";
   let mimeType = "";
+  let sessionId: string | undefined;
 
   for await (const part of request.parts()) {
     if (part.type === "file") {
@@ -689,6 +720,8 @@ async function parseMultipartImageUpload(
       displayName = String(part.value ?? "").trim();
     } else if (part.fieldname === "mimeType") {
       mimeType = String(part.value ?? "").trim();
+    } else if (part.fieldname === "sessionId") {
+      sessionId = String(part.value ?? "").trim() || undefined;
     }
   }
 
@@ -704,23 +737,29 @@ async function parseMultipartImageUpload(
     mimeType = "image/png";
   }
 
-  return attachmentStore.createImage({
+  return {
+    kind: "multipart" as const,
     displayName,
     mimeType,
     content: fileBuffer,
-  });
+    sessionId,
+  };
 }
 
 async function parseJsonImageUpload(
   body: unknown,
   attachmentStore: AttachmentStore,
 ) {
+  void attachmentStore;
   const parsed = uploadImageSchema.safeParse(body);
   if (!parsed.success) {
     throw new Error("invalid-request");
   }
 
-  return attachmentStore.createImageFromBase64(parsed.data);
+  return {
+    kind: "json" as const,
+    ...parsed.data,
+  };
 }
 
 function resolveBridgeBodyLimitBytes(): number {
@@ -877,6 +916,19 @@ function isSameOrChildPath(candidate: string, allowedRoot: string): boolean {
 
   const relative = path.relative(allowedRoot, candidate);
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function resolveSessionImageSaveRoot(cwd: string, security: BridgeSecurityConfig): { cwd: string; targetDir: string } {
+  const validated = validateSessionCwd(cwd, security);
+  if (!validated.ok || !validated.cwd) {
+    throw new Error(validated.message ?? validated.error ?? "invalid-session-cwd");
+  }
+
+  const resolvedCwd = path.resolve(validated.cwd);
+  return {
+    cwd: resolvedCwd,
+    targetDir: path.join(resolvedCwd, "mobile_uploads"),
+  };
 }
 
 async function resolveSessionRecord(

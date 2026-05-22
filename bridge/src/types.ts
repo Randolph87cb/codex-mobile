@@ -89,6 +89,8 @@ export interface UploadedImageAttachment {
   displayName: string;
   mimeType: string;
   path: string;
+  savedPath?: string;
+  savedRelativePath?: string;
   createdAt: string;
 }
 

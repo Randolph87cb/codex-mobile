@@ -116,8 +116,12 @@ data class PendingImageAttachmentUiState(
     val previewSource: String,
     val uploadState: PendingImageUploadState,
     val stagedPath: String? = null,
+    val savedPath: String? = null,
     val uploadError: String? = null,
-)
+) {
+    val attachmentPath: String?
+        get() = savedPath ?: stagedPath
+}
 
 enum class PendingImageUploadState {
     Uploading,
@@ -323,9 +327,10 @@ class AppViewModel(
             return
         }
 
+        val activeSessionId = uiState.value.selectedSession?.id?.takeIf { it.isNotBlank() }
         val appended = validAttachments.map { attachment ->
             val localId = UUID.randomUUID().toString()
-            pendingImageUploadRequests[localId] = attachment
+            pendingImageUploadRequests[localId] = attachment.copy(sessionId = activeSessionId)
             PendingImageAttachmentUiState(
                 localId = localId,
                 displayName = attachment.displayName.ifBlank { "image" },
@@ -407,7 +412,6 @@ class AppViewModel(
                 runCatching {
                     bridgeApi.uploadImageAttachment(request)
                 }.onSuccess { uploaded ->
-                    pendingImageUploadRequests.remove(localId)
                     _uiState.update { state ->
                         state.copy(
                             pendingImageAttachments = state.pendingImageAttachments.map { attachment ->
@@ -415,9 +419,10 @@ class AppViewModel(
                                     attachment
                                 } else {
                                     attachment.copy(
-                                        previewSource = buildBridgeImageSource(uploaded.stagedPath),
+                                        previewSource = buildBridgeImageSource(uploaded.attachmentPath),
                                         uploadState = PendingImageUploadState.Uploaded,
                                         stagedPath = uploaded.stagedPath,
+                                        savedPath = uploaded.savedPath,
                                         uploadError = null,
                                     )
                                 }
@@ -427,7 +432,7 @@ class AppViewModel(
                     }
                     appLogger.info(
                         "AppViewModel",
-                        "图片预上传完成：localId=$localId, stagedPath=${uploaded.stagedPath}",
+                        "图片预上传完成：localId=$localId, stagedPath=${uploaded.stagedPath}, savedPath=${uploaded.savedPath ?: "none"}",
                     )
                 }.onFailure { error ->
                     if (error is CancellationException) {
@@ -880,10 +885,14 @@ class AppViewModel(
                         "草稿线程转正式会话：cwd=${draftSession.cwd}, firstMessageLength=${text.length}",
                     )
                     val created = bridgeApi.createSession(buildCreateSessionRequest(draftSession))
+                    val resolvedPendingImageAttachments = resolvePendingImageAttachmentsForSession(
+                        sessionId = created.id,
+                        pendingImageAttachments = pendingImageAttachments,
+                    )
                     submitInputNow(
                         detail = created,
                         text = text,
-                        pendingImageAttachments = pendingImageAttachments,
+                        pendingImageAttachments = resolvedPendingImageAttachments,
                         fromQueue = false,
                     )
                     _uiState.update {
@@ -2115,9 +2124,12 @@ class AppViewModel(
                 displayName = pendingImageAttachment.displayName,
                 mimeType = pendingImageAttachment.mimeType,
                 stagedPath = stagedPath,
+                savedPath = pendingImageAttachment.savedPath,
             )
         }
-        val attachmentRefs = uploadedImages.map { uploaded -> SessionInputAttachmentRef(stagedPath = uploaded.stagedPath) }
+        val attachmentRefs = uploadedImages.map { uploaded ->
+            SessionInputAttachmentRef(stagedPath = uploaded.attachmentPath)
+        }
         bridgeApi.sendInput(
             detail.id,
             SendInputRequest(
@@ -2163,6 +2175,41 @@ class AppViewModel(
             startSessionStream(detail.id)
         }
         refreshDiagnosticsLog()
+    }
+
+    private suspend fun resolvePendingImageAttachmentsForSession(
+        sessionId: String,
+        pendingImageAttachments: List<PendingImageAttachmentUiState>,
+    ): List<PendingImageAttachmentUiState> {
+        if (pendingImageAttachments.isEmpty()) {
+            return pendingImageAttachments
+        }
+
+        return pendingImageAttachments.map { attachment ->
+            if (attachment.savedPath != null) {
+                return@map attachment
+            }
+
+            val originalRequest = pendingImageUploadRequests[attachment.localId]
+                ?: return@map attachment
+            if (!originalRequest.sessionId.isNullOrBlank()) {
+                return@map attachment
+            }
+
+            val saveRequest = originalRequest.copy(sessionId = sessionId)
+            appLogger.info(
+                "AppViewModel",
+                "草稿会话图片转正式保存：localId=${attachment.localId}, sessionId=$sessionId",
+            )
+            val savedUpload = bridgeApi.uploadImageAttachment(saveRequest)
+            pendingImageUploadRequests[attachment.localId] = saveRequest
+            attachment.copy(
+                previewSource = buildBridgeImageSource(savedUpload.attachmentPath),
+                stagedPath = savedUpload.stagedPath,
+                savedPath = savedUpload.savedPath,
+                uploadError = null,
+            )
+        }
     }
 
     private fun shouldQueueInput(
@@ -2695,7 +2742,7 @@ private fun appendUserMessage(
             append("![")
             append(image.displayName)
             append("](")
-            append(buildBridgeImageSource(image.stagedPath))
+            append(buildBridgeImageSource(image.attachmentPath))
             append(")")
         }
     }

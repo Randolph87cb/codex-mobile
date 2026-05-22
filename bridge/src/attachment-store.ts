@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { extname, join, normalize, resolve } from "node:path";
+import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
+import { extname, join, normalize, parse, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { UploadedImageAttachment } from "./types.js";
 
@@ -56,6 +56,31 @@ export class AttachmentStore {
 
   getImageByPath(filePath: string): UploadedImageAttachment | undefined {
     return this.attachmentsByPath.get(normalizePathForComparison(filePath));
+  }
+
+  async saveImageToDirectory(
+    attachment: UploadedImageAttachment,
+    targetDir: string,
+    relativeRoot?: string,
+  ): Promise<UploadedImageAttachment> {
+    await mkdir(targetDir, { recursive: true });
+
+    const stagedPath = attachment.savedPath ?? attachment.path;
+    const targetPath = await createUniqueTargetPath(targetDir, attachment.displayName);
+    await copyFile(stagedPath, targetPath);
+
+    const nextAttachment: UploadedImageAttachment = {
+      ...attachment,
+      savedPath: targetPath,
+      savedRelativePath: relativeRoot
+        ? normalizeRelativePath(relativeRoot, targetPath)
+        : undefined,
+    };
+
+    this.attachments.set(attachment.id, nextAttachment);
+    this.attachmentsByPath.set(normalizePathForComparison(attachment.path), nextAttachment);
+    this.attachmentsByPath.set(normalizePathForComparison(targetPath), nextAttachment);
+    return nextAttachment;
   }
 
   containsPath(filePath: string): boolean {
@@ -122,4 +147,33 @@ function normalizeImageMimeType(value: string): string {
 function normalizePathForComparison(value: string): string {
   const normalized = normalize(resolve(value));
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+async function createUniqueTargetPath(targetDir: string, displayName: string): Promise<string> {
+  const safeName = sanitizeFileName(displayName);
+  const parsed = parse(safeName);
+  const baseName = parsed.name || "image";
+  const extension = parsed.ext || ".jpg";
+
+  let candidate = join(targetDir, `${baseName}${extension}`);
+  let counter = 2;
+  while (await pathExists(candidate)) {
+    candidate = join(targetDir, `${baseName} (${counter})${extension}`);
+    counter += 1;
+  }
+
+  return candidate;
+}
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeRelativePath(relativeRoot: string, targetPath: string): string {
+  return relative(resolve(relativeRoot), resolve(targetPath)).replace(/\\/g, "/");
 }
