@@ -32,6 +32,15 @@
   - 将消息内图片改成统一尺寸缩略窗，固定窗口裁切预览，点击继续查看原图。
   - 将发送区附件托盘改成统一卡片样式和固定预览窗，避免竖图撑高。
   - 调整输入区、卡片圆角和留白，让整体更接近用户给出的浅色参考风格。
+- `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
+  - 按参考稿改成浅色背景 + 蓝色主状态卡 + 单一主按钮结构。
+  - 桥接地址输入区改成更接近参考稿的图标前缀和圆角描边框。
+- `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+  - 改成“顶部标题 + 会话统计 + 目录分组标题 + 轻量卡片列表 + 右下角新建”的结构。
+  - 压缩会话卡信息层级，减少每条会话对垂直空间的占用。
+- `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - 连接页和会话列表页移除重复顶栏。
+  - 会话详情顶栏改成更接近参考图的标题 + 在线状态样式。
 - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Theme.kt`
   - 主题支持显式传入浅色模式，方便截图回放页稳定复现。
 - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
@@ -40,6 +49,8 @@
   - 新增/完善确定性 UI 回放入口，回放数据改为当前托管策略默认值。
 - `android/app/src/debug/AndroidManifest.xml`
   - 注册截图回放 Activity，便于用 `adb am start` 直接拉起展示页。
+- `android/app/src/debug/java/com/openai/codexmobile/PrimaryScreensShowcaseActivity.kt`
+  - 新增连接页 / 会话列表 showcase 入口，支持真实截图验证。
 - `android/app/src/main/AndroidManifest.xml`
   - 补上 `ReplayHarnessActivity` 声明，修正回放测试无法启动的问题。
 - `android/app/src/androidTest/java/com/openai/codexmobile/SessionDetailScreenshotTest.kt`
@@ -54,6 +65,14 @@
   - 展示会话详情页主参考图，包含紧凑目标区和发送区固定图片预览窗。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript.png`
   - 展示消息区内联图片的固定尺寸缩略窗效果。
+- `./.tmp/ui-screenshots/connection-showcase-v2.png`
+  - 展示连接页重构后的主视觉和输入区布局。
+- `./.tmp/ui-screenshots/sessions-showcase-v3.png`
+  - 展示会话列表的分组结构、轻量会话卡和浮动新建按钮。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
+  - 会话详情页第二轮截图，包含新的顶栏样式。
+- `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
+  - 会话详情页第二轮消息图窗截图。
 
 ## 验证结果
 
@@ -61,6 +80,11 @@
 - `cd android; .\gradlew.bat testDebugUnitTest`：通过
 - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailConfigIsolationTest'`：通过
 - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+- 第二轮 UI 调整后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailConfigIsolationTest'`：通过
 
 ## 备注
 

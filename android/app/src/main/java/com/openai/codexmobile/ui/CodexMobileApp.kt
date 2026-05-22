@@ -2,7 +2,11 @@ package com.openai.codexmobile.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,10 +25,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -137,6 +143,8 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
             AppTopBar(
                 currentRoute = currentRoute,
                 navController = navController,
+                selectedSessionTitle = uiState.selectedSession?.title,
+                sessionConnected = uiState.sessionRealtimeState.isConnected,
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -319,18 +327,31 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
 private fun AppTopBar(
     currentRoute: String?,
     navController: NavHostController,
+    selectedSessionTitle: String?,
+    sessionConnected: Boolean,
 ) {
+    if (currentRoute == Routes.Connection || currentRoute == Routes.Sessions) {
+        return
+    }
     val isSessionDetailRoute = currentRoute == Routes.DraftSession ||
         currentRoute == Routes.SessionDetail ||
         currentRoute?.startsWith("session/") == true
     val title = when (currentRoute) {
-        Routes.Connection -> "Codex Mobile"
-        Routes.Sessions -> "Codex Mobile"
         Routes.DraftSession -> "草稿线程"
         Routes.Settings -> "设置"
         else -> "Codex 移动端"
     }
-    val resolvedTitle = if (currentRoute?.startsWith("session/") == true) "会话详情" else title
+    val resolvedTitle = if (currentRoute?.startsWith("session/") == true) {
+        selectedSessionTitle ?: "会话详情"
+    } else {
+        title
+    }
+    val sessionStatusText = if (sessionConnected) "在线" else "快照"
+    val sessionStatusDotColor = if (sessionConnected) {
+        MaterialTheme.colorScheme.tertiary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(
@@ -338,7 +359,35 @@ private fun AppTopBar(
             titleContentColor = MaterialTheme.colorScheme.onBackground,
             navigationIconContentColor = MaterialTheme.colorScheme.primary,
         ),
-        title = { Text(text = resolvedTitle) },
+        title = {
+            if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
+                Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
+                    Text(text = resolvedTitle)
+                    Row(
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.foundation.Canvas(
+                            modifier = Modifier
+                                .padding(top = 1.dp)
+                                .size(8.dp),
+                        ) {
+                            drawCircle(
+                                color = sessionStatusDotColor,
+                                radius = size.minDimension / 2,
+                            )
+                        }
+                        Text(
+                            text = sessionStatusText,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else {
+                Text(text = resolvedTitle)
+            }
+        },
         navigationIcon = {
             if (isSessionDetailRoute || currentRoute == Routes.Settings) {
                 IconButton(onClick = { navController.popBackStack() }) {
