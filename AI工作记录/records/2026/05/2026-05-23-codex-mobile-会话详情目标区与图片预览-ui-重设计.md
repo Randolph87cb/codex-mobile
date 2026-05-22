@@ -757,3 +757,24 @@
 
 - 本轮继续压的是详情页默认态最厚的三块：顶部状态条、目标卡首行和发送图片区托盘都再收了一层，首屏纵向占用更小，状态和目标不再那么抢消息区。
 - 发送图片区继续保持固定尺寸预览窗，但外层圆角、头部图标块、缩略卡间距和缩略图窗口本身都更轻；另外顺手补了截图测试的公共导出路径，后续每轮都能稳定拉回参考图做对比。
+
+- 消息卡本体继续收口并清理截图样本后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：为了拿到本轮真实截图，先清空了设备侧 `/sdcard/Download/codex-mobile-ui/*.png`，避免同名导出文件残留导致拉回的是旧图。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v58.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v58.png`
+
+## 本轮说明
+
+- 本轮继续压的是消息卡本体和执行过程卡：宽度、圆角、内边距、头部标签间距和复制按钮尺寸都再收了一层，消息流不再像上一版那样“鼓”。
+- 截图样本里的 transcript 也去掉了内联图片，只保留更接近参考图的纯文本消息流；图片展示验证继续放在下方固定尺寸托盘里，所以 `v58` 的整体构图比上一版更贴近参考图。

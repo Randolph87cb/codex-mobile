@@ -341,7 +341,7 @@ fun SessionDetailScreen(
                     .padding(horizontal = 2.dp, vertical = 2.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
@@ -1482,12 +1482,12 @@ private fun TranscriptBubbleCard(
         Card(
             modifier = Modifier
                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(if (isUser) 0.80f else 0.86f),
+                .fillMaxWidth(if (isUser) 0.78f else 0.84f),
             shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (isUser) 16.dp else 8.dp,
-                bottomEnd = if (isUser) 8.dp else 16.dp,
+                topStart = 15.dp,
+                topEnd = 15.dp,
+                bottomStart = if (isUser) 15.dp else 7.dp,
+                bottomEnd = if (isUser) 7.dp else 15.dp,
             ),
             colors = CardDefaults.cardColors(
                 containerColor = backgroundColor,
@@ -1495,8 +1495,8 @@ private fun TranscriptBubbleCard(
             ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(horizontal = 9.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 if (isCollapsible) {
                     TranscriptToggleHeader(
@@ -1554,13 +1554,13 @@ private fun ExecutionProcessCard(
         Card(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.86f),
-            shape = RoundedCornerShape(20.dp),
+                .fillMaxWidth(0.84f),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(9.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 TranscriptToggleHeader(
                     bubble = null,
@@ -1576,7 +1576,7 @@ private fun ExecutionProcessCard(
                 )
 
                 if (expanded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         group.activities.forEachIndexed { activityIndex, bubble ->
                             ExecutionActivityCard(
                                 toggleTag = TestTags.SessionDetailExecutionEntryTogglePrefix + "${index}_${activityIndex}",
@@ -1613,11 +1613,11 @@ private fun ExecutionActivityCard(
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(15.dp),
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            modifier = Modifier.padding(9.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             TranscriptToggleHeader(
                 bubble = bubble,
@@ -1659,7 +1659,7 @@ private fun TranscriptToggleHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -1667,7 +1667,7 @@ private fun TranscriptToggleHeader(
                 .weight(1f)
                 .testTag(toggleTag)
                 .clickable(onClick = onToggle),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
@@ -1689,13 +1689,13 @@ private fun TranscriptToggleHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(24.dp)
+                .size(22.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(13.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
@@ -1706,7 +1706,7 @@ private fun TranscriptToggleHeader(
                 Icons.Default.KeyboardArrowDown
             },
             contentDescription = if (expanded) "收起消息" else "展开消息",
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(15.dp),
         )
     }
 }
@@ -1721,12 +1721,12 @@ private fun TranscriptStaticHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
@@ -1748,13 +1748,13 @@ private fun TranscriptStaticHeader(
         IconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(24.dp)
+                .size(22.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(13.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
