@@ -1650,7 +1650,7 @@ private fun TranscriptToggleHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -1658,7 +1658,7 @@ private fun TranscriptToggleHeader(
                 .weight(1f)
                 .testTag(toggleTag)
                 .clickable(onClick = onToggle),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
@@ -1667,10 +1667,11 @@ private fun TranscriptToggleHeader(
                     ?: MaterialTheme.colorScheme.primaryContainer,
                 contentColor = bubble?.headerContentColor()
                     ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                compact = true,
             )
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1678,13 +1679,13 @@ private fun TranscriptToggleHeader(
         FilledTonalIconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(36.dp)
+                .size(32.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
             )
         }
         Icon(
@@ -1694,7 +1695,7 @@ private fun TranscriptToggleHeader(
                 Icons.Default.KeyboardArrowDown
             },
             contentDescription = if (expanded) "收起消息" else "展开消息",
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
     }
 }
@@ -1709,23 +1710,24 @@ private fun TranscriptStaticHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             TranscriptLabelChip(
                 text = label,
                 icon = bubble.headerIcon(),
                 containerColor = bubble.headerContainerColor(),
                 contentColor = bubble.headerContentColor(),
+                compact = true,
             )
             title?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1734,13 +1736,13 @@ private fun TranscriptStaticHeader(
         FilledTonalIconButton(
             onClick = onCopy,
             modifier = Modifier
-                .size(36.dp)
+                .size(32.dp)
                 .testTag(copyTag),
         ) {
             Icon(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
             )
         }
     }

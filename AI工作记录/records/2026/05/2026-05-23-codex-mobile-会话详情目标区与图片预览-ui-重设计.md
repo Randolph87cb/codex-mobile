@@ -571,3 +571,20 @@
 
 - 本轮继续压缩详情页顶栏：`TopAppBar` 高度收成 `58dp`，会话标题从 `headlineSmall` 收成 `titleLarge`，在线状态点、返回键和右侧 action 图标也都同步缩小了一层。
 - 目的是把首屏顶部做得更像参考图那种轻量工具栏，而不改任何操作位和页面结构。
+
+- 消息气泡头部继续压缩后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v47.png`
+
+## 本轮说明
+
+- 本轮继续收的是消息头部：`你 / Codex` 标签 chip 改成紧凑尺寸，标题字级从 `titleMedium` 收成 `titleSmall`，右侧复制按钮和展开箭头也同步缩小。
+- 目标是让消息气泡更接近参考图那种“内容优先、头部退后”的感觉，同时保留复制和展开能力，以及现有 test tag。
