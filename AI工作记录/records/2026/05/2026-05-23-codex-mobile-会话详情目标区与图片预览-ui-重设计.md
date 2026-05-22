@@ -736,3 +736,24 @@
 
 - 本轮继续收的是消息卡本体：用户/助手消息宽度又缩了一层，执行过程卡也同步变窄，消息流不再像上一版那样横向铺得太满。
 - 气泡圆角、内边距和卡内元素间距也一起压了一层，所以消息正文、执行过程卡和发送图片区之间的厚度关系更接近参考图。
+
+- 状态条 / 目标卡 / 附件托盘继续收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：当前 PowerShell 会话没有全局 `adb`，这轮统一改用仓库内 `platform-tools\adb.exe`；同时发现 `am start` 直拉 showcase activity 仍可能命中设备侧解析异常，所以截图验证改成由 `SessionDetailScreenshotTest` 直接导出到 `/sdcard/Download/codex-mobile-ui/` 后再拉回工作区。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v56.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v56.png`
+
+## 本轮说明
+
+- 本轮继续压的是详情页默认态最厚的三块：顶部状态条、目标卡首行和发送图片区托盘都再收了一层，首屏纵向占用更小，状态和目标不再那么抢消息区。
+- 发送图片区继续保持固定尺寸预览窗，但外层圆角、头部图标块、缩略卡间距和缩略图窗口本身都更轻；另外顺手补了截图测试的公共导出路径，后续每轮都能稳定拉回参考图做对比。

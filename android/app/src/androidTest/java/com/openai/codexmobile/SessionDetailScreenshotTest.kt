@@ -1,11 +1,14 @@
 package com.openai.codexmobile
 
+import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.PaddingValues
@@ -173,9 +176,36 @@ class SessionDetailScreenshotTest {
     ) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val outputDir = File(context.getExternalFilesDir(null), "test-screenshots").apply { mkdirs() }
-        FileOutputStream(File(outputDir, fileName)).use { stream ->
+        val outputFile = File(outputDir, fileName)
+        FileOutputStream(outputFile).use { stream ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
         }
+        saveCaptureToDownloads(context, fileName, bitmap)
+    }
+
+    private fun saveCaptureToDownloads(
+        context: android.content.Context,
+        fileName: String,
+        bitmap: Bitmap,
+    ) {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+            put(
+                MediaStore.MediaColumns.RELATIVE_PATH,
+                Environment.DIRECTORY_DOWNLOADS + "/codex-mobile-ui",
+            )
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val resolver = context.contentResolver
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val itemUri = resolver.insert(collection, values) ?: return
+        resolver.openOutputStream(itemUri)?.use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        }
+        values.clear()
+        values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+        resolver.update(itemUri, values, null, null)
     }
 
     private fun createSampleImageDataUrl(
