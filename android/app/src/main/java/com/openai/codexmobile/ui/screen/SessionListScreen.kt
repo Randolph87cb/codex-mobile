@@ -470,7 +470,7 @@ private fun SessionDirectoryCard(
             }
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -484,7 +484,7 @@ private fun SessionDirectoryCard(
                 ) {
                     Text(
                         text = group.sessions.size.toString(),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }

@@ -827,7 +827,7 @@ private fun GoalCard(
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
