@@ -42,6 +42,9 @@
 - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
   - 连接页和会话列表页移除重复顶栏。
   - 会话详情顶栏改成更接近参考图的标题 + 在线状态样式。
+  - 继续把会话详情顶栏 action 区补齐为更接近参考图的多图标排布。
+- `android/app/src/debug/java/com/openai/codexmobile/SessionDetailShowcaseActivity.kt`
+  - showcase 顶栏同步补齐参考图风格的 action 排布，用于截图验证。
 - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Theme.kt`
   - 主题支持显式传入浅色模式，方便截图回放页稳定复现。
 - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
@@ -68,16 +71,22 @@
   - 展示消息区内联图片的固定尺寸缩略窗效果。
 - `./.tmp/ui-screenshots/connection-showcase-v2.png`
   - 展示连接页重构后的主视觉和输入区布局。
+- `./.tmp/ui-screenshots/connection-showcase-v3.png`
+  - 连接页第三轮截图，右上角设置图标更接近参考稿轻量样式。
 - `./.tmp/ui-screenshots/sessions-showcase-v3.png`
   - 展示会话列表的分组结构、轻量会话卡和浮动新建按钮。
 - `./.tmp/ui-screenshots/sessions-showcase-v5.png`
   - 会话列表第二轮截图，卡片密度进一步压缩，更接近参考稿。
+- `./.tmp/ui-screenshots/sessions-showcase-v6.png`
+  - 会话列表第三轮截图，顶栏工具区改成更接近参考稿的搜索 / 筛选 / 更多布局。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v6.png`
   - 会话详情页第二轮截图，包含新的顶栏样式。
 - `./.tmp/ui-screenshots/session-detail-showcase-transcript-v2.png`
   - 会话详情页第二轮消息图窗截图。
 - `./.tmp/ui-screenshots/session-detail-showcase-full-v7.png`
   - 会话详情页第三轮截图，顶部状态条和目标卡进一步收瘦。
+- `./.tmp/ui-screenshots/session-detail-showcase-full-v8.png`
+  - 会话详情页第四轮截图，顶栏 action 排布更接近参考稿。
 
 ## 验证结果
 
@@ -91,6 +100,11 @@
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
   - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailConfigIsolationTest'`：通过
 - 第三轮密度微调后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+- 顶栏与工具区拟真度调整后再次执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
   - `cd android; .\gradlew.bat testDebugUnitTest`：通过

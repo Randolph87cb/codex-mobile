@@ -22,8 +22,11 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -33,6 +36,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -89,6 +93,8 @@ fun SessionListScreen(
     onCreateDraft: (String) -> Unit,
     onDisconnect: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSearch: () -> Unit = {},
+    onFilter: () -> Unit = {},
 ) {
     val groups = groupSessionsByDirectory(sessions)
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
@@ -201,14 +207,28 @@ fun SessionListScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            FilledTonalIconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.testTag(TestTags.SessionListOpenSettingsButton),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "设置",
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                IconButton(onClick = onSearch) {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = "搜索",
+                    )
+                }
+                IconButton(onClick = onFilter) {
+                    Icon(
+                        imageVector = Icons.Filled.Tune,
+                        contentDescription = "筛选",
+                    )
+                }
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.testTag(TestTags.SessionListOpenSettingsButton),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "更多",
+                    )
+                }
             }
         }
 

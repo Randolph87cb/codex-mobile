@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -79,7 +78,7 @@ fun ConnectionScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            FilledTonalIconButton(
+            IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.testTag(TestTags.ConnectionOpenSettingsButton),
             ) {
