@@ -702,15 +702,15 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -754,14 +754,14 @@ private fun StatusStrip(
                 IconButton(
                     onClick = onToggleExpanded,
                     modifier = Modifier
-                        .padding(start = 1.dp)
-                        .size(24.dp),
+                        .padding(start = 0.dp)
+                        .size(22.dp),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                         contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
             }
@@ -839,19 +839,19 @@ private fun GoalCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 11.dp, vertical = 3.dp),
+                .padding(horizontal = 10.dp, vertical = 3.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TranscriptLabelChip(
@@ -863,8 +863,9 @@ private fun GoalCard(
                 )
                 Text(
                     text = primaryStatusText,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -873,7 +874,9 @@ private fun GoalCard(
                     imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起目标详情" else "展开目标详情",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp, end = 1.dp),
+                    modifier = Modifier
+                        .padding(start = 6.dp)
+                        .size(18.dp),
                 )
             }
             Text(
@@ -1012,15 +1015,15 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .padding(horizontal = 5.dp, vertical = 3.dp),
+            .defaultMinSize(minHeight = 44.dp)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(12.dp),
+            modifier = Modifier.size(11.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
@@ -1031,7 +1034,7 @@ private fun SessionStatusMetric(
         Text(
             text = value,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -1044,7 +1047,7 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(32.dp)
+            .height(28.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.09f)),
     )
 }

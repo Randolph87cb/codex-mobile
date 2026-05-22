@@ -660,3 +660,22 @@
 
 - 本轮继续收的是消息头结构：`你 / Codex / 执行过程` 这条标签从彩色胶囊退成更轻的 plain caption，图标和文字都更小，和参考图里“作者行退后、正文前置”的感觉更接近。
 - 复制按钮也继续缩了一层，但复制能力、展开能力和现有 test tag 都保留，所以只是在视觉上继续弱化动作，不改消息交互。
+
+- 顶部状态条 / 目标卡比例继续收口后再次执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过，但随后 `am start` 仍会命中设备侧旧问题
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `adb install -r android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`；这轮截图继续使用手工 `adb install -r`，并在 `adb shell am start` 后额外等待 5 秒，避开 splash 首屏。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v51b.png`
+
+## 本轮说明
+
+- 本轮继续收的是顶部两块的横向比例：状态条四列指标的最小高度、内边距、箭头尺寸和分隔线高度都再压了一层，整条卡片不再那么“厚”和“均分感太强”。
+- 目标卡也同步收口：圆角和横向 padding 更小，状态文字从偏重标题收成更轻的 `labelLarge`，右侧箭头也再缩了一层，所以目标行和状态条的视觉重心比上一版更接近参考图。
