@@ -37,6 +37,7 @@
   - 再继续压缩详情页首屏纵向密度：外层纵向 padding、状态条指标块、目标卡、transcript 卡和输入区的留白都收小一层，让首屏更多地露出消息与附件区。
   - 最新一轮继续压缩消息气泡本体：缩小气泡圆角和内边距，收紧标签 chip、复制按钮和气泡间距，让消息流更接近参考图的轻薄卡片感。
   - 最新一轮继续压缩底部输入区：缩小加图按钮、输入框和发送按钮的高度与圆角，降低附件卡和输入区之间的视觉厚度，让底部比例更接近参考图。
+  - 最新一轮继续压缩底部输入区比例：在保持整体外层留白不变的前提下，收小加图按钮、输入框和发送按钮，让附件区和输入区的上下节奏更接近参考图。
   - 调整输入区、卡片圆角和留白，让整体更接近用户给出的浅色参考风格。
   - 第六轮把目标卡首行的重复状态胶囊移到底部指标区，首行收成更接近参考稿的“标签 + 状态 + 展开”关系。
   - 第七轮把状态条改成单外框四列指标 + 细分隔线，缩小外层与列间边距，继续贴近参考稿。
@@ -422,6 +423,13 @@
 
 - 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
 - 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v39.png`
+
+- 底部输入区高度与附件区比例继续收口后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
 
 ## 备注
 
