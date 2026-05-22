@@ -537,3 +537,37 @@
 
 - 本轮继续压的是底部输入条：外层容器圆角、上下 padding、加图按钮、文本框最小高度和发送按钮都从 `52dp` 体系收到了 `48dp` 体系。
 - 发送、加图、test tag 和现有交互都没变，只是把默认态做得更薄，让底部视觉重量更接近参考图。
+
+- 底部输入区继续压缩默认态后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v45.png`
+
+## 本轮说明
+
+- 本轮继续压缩首屏纵向节奏，重点是底部输入条默认态；当前截图已验证输入条更接近参考图的薄型比例。
+- 这轮没有改发送逻辑、图片能力和测试标记，只继续收紧了默认态尺寸。
+
+- 顶栏标题区继续压缩后再次执行：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - 说明：继续保持 Gradle 串行执行，并设置 `GRADLE_OPTS='-Dkotlin.compiler.execution.strategy=in-process'`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v46.png`
+
+## 本轮说明
+
+- 本轮继续压缩详情页顶栏：`TopAppBar` 高度收成 `58dp`，会话标题从 `headlineSmall` 收成 `titleLarge`，在线状态点、返回键和右侧 action 图标也都同步缩小了一层。
+- 目的是把首屏顶部做得更像参考图那种轻量工具栏，而不改任何操作位和页面结构。
