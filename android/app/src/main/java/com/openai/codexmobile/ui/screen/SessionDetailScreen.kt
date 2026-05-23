@@ -385,13 +385,13 @@ fun SessionDetailScreen(
             )
         }
         Surface(
-            shape = RoundedCornerShape(11.dp),
+            shape = RoundedCornerShape(10.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 1.dp, vertical = 1.dp),
+                    .padding(horizontal = 0.dp, vertical = 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
@@ -399,13 +399,13 @@ fun SessionDetailScreen(
                     onClick = onPickImage,
                     enabled = !isLoading && detail != null,
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(28.dp)
                         .testTag(TestTags.SessionDetailAttachImageButton),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = "添加图片",
-                        modifier = Modifier.size(11.dp),
+                        modifier = Modifier.size(10.dp),
                     )
                 }
                 OutlinedTextField(
@@ -413,7 +413,7 @@ fun SessionDetailScreen(
                     onValueChange = onDraftMessageChange,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 30.dp)
+                        .heightIn(min = 28.dp)
                         .testTag(TestTags.SessionDetailDraftField),
                     placeholder = {
                         Text(
@@ -425,7 +425,7 @@ fun SessionDetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     },
-                    shape = RoundedCornerShape(9.dp),
+                    shape = RoundedCornerShape(8.dp),
                     maxLines = 3,
                 )
                 Button(
@@ -435,21 +435,21 @@ fun SessionDetailScreen(
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
                     modifier = Modifier
-                        .defaultMinSize(minWidth = 30.dp, minHeight = 30.dp)
+                        .defaultMinSize(minWidth = 28.dp, minHeight = 28.dp)
                         .testTag(TestTags.SessionDetailSendButton),
-                    shape = RoundedCornerShape(9.dp),
+                    shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(9.dp),
-                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(8.dp),
+                            strokeWidth = 1.8.dp,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = if (draftSession != null) "开始" else "发送",
-                            modifier = Modifier.size(11.dp),
+                            modifier = Modifier.size(10.dp),
                         )
                     }
                 }
@@ -1468,7 +1468,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.53f else 0.59f
+        val bubbleWidthFraction = if (isUser) 0.51f else 0.57f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1546,7 +1546,7 @@ private fun TranscriptBubbleCard(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
                 ) {
                     ConversationSpeakerHeader(
                         bubble = bubble,
@@ -1556,14 +1556,14 @@ private fun TranscriptBubbleCard(
                         modifier = Modifier
                             .fillMaxWidth(bubbleWidthFraction)
                             .padding(
-                                start = if (isUser) 0.dp else 18.dp,
-                                end = if (isUser) 18.dp else 0.dp,
+                                start = if (isUser) 0.dp else 16.dp,
+                                end = if (isUser) 16.dp else 0.dp,
                             ),
                         shape = RoundedCornerShape(
-                            topStart = 12.dp,
-                            topEnd = 12.dp,
-                            bottomStart = if (isUser) 12.dp else 6.dp,
-                            bottomEnd = if (isUser) 6.dp else 12.dp,
+                            topStart = 11.dp,
+                            topEnd = 11.dp,
+                            bottomStart = if (isUser) 11.dp else 5.dp,
+                            bottomEnd = if (isUser) 5.dp else 11.dp,
                         ),
                         colors = CardDefaults.cardColors(
                             containerColor = backgroundColor,
@@ -1571,24 +1571,24 @@ private fun TranscriptBubbleCard(
                         ),
                     ) {
                         Box(
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
                         ) {
                             IconButton(
                                 onClick = { onCopyText(bubble.copyText) },
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(12.dp)
+                                    .size(11.dp)
                                     .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.ContentCopy,
                                     contentDescription = "复制消息",
-                                    modifier = Modifier.size(6.dp),
+                                    modifier = Modifier.size(5.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                                 )
                             }
                             Column(
-                                modifier = Modifier.padding(end = 11.dp),
+                                modifier = Modifier.padding(end = 10.dp),
                             ) {
                                 TranscriptPartsColumn(
                                     parts = bubble.parts,
@@ -1615,7 +1615,7 @@ private fun ConversationSpeakerHeader(
     isUser: Boolean,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(horizontal = 0.dp),
     ) {
@@ -1623,13 +1623,13 @@ private fun ConversationSpeakerHeader(
             ConversationSpeakerBadge(isUser = false)
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ConversationSpeakerBadge(isUser = true)
@@ -1643,13 +1643,13 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
         shape = CircleShape,
         color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(16.dp),
+        modifier = Modifier.size(15.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
                 Box(
                     modifier = Modifier
-                        .size(5.dp)
+                        .size(4.dp)
                         .background(
                             color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
                             shape = CircleShape,
