@@ -48,6 +48,7 @@
 - 用户继续要求“再收一轮”后，补做详情页第二轮微调：提升共享顶栏与 showcase 顶栏的可读性，修正状态条指标过小问题，并继续提高 chip、placeholder 和分隔线的真机可读性。
 - 第二轮改动覆盖 `SessionDetailScreen.kt`、`CodexMobileApp.kt`、`SessionDetailShowcaseActivity.kt`，确保模拟器预览与真实页面顶栏节奏一致。
 - 用户随后进一步指出状态条下方的状态值文案冗余，因此继续做第三轮小修：移除 `进行中 / 已连接 / 无排队 / 正常` 这一排可见文本，仅保留图标与标签。
+- 第三轮验证中，`testDebugUnitTest` 先通过，但 `build-android-debug.ps1` 因 Kotlin 增量缓存损坏失败；随后执行 `gradlew --stop` 并清理 `app/build/kotlin/compileDebugKotlin` 缓存后，调试构建恢复通过。
 
 ## 结果
 
@@ -69,6 +70,9 @@
 - 验证结果：
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+- 第三轮状态条简化后再次执行：
+- `cd android; .\gradlew.bat testDebugUnitTest`：通过
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：首次失败，原因为 Kotlin 增量缓存损坏；清理缓存后再次通过
 
 ## 可复用经验
 
