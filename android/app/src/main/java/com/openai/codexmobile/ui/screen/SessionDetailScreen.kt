@@ -61,6 +61,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -800,32 +801,56 @@ private fun StatusStrip(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(TestTags.SessionDetailStatusDetails),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
-                    Text(text = "连接：${sessionRealtimeState.connectionText}", style = MaterialTheme.typography.bodyMedium)
-                    Text(text = "状态：${sessionRealtimeState.statusText}", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = sessionRealtimeState.lastEventText ?: "等待实时事件。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = onRefreshSession,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag(TestTags.SessionDetailStatusRefreshButton),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = "立即同步",
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                    OutlinedCard(
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = "连接：${sessionRealtimeState.connectionText}",
+                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                            )
+                            Text(
+                                text = "状态：${sessionRealtimeState.statusText}",
+                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                            )
+                            Text(
+                                text = "最近事件：${sessionRealtimeState.lastEventText ?: "等待实时事件。"}",
+                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                            )
+                        }
+                    }
                     sessionRealtimeState.fallbackNotice?.let { notice ->
                         Text(
                             text = notice,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
-                    }
-                    if (!isDraft) {
-                        FilledTonalIconButton(
-                            onClick = onRefreshSession,
-                            modifier = Modifier.testTag(TestTags.SessionDetailStatusRefreshButton),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Refresh,
-                                contentDescription = "立即同步",
-                            )
-                        }
                     }
                     SessionConfigRow(
                         detail = detail,
@@ -1086,64 +1111,68 @@ private fun SessionConfigRow(
         return
     }
 
-    FlowRow(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailConfigRow),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.Cwd) },
-            modifier = Modifier.testTag(TestTags.SessionDetailConfigCwdButton),
-        ) {
-            Icon(imageVector = Icons.Filled.Work, contentDescription = null)
-            Text(
-                text = "目录",
-                modifier = Modifier.padding(start = 8.dp),
-                maxLines = 1,
-            )
-        }
-        OutlinedButton(
             onClick = { onOpenEditor(SessionConfigEditor.Model) },
-            modifier = Modifier.testTag(TestTags.SessionDetailConfigModelButton),
+            modifier = Modifier
+                .weight(1f)
+                .testTag(TestTags.SessionDetailConfigModelButton),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            Icon(imageVector = Icons.Filled.Tune, contentDescription = null)
+            Icon(
+                imageVector = Icons.Filled.Tune,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+            )
             Text(
                 text = detail.model,
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier.padding(start = 6.dp),
                 maxLines = 1,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
         OutlinedButton(
             onClick = { onOpenEditor(SessionConfigEditor.ReasoningEffort) },
-            modifier = Modifier.testTag(TestTags.SessionDetailConfigReasoningButton),
+            modifier = Modifier
+                .weight(1f)
+                .testTag(TestTags.SessionDetailConfigReasoningButton),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            Icon(imageVector = Icons.Filled.Bolt, contentDescription = null)
+            Icon(
+                imageVector = Icons.Filled.Bolt,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+            )
             Text(
                 text = "推理 ${localizedReasoning(detail.reasoningEffort)}",
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier.padding(start = 6.dp),
                 maxLines = 1,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
         OutlinedButton(
             onClick = { onOpenEditor(SessionConfigEditor.ServiceTier) },
-            modifier = Modifier.testTag(TestTags.SessionDetailConfigServiceTierButton),
+            modifier = Modifier
+                .weight(1f)
+                .testTag(TestTags.SessionDetailConfigServiceTierButton),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            Icon(imageVector = Icons.Filled.Speed, contentDescription = null)
+            Icon(
+                imageVector = Icons.Filled.Speed,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+            )
             Text(
                 text = "速度 ${localizedService(detail.serviceTier)}",
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier.padding(start = 6.dp),
                 maxLines = 1,
-            )
-        }
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.SandboxMode) },
-            modifier = Modifier.testTag(TestTags.SessionDetailConfigSandboxButton),
-        ) {
-            Text(
-                text = "权限 ${localizedSandbox(detail.sandboxMode)}",
-                maxLines = 1,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
     }

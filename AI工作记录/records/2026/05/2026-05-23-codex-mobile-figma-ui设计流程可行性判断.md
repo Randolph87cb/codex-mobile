@@ -49,6 +49,8 @@
 - 第二轮改动覆盖 `SessionDetailScreen.kt`、`CodexMobileApp.kt`、`SessionDetailShowcaseActivity.kt`，确保模拟器预览与真实页面顶栏节奏一致。
 - 用户随后进一步指出状态条下方的状态值文案冗余，因此继续做第三轮小修：移除 `进行中 / 已连接 / 无排队 / 正常` 这一排可见文本，仅保留图标与标签。
 - 第三轮验证中，`testDebugUnitTest` 先通过，但 `build-android-debug.ps1` 因 Kotlin 增量缓存损坏失败；随后执行 `gradlew --stop` 并清理 `app/build/kotlin/compileDebugKotlin` 缓存后，调试构建恢复通过。
+- 用户随后选定此前给出的 `B` 方向，并明确要求去掉 `目录` 与 `权限` 选项，只保留一排 3 个按钮。
+- 按 `B` 方向重构状态详情扩展区：把文本摘要包进独立轻卡片、把刷新动作缩到右上角、把底部能力区改成仅保留 `模型 / 推理 / 速度` 三个按钮的一排结构。
 
 ## 结果
 
@@ -73,6 +75,9 @@
 - 第三轮状态条简化后再次执行：
 - `cd android; .\gradlew.bat testDebugUnitTest`：通过
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：首次失败，原因为 Kotlin 增量缓存损坏；清理缓存后再次通过
+- `B` 方案落地后再次执行：
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+- `cd android; .\gradlew.bat testDebugUnitTest`：通过
 
 ## 可复用经验
 
