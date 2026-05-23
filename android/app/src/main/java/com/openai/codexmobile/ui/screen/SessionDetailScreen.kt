@@ -763,28 +763,24 @@ private fun StatusStrip(
             ) {
                 SessionStatusMetric(
                     label = "会话",
-                    value = localizedStatusLabel(detail?.status ?: "idle"),
                     icon = statusIcon,
                     modifier = Modifier.weight(1f),
                 )
                 StatusMetricDivider()
                 SessionStatusMetric(
                     label = "连接",
-                    value = if (isDraft) "草稿" else if (sessionRealtimeState.isConnected) "已连接" else "快照",
                     icon = connectionIcon,
                     modifier = Modifier.weight(1f),
                 )
                 StatusMetricDivider()
                 SessionStatusMetric(
                     label = "排队",
-                    value = if (queuedInputs.isEmpty()) "无排队" else "${queuedInputs.size} 条",
                     icon = queueIcon,
                     modifier = Modifier.weight(1f),
                 )
                 StatusMetricDivider()
                 SessionStatusMetric(
                     label = "审批",
-                    value = if (sessionRealtimeState.pendingApproval != null) "待处理" else "正常",
                     icon = if (sessionRealtimeState.pendingApproval != null) {
                         Icons.Filled.HourglassTop
                     } else {
@@ -1045,36 +1041,27 @@ private fun GoalMetricChip(
 @Composable
 private fun SessionStatusMetric(
     label: String,
-    value: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 42.dp)
+            .defaultMinSize(minHeight = 28.dp)
             .padding(horizontal = 2.dp, vertical = 0.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp, lineHeight = 12.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
             maxLines = 1,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, lineHeight = 13.sp),
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
