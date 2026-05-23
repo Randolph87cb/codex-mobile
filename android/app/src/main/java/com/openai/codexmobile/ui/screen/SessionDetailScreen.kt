@@ -306,7 +306,7 @@ fun SessionDetailScreen(
             .fillMaxSize()
             .padding(paddingValues)
             .padding(horizontal = 6.dp, vertical = 3.dp),
-        verticalArrangement = Arrangement.spacedBy(1.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         StatusStrip(
             detail = detail,
@@ -852,7 +852,7 @@ private fun GoalCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(7.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
@@ -876,7 +876,7 @@ private fun GoalCard(
                 )
                 Text(
                     text = primaryStatusText,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f),
                     maxLines = 1,
@@ -888,14 +888,14 @@ private fun GoalCard(
                     contentDescription = if (expanded) "收起目标详情" else "展开目标详情",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
-                        .padding(start = 2.dp)
-                        .size(9.dp),
+                        .padding(start = 1.dp)
+                        .size(8.dp),
                 )
             }
             Text(
                 text = objectiveText,
-                modifier = Modifier.padding(end = 12.dp),
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 14.sp),
+                modifier = Modifier.padding(end = 10.dp),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
                 maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1013,8 +1013,8 @@ private fun GoalMetricChip(
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
         )
     }
 }
@@ -1028,7 +1028,7 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 22.dp)
+            .defaultMinSize(minHeight = 18.dp)
             .padding(horizontal = 0.dp, vertical = 0.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1036,18 +1036,18 @@ private fun SessionStatusMetric(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(3.dp),
+            modifier = Modifier.size(2.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 10.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
             maxLines = 1,
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -1061,7 +1061,7 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(10.dp)
+            .height(8.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.07f)),
     )
 }
@@ -1422,7 +1422,7 @@ private fun TranscriptBubbleList(
         return
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEachIndexed { index, item ->
             when (item) {
                 is TranscriptDisplayItem.BubbleItem -> TranscriptBubbleCard(
@@ -1615,7 +1615,7 @@ private fun ConversationSpeakerHeader(
     isUser: Boolean,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(horizontal = 0.dp),
     ) {
@@ -1623,13 +1623,13 @@ private fun ConversationSpeakerHeader(
             ConversationSpeakerBadge(isUser = false)
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ConversationSpeakerBadge(isUser = true)
@@ -1643,13 +1643,13 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
         shape = CircleShape,
         color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(15.dp),
+        modifier = Modifier.size(13.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
                 Box(
                     modifier = Modifier
-                        .size(4.dp)
+                        .size(3.dp)
                         .background(
                             color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
                             shape = CircleShape,

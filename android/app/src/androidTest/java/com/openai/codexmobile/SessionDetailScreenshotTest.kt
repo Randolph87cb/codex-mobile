@@ -111,6 +111,8 @@ class SessionDetailScreenshotTest {
 
                                 你：先修回调，再把两张失败图片重试一遍。
 
+                                Codex：验签已修复，正在回放上传。
+
                                 Codex：已开始复测上传链路，附图托盘会固定预览窗口，点缩略图直接看原图。
                             """.trimIndent(),
                             cwd = "D:\\workspace\\codex-mobile",
