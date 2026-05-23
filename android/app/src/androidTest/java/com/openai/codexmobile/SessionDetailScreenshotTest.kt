@@ -108,6 +108,10 @@ class SessionDetailScreenshotTest {
                                 你：请帮我检查支付回调失败，并把图片预览收紧。
 
                                 Codex：已定位到签名串顺序不一致，接下来调整验签并复测上传链路。
+
+                                你：先修回调，再把两张失败图片重试一遍。
+
+                                Codex：已开始复测上传链路，附图托盘会固定预览窗口，点缩略图直接看原图。
                             """.trimIndent(),
                             cwd = "D:\\workspace\\codex-mobile",
                             model = "gpt-5.5",

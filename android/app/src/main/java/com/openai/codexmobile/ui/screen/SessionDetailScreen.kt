@@ -340,7 +340,7 @@ fun SessionDetailScreen(
             modifier = Modifier
                 .testTag(TestTags.SessionDetailTranscript)
                 .fillMaxWidth()
-                .weight(1f, fill = false),
+                .weight(1f),
         ) {
             Column(
                 modifier = Modifier
@@ -508,9 +508,9 @@ private fun PendingImageAttachmentTray(
                     )
                     Text(
                         text = when {
-                            failedCount > 0 -> "$failedCount 张待处理，点缩略图看原图。"
+                            failedCount > 0 -> "$failedCount 张失败，点图看原图。"
                             uploadingCount > 0 -> "$uploadingCount 张上传中。"
-                            else -> "点缩略图看原图。"
+                            else -> "固定预览，点图看原图。"
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
