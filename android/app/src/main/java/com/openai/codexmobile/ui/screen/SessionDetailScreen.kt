@@ -722,7 +722,7 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(9.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
@@ -730,7 +730,7 @@ private fun StatusStrip(
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 1.dp, vertical = 0.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -773,13 +773,13 @@ private fun StatusStrip(
                 )
                 IconButton(
                     onClick = onToggleExpanded,
-                    modifier = Modifier.size(12.dp),
+                    modifier = Modifier.size(10.dp),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                         contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(7.dp),
+                        modifier = Modifier.size(6.dp),
                     )
                 }
             }
@@ -857,14 +857,14 @@ private fun GoalCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(9.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 4.dp, vertical = 1.dp),
+                .padding(horizontal = 3.dp, vertical = 1.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Row(
@@ -893,13 +893,13 @@ private fun GoalCard(
                     contentDescription = if (expanded) "收起目标详情" else "展开目标详情",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
-                        .padding(start = 3.dp)
-                        .size(10.dp),
+                        .padding(start = 2.dp)
+                        .size(9.dp),
                 )
             }
             Text(
                 text = objectiveText,
-                modifier = Modifier.padding(end = 18.dp),
+                modifier = Modifier.padding(end = 16.dp),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1018,7 +1018,7 @@ private fun GoalMetricChip(
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
             style = MaterialTheme.typography.labelSmall,
         )
     }
@@ -1033,15 +1033,15 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 26.dp)
-            .padding(horizontal = 1.dp, vertical = 1.dp),
+            .defaultMinSize(minHeight = 24.dp)
+            .padding(horizontal = 1.dp, vertical = 0.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(5.dp),
+            modifier = Modifier.size(4.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
@@ -1066,7 +1066,7 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(14.dp)
+            .height(12.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.07f)),
     )
 }
