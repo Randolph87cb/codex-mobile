@@ -105,11 +105,11 @@ class SessionDetailScreenshotTest {
                             transcriptPreview = """
                                 Codex：已连接到项目环境。
 
-                                你：请帮我排查支付回调失败，并确认这几张图片的上传展示不要再挡住消息。
+                                你：请帮我检查支付回调失败，并把图片预览收紧。
 
                                 Codex：我先接入项目环境，再把图片预览改成固定窗口。
 
-                                Codex：已定位到签名串拼接顺序不一致，接下来调整回调验签并复测上传链路。
+                                Codex：已定位到签名串顺序不一致，接下来调整验签并复测上传链路。
                             """.trimIndent(),
                             cwd = "D:\\workspace\\codex-mobile",
                             model = "gpt-5.5",
@@ -141,23 +141,23 @@ class SessionDetailScreenshotTest {
                         pendingImageAttachments = listOf(
                             PendingImageAttachmentUiState(
                                 localId = "pending-portrait",
-                                displayName = "girl-portrait.png",
+                                displayName = "1000015958.png",
                                 mimeType = "image/png",
                                 previewSource = portraitImage,
                                 uploadState = PendingImageUploadState.Uploaded,
-                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\girl-portrait.png",
+                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\1000015958.png",
                             ),
                             PendingImageAttachmentUiState(
                                 localId = "pending-square",
-                                displayName = "avatar-square.png",
+                                displayName = "1000015923.png",
                                 mimeType = "image/png",
                                 previewSource = squareImage,
                                 uploadState = PendingImageUploadState.Uploaded,
-                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\avatar-square.png",
+                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\1000015923.png",
                             ),
                             PendingImageAttachmentUiState(
                                 localId = "pending-landscape",
-                                displayName = "wide-banner.png",
+                                displayName = "1000015924.png",
                                 mimeType = "image/png",
                                 previewSource = landscapeImage,
                                 uploadState = PendingImageUploadState.Failed,
@@ -165,7 +165,7 @@ class SessionDetailScreenshotTest {
                             ),
                             PendingImageAttachmentUiState(
                                 localId = "pending-dark",
-                                displayName = "dark-portrait.png",
+                                displayName = "1000015925.png",
                                 mimeType = "image/png",
                                 previewSource = darkPortraitImage,
                                 uploadState = PendingImageUploadState.Uploading,
