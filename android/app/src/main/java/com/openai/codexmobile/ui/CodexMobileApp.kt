@@ -359,7 +359,7 @@ private fun AppTopBar(
     }
 
     TopAppBar(
-        expandedHeight = 46.dp,
+        expandedHeight = 42.dp,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
             titleContentColor = MaterialTheme.colorScheme.onBackground,
@@ -367,10 +367,10 @@ private fun AppTopBar(
         ),
         title = {
             if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
-                Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(1.dp)) {
+                Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(0.dp)) {
                     Text(
                         text = resolvedTitle,
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                     )
@@ -380,7 +380,7 @@ private fun AppTopBar(
                     ) {
                         androidx.compose.foundation.Canvas(
                             modifier = Modifier
-                                .size(3.dp),
+                                .size(2.dp),
                         ) {
                             drawCircle(
                                 color = sessionStatusDotColor,
@@ -402,44 +402,44 @@ private fun AppTopBar(
             if (isSessionDetailRoute || currentRoute == Routes.Settings) {
                 IconButton(
                     onClick = { navController.popBackStack() },
-                    modifier = Modifier.size(26.dp),
+                    modifier = Modifier.size(24.dp),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(13.dp),
                     )
                 }
             }
         },
         actions = {
             if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
-                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Filled.Refresh,
                         contentDescription = "刷新",
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(12.dp),
                     )
                 }
-                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Filled.OpenInFull,
                         contentDescription = "展开",
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(12.dp),
                     )
                 }
-                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,
                         contentDescription = "复制",
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(12.dp),
                     )
                 }
-                IconButton(onClick = {}, modifier = Modifier.size(26.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "更多",
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(12.dp),
                     )
                 }
             }

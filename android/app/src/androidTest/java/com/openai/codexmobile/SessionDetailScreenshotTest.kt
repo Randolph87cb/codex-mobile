@@ -280,29 +280,29 @@ class SessionDetailScreenshotTest {
 @Composable
 private fun ScreenshotReferenceTopBar() {
     TopAppBar(
-        expandedHeight = 58.dp,
+        expandedHeight = 48.dp,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
             titleContentColor = MaterialTheme.colorScheme.onBackground,
             navigationIconContentColor = MaterialTheme.colorScheme.primary,
         ),
         navigationIcon = {
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(16.dp),
                 )
             }
         },
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text(text = "支付系统改造", style = MaterialTheme.typography.titleLarge)
+            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                Text(text = "支付系统改造", style = MaterialTheme.typography.titleMedium)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Canvas(modifier = Modifier.size(6.dp)) {
+                    Canvas(modifier = Modifier.size(4.dp)) {
                         drawCircle(
                             color = Color(0xFF54A66E),
                             radius = size.minDimension / 2,
@@ -317,32 +317,32 @@ private fun ScreenshotReferenceTopBar() {
             }
         },
         actions = {
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                 Icon(
                     imageVector = Icons.Filled.Refresh,
                     contentDescription = "刷新",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(15.dp),
                 )
             }
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                 Icon(
                     imageVector = Icons.Filled.OpenInFull,
                     contentDescription = "展开",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(15.dp),
                 )
             }
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                 Icon(
                     imageVector = Icons.Filled.ContentCopy,
                     contentDescription = "复制",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(15.dp),
                 )
             }
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
                     contentDescription = "更多",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(15.dp),
                 )
             }
         },
