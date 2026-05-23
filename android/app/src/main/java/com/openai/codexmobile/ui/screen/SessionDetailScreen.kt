@@ -3,6 +3,7 @@ package com.openai.codexmobile.ui.screen
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -141,8 +142,8 @@ private data class IndexedTranscriptImage(
 
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
-private val PendingImagePreviewWidth = 60.dp
-private val PendingImagePreviewHeight = 46.dp
+private val PendingImagePreviewWidth = 92.dp
+private val PendingImagePreviewHeight = 104.dp
 private val PendingAttachmentMetaTextStyle = TextStyle(
     fontSize = 8.sp,
     lineHeight = 10.sp,
@@ -151,6 +152,7 @@ private val TranscriptBodyTextStyle = TextStyle(
     fontSize = 12.sp,
     lineHeight = 15.sp,
 )
+private val SessionDetailPanelShape = RoundedCornerShape(16.dp)
 
 @Composable
 fun SessionDetailScreen(
@@ -317,8 +319,8 @@ fun SessionDetailScreen(
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 6.dp, vertical = 3.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         StatusStrip(
             detail = detail,
@@ -356,10 +358,10 @@ fun SessionDetailScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 0.dp, vertical = 0.dp)
+                    .padding(horizontal = 2.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
@@ -398,27 +400,29 @@ fun SessionDetailScreen(
             )
         }
         Surface(
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
             color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 0.dp, vertical = 0.dp),
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilledTonalIconButton(
                     onClick = onPickImage,
                     enabled = !isLoading && detail != null,
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(42.dp)
                         .testTag(TestTags.SessionDetailAttachImageButton),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = "添加图片",
-                        modifier = Modifier.size(10.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
                 OutlinedTextField(
@@ -426,7 +430,7 @@ fun SessionDetailScreen(
                     onValueChange = onDraftMessageChange,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 28.dp)
+                        .heightIn(min = 52.dp)
                         .testTag(TestTags.SessionDetailDraftField),
                     placeholder = {
                         Text(
@@ -438,8 +442,9 @@ fun SessionDetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(20.dp),
                     maxLines = 3,
+                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
                 Button(
                     onClick = onSend,
@@ -448,21 +453,21 @@ fun SessionDetailScreen(
                         (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
                         !hasPendingUploadBlockers,
                     modifier = Modifier
-                        .defaultMinSize(minWidth = 28.dp, minHeight = 28.dp)
+                        .size(52.dp)
                         .testTag(TestTags.SessionDetailSendButton),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = CircleShape,
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(8.dp),
-                            strokeWidth = 1.8.dp,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = if (draftSession != null) "开始" else "发送",
-                            modifier = Modifier.size(10.dp),
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -487,52 +492,54 @@ private fun PendingImageAttachmentTray(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailPendingImageCard),
-        shape = RoundedCornerShape(9.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+        tonalElevation = 1.dp,
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 2.dp, vertical = 1.dp)
+                .padding(horizontal = 12.dp, vertical = 12.dp)
                 .testTag(TestTags.SessionDetailPendingImageTray),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(3.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
-                        modifier = Modifier.padding(1.dp).size(9.dp),
+                        modifier = Modifier.padding(8.dp).size(18.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(
                         text = "已附加图片（${attachments.size}）",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
                         text = when {
-                            failedCount > 0 -> "$failedCount 张失败，点图看原图。"
-                            uploadingCount > 0 -> "$uploadingCount 张上传中。"
-                            else -> "固定预览，点图看原图。"
+                            failedCount > 0 -> "$failedCount 张失败，点图查看原图，失败项可直接重试。"
+                            uploadingCount > 0 -> "$uploadingCount 张上传中，图片窗口已固定尺寸。"
+                            else -> "固定预览窗口，点图查看原图。"
                         },
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             LazyRow(
                 modifier = Modifier.testTag(TestTags.SessionDetailPendingImageRow),
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(items = attachments, key = { it.localId }) { attachment ->
                     PendingImageThumbnailCard(
@@ -560,12 +567,13 @@ private fun PendingImageThumbnailCard(
 ) {
     Surface(
         modifier = Modifier.width(PendingImagePreviewWidth),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.background,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 1.dp, vertical = 0.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FixedPreviewImageCard(
                 source = attachment.previewSource,
@@ -584,25 +592,23 @@ private fun PendingImageThumbnailCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 0.dp),
+                modifier = Modifier.fillMaxWidth(),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     modifier = Modifier
                         .weight(1f)
                         .testTag(TestTags.SessionDetailPendingImageStatusPrefix + attachment.localId),
                 ) {
                     when (attachment.uploadState) {
                         PendingImageUploadState.Uploading -> {
-                            CircularProgressIndicator(modifier = Modifier.size(5.dp), strokeWidth = 1.3.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(8.dp), strokeWidth = 1.4.dp)
                             Text(
                                 "上传中",
                                 style = MaterialTheme.typography.labelSmall.merge(PendingAttachmentMetaTextStyle),
@@ -614,7 +620,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.CheckCircle,
                                 contentDescription = null,
-                                modifier = Modifier.size(6.dp),
+                                modifier = Modifier.size(9.dp),
                             )
                             Text(
                                 "已就绪",
@@ -627,7 +633,7 @@ private fun PendingImageThumbnailCard(
                             Icon(
                                 imageVector = Icons.Filled.Error,
                                 contentDescription = null,
-                                modifier = Modifier.size(6.dp),
+                                modifier = Modifier.size(9.dp),
                             )
                             Text(
                                 "失败",
@@ -735,15 +741,17 @@ private fun StatusStrip(
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
 
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = SessionDetailPanelShape,
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+        tonalElevation = 1.dp,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 1.dp, vertical = 0.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -788,7 +796,7 @@ private fun StatusStrip(
                     imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(10.dp),
+                    modifier = Modifier.size(16.dp),
                 )
             }
             if (expanded) {
@@ -865,19 +873,21 @@ private fun GoalCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailGoalCard),
-        shape = RoundedCornerShape(7.dp),
+        shape = SessionDetailPanelShape,
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+        tonalElevation = 1.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 2.dp, vertical = 0.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TranscriptLabelChip(
@@ -901,13 +911,13 @@ private fun GoalCard(
                     contentDescription = if (expanded) "收起目标详情" else "展开目标详情",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
-                        .padding(start = 1.dp)
-                        .size(8.dp),
+                        .padding(start = 2.dp)
+                        .size(14.dp),
                 )
             }
             Text(
                 text = objectiveText,
-                modifier = Modifier.padding(end = 10.dp),
+                modifier = Modifier.padding(end = 14.dp),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
                 maxLines = if (expanded) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
