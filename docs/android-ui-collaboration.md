@@ -26,6 +26,8 @@
 - `SessionDetailScreen` 已完成两轮细化：
   - 顶部状态条更紧凑
   - 消息气泡、执行过程、审批卡片的视觉语言更统一
+  - 待发送图片区已改成固定尺寸预览窗，点击缩略图看原图
+  - 真实 `你 / Codex` 消息正文宽度已单独放宽，避免手机端只剩过窄阅读列
   - 发送按钮已改成小飞机图标
 - `SessionListScreen` 已支持：
   - “当前 / 已归档”切换
@@ -156,6 +158,38 @@ $env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"
 $env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"
 .\gradlew.bat testDebugUnitTest
 ```
+
+如果本次改动直接影响会话详情页视觉结构，还应补跑：
+
+```powershell
+cd android
+.\gradlew.bat connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest
+.\gradlew.bat connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest
+```
+
+## 截图验证与真实页面边界
+
+当前仓库里的详情页截图验证分成两类：
+
+- `SessionDetailScreenshotTest`
+  - 产出 showcase 图
+  - 作用是稳定比较卡片层级、间距、宽度、托盘样式
+- `SessionDetailReplayTest`
+  - 回放真实页面链路
+  - 作用是确认真实详情页没有因为 UI 改动而崩坏
+
+需要明确：
+
+- showcase 图不是“真机真实工作线程截图”，它吃的是测试里手工构造的样本文案、目标和待发送附件；
+- 真实手机线程页直接吃真实 transcript、执行过程、目标内容和待发送附件；
+- 所以“showcase 越来越像参考稿”不等于“真实线程页也会自动像参考稿”。
+
+后续如果用户明确要求“真机正在工作的这条线程也要像参考图”，不要只抠 `SessionDetailScreenshotTest`，而要优先检查：
+
+- `SessionDetailScreen.kt` 的真实消息宽度和折叠策略
+- 系统 / 执行过程卡是否需要默认摘要化
+- 目标卡默认态是否需要进一步压缩
+- 待发送图片区是否真的出现在用户那条线程里，而不是只存在于 showcase 样本里
 
 ## Kotlin 构建缓存异常的当前处理
 

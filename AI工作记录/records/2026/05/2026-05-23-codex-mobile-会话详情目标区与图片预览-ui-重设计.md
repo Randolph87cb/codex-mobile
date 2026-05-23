@@ -998,6 +998,11 @@
 - 本轮优先解决真实会话里的可读性问题，不再继续抠参考图首屏节奏。现在 `你 / Codex` 的正文宽度明显回到了正常区间，不再只占大约三成屏宽。
 - 这轮没有改目标卡、状态条和图片托盘的结构，只放宽了真实消息气泡的可用宽度，所以可以单独观察聊天阅读体验变化。
 
+- 正式文档补充：
+  - 已更新 `docs/android-ui-collaboration.md`，补充会话详情页的固定尺寸待发送图片区、真实消息宽度调整，以及 showcase / 真实线程页的验证边界。
+  - 已新增 `docs/session-detail-ui-notes.md`，单独说明会话详情页 UI 结构、截图验证入口，以及为什么 showcase 图不能直接等同真机真实线程页。
+  - 说明：本轮只更新正式文档，没有新增代码改动或额外验证命令。
+
 - 状态条、目标卡和消息流节奏继续压缩后重新执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
