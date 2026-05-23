@@ -225,21 +225,26 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
 @Composable
 private fun ShowcaseTopBar() {
     TopAppBar(
+        expandedHeight = 54.dp,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
             titleContentColor = MaterialTheme.colorScheme.onBackground,
         ),
         navigationIcon = {
-            IconButton(onClick = {}) {
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
+                    modifier = Modifier.size(20.dp),
                 )
             }
         },
         title = {
             Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
-                Text(text = "支付系统改造")
+                Text(
+                    text = "支付系统改造",
+                    style = MaterialTheme.typography.titleSmall,
+                )
                 Row(
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -263,17 +268,33 @@ private fun ShowcaseTopBar() {
             }
         },
         actions = {
-            IconButton(onClick = {}) {
-                Icon(imageVector = Icons.Filled.Refresh, contentDescription = "刷新")
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "刷新",
+                    modifier = Modifier.size(18.dp),
+                )
             }
-            IconButton(onClick = {}) {
-                Icon(imageVector = Icons.Filled.OpenInFull, contentDescription = "展开")
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.OpenInFull,
+                    contentDescription = "展开",
+                    modifier = Modifier.size(18.dp),
+                )
             }
-            IconButton(onClick = {}) {
-                Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = "复制")
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.ContentCopy,
+                    contentDescription = "复制",
+                    modifier = Modifier.size(18.dp),
+                )
             }
-            IconButton(onClick = {}) {
-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "更多")
+            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "更多",
+                    modifier = Modifier.size(18.dp),
+                )
             }
         },
     )

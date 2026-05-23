@@ -439,7 +439,7 @@ fun SessionDetailScreen(
                             } else {
                                 "发送给 Codex"
                             },
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                     },
                     shape = RoundedCornerShape(20.dp),
@@ -1036,8 +1036,8 @@ private fun GoalMetricChip(
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
         )
     }
 }
@@ -1051,26 +1051,26 @@ private fun SessionStatusMetric(
 ) {
     Column(
         modifier = modifier
-            .defaultMinSize(minHeight = 18.dp)
-            .padding(horizontal = 0.dp, vertical = 0.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+            .defaultMinSize(minHeight = 42.dp)
+            .padding(horizontal = 2.dp, vertical = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(2.dp),
+            modifier = Modifier.size(14.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 10.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
             maxLines = 1,
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, lineHeight = 13.sp),
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -1084,8 +1084,8 @@ private fun StatusMetricDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(8.dp)
-            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.07f)),
+            .height(30.dp)
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
     )
 }
 

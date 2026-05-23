@@ -45,6 +45,8 @@
 - 读取 `codex-mobile-android-ui` 项目 skill，并检查 `SessionDetailScreen.kt`、`SessionDetailShowcaseActivity.kt`、`Theme.kt` 与相关 test tag。
 - 直接修改真实 `SessionDetailScreen`：统一面板圆角/描边、压紧状态条和目标卡、重构附件托盘比例、放大缩略图窗口、重做底部输入区按钮与输入框比例，让 showcase 更接近设计面板而不是仅仅功能预览。
 - 首次 Android 构建暴露 `BorderStroke` 导包与 `defaultMinSize` 依赖遗漏，修复后重新验证通过。
+- 用户继续要求“再收一轮”后，补做详情页第二轮微调：提升共享顶栏与 showcase 顶栏的可读性，修正状态条指标过小问题，并继续提高 chip、placeholder 和分隔线的真机可读性。
+- 第二轮改动覆盖 `SessionDetailScreen.kt`、`CodexMobileApp.kt`、`SessionDetailShowcaseActivity.kt`，确保模拟器预览与真实页面顶栏节奏一致。
 
 ## 结果
 
@@ -60,6 +62,8 @@
 - 本次已修改 Android UI 代码，并完成调试构建与单元测试验证。
 - 实际修改文件：
 - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+- `android/app/src/debug/java/com/openai/codexmobile/SessionDetailShowcaseActivity.kt`
 - 验证结果：
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 - `cd android; .\gradlew.bat testDebugUnitTest`：通过
