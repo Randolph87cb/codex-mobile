@@ -137,7 +137,7 @@ private val PendingAttachmentMetaTextStyle = TextStyle(
 )
 private val TranscriptBodyTextStyle = TextStyle(
     fontSize = 12.sp,
-    lineHeight = 16.sp,
+    lineHeight = 15.sp,
 )
 
 @Composable
@@ -305,8 +305,8 @@ fun SessionDetailScreen(
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 7.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         StatusStrip(
             detail = detail,
@@ -344,10 +344,10 @@ fun SessionDetailScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 1.dp, vertical = 0.dp)
+                    .padding(horizontal = 0.dp, vertical = 0.dp)
                     .testTag(TestTags.SessionDetailTranscriptScroll)
                     .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
@@ -1473,7 +1473,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.54f else 0.60f
+        val bubbleWidthFraction = if (isUser) 0.53f else 0.59f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1561,8 +1561,8 @@ private fun TranscriptBubbleCard(
                         modifier = Modifier
                             .fillMaxWidth(bubbleWidthFraction)
                             .padding(
-                                start = if (isUser) 0.dp else 20.dp,
-                                end = if (isUser) 20.dp else 0.dp,
+                                start = if (isUser) 0.dp else 18.dp,
+                                end = if (isUser) 18.dp else 0.dp,
                             ),
                         shape = RoundedCornerShape(
                             topStart = 12.dp,
@@ -1576,24 +1576,24 @@ private fun TranscriptBubbleCard(
                         ),
                     ) {
                         Box(
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                         ) {
                             IconButton(
                                 onClick = { onCopyText(bubble.copyText) },
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(13.dp)
+                                    .size(12.dp)
                                     .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.ContentCopy,
                                     contentDescription = "复制消息",
-                                    modifier = Modifier.size(7.dp),
+                                    modifier = Modifier.size(6.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                                 )
                             }
                             Column(
-                                modifier = Modifier.padding(end = 12.dp),
+                                modifier = Modifier.padding(end = 11.dp),
                             ) {
                                 TranscriptPartsColumn(
                                     parts = bubble.parts,
@@ -1620,9 +1620,9 @@ private fun ConversationSpeakerHeader(
     isUser: Boolean,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 1.dp),
+        modifier = Modifier.padding(horizontal = 0.dp),
     ) {
         if (!isUser) {
             ConversationSpeakerBadge(isUser = false)
@@ -1648,13 +1648,13 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
         shape = CircleShape,
         color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(17.dp),
+        modifier = Modifier.size(16.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
                 Box(
                     modifier = Modifier
-                        .size(6.dp)
+                        .size(5.dp)
                         .background(
                             color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
                             shape = CircleShape,
@@ -2055,7 +2055,7 @@ private fun CodeBlockCard(
                 Text(
                     text = part.code,
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
                     fontFamily = FontFamily.Monospace,
                 )
             }
