@@ -62,6 +62,22 @@
 - `/api/file/download` 只允许下载 `attachmentStore` 中的路径，或安全配置 `allowedCwds` 覆盖到的绝对路径
 - 路径为空、缺少 `savedPath/path`、或命中安全限制时，最终也无法下载
 
+## 推荐修改方案
+
+- 优先只改 Android 端 Markdown 点击解析，不先扩大 bridge 端 `bridge-file://...` 生成范围
+- 在 `TranscriptFileSupport.kt` 里把“可下载文件链接”识别从少数白名单格式，扩展为“所有本地文件型 Markdown 链接”
+- 推荐规则：
+  - `http://` / `https://` 默认仍按外部链接打开
+  - 只有命中 `/api/file/download` 的 `http(s)` 链接继续走下载
+  - 其他无 scheme 的链接、`file://`、`bridge-file://`、绝对路径、UNC 路径、会话目录下的相对路径，都解析为本地文件下载
+- 需要补充的兼容点：
+  - 支持相对路径，如 `docs/a.md`、`./a.md`、`../a.md`
+  - 支持编辑器定位后缀，如 `README.md:12`、`README.md:12:3`、`README.md#L12`
+  - 支持 `/D:/workspace/...` 这类前导 `/` 的 Windows 绝对路径
+  - 支持 `<...>` 包裹过的 Markdown 目标
+- 需要把当前会话 `cwd` 继续向下传到 Markdown 点击解析层，供相对路径解析
+- 同步补 Android 单测，覆盖绝对路径、相对路径、带行号路径、外部链接不下载等场景
+
 ## 后续可选修法
 
 - 在 Android 端补充对更多本地路径目标格式的识别。
