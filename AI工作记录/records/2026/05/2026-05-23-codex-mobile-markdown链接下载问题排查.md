@@ -78,6 +78,26 @@
 - 需要把当前会话 `cwd` 继续向下传到 Markdown 点击解析层，供相对路径解析
 - 同步补 Android 单测，覆盖绝对路径、相对路径、带行号路径、外部链接不下载等场景
 
+## 本次实现
+
+- 已在 `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptFileSupport.kt` 扩展本地文件链接识别：
+  - 支持相对路径 `docs/report.md`
+  - 支持 bare filename `README.md`
+  - 支持编辑器定位后缀 `README.md:12:3`
+  - 支持片段后缀 `README.md#L12`
+  - 支持前导 `/` 的 Windows 绝对路径 `/D:/workspace/...`
+  - 支持 `<...>` 包裹的 Markdown 目标
+- 已在 `TranscriptMarkdown.kt` 和 `SessionDetailScreen.kt` 把当前会话 `cwd` 传到链接点击解析层
+- `http://` / `https://` 普通外链仍然不会误判成下载
+
+## 验证
+
+- 已执行 `cd android; .\gradlew.bat testDebugUnitTest`
+- 已执行 `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+- 结果：通过
+- 备注：编译期间仍有现存 `ClickableText` 废弃警告，但不影响本次功能
+- 备注：同一 Android 工程的 Gradle 构建与单测不要并行跑，否则可能触发 Kotlin 增量缓存冲突
+
 ## 后续可选修法
 
 - 在 Android 端补充对更多本地路径目标格式的识别。

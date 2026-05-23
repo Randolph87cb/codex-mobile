@@ -12,6 +12,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -20,6 +21,7 @@ import java.util.Locale
 private val transcriptFileHttpClient = OkHttpClient()
 private val windowsDrivePathRegex = Regex("^[A-Za-z]:[\\\\/].+")
 private val uncPathRegex = Regex("^\\\\\\\\[^\\\\]+\\\\[^\\\\].+")
+private val relativeFileNameRegex = Regex("^[^\\\\/:*?\"<>|]+(\\.[^\\\\/:*?\"<>|]+)?$")
 
 internal data class TranscriptFileDownloadRequest(
     val url: String,
@@ -48,13 +50,14 @@ private data class DownloadedTranscriptFile(
 internal fun resolveTranscriptFileDownloadRequest(
     source: String,
     bridgeEndpoint: String,
+    sessionCwd: String? = null,
 ): TranscriptFileDownloadRequest? {
-    val trimmed = source.trim()
+    val trimmed = normalizeMarkdownLinkTarget(source)
     if (trimmed.isBlank()) {
         return null
     }
 
-    val localPath = resolveTranscriptLocalFilePath(trimmed)
+    val localPath = resolveTranscriptLocalFilePath(trimmed, sessionCwd)
     if (localPath != null) {
         require(bridgeEndpoint.isNotBlank()) { "桥接地址为空，无法下载本地文件。" }
         return TranscriptFileDownloadRequest(
@@ -150,10 +153,11 @@ internal suspend fun saveTranscriptFile(
     return@withContext "文件已保存：${targetFile.absolutePath}"
 }
 
-private fun resolveTranscriptLocalFilePath(source: String): String? {
+private fun resolveTranscriptLocalFilePath(source: String, sessionCwd: String?): String? {
+    val sanitizedSource = stripMarkdownFileLocationSuffix(source)
     return when {
-        source.startsWith("bridge-file://", ignoreCase = true) -> {
-            val encodedPath = source.substringAfter("://").trim()
+        sanitizedSource.startsWith("bridge-file://", ignoreCase = true) -> {
+            val encodedPath = sanitizedSource.substringAfter("://").trim()
             if (encodedPath.isBlank()) {
                 null
             } else {
@@ -161,8 +165,8 @@ private fun resolveTranscriptLocalFilePath(source: String): String? {
             }
         }
 
-        source.startsWith("file://", ignoreCase = true) -> {
-            val decoded = URLDecoder.decode(source.removePrefix("file://"), StandardCharsets.UTF_8.name())
+        sanitizedSource.startsWith("file://", ignoreCase = true) -> {
+            val decoded = URLDecoder.decode(sanitizedSource.substring(7), StandardCharsets.UTF_8.name())
             when {
                 decoded.matches(windowsDrivePathRegex) -> decoded.replace('/', '\\')
                 decoded.startsWith("/") && decoded.drop(1).matches(windowsDrivePathRegex) -> decoded.drop(1).replace('/', '\\')
@@ -171,9 +175,61 @@ private fun resolveTranscriptLocalFilePath(source: String): String? {
             }
         }
 
-        source.matches(windowsDrivePathRegex) || source.matches(uncPathRegex) -> source
+        sanitizedSource.matches(windowsDrivePathRegex) || sanitizedSource.matches(uncPathRegex) -> sanitizedSource
+        sanitizedSource.startsWith("/") && sanitizedSource.drop(1).matches(windowsDrivePathRegex) ->
+            sanitizedSource.drop(1).replace('/', '\\')
+
+        looksLikeRelativeLocalFilePath(sanitizedSource) -> {
+            val cwd = sessionCwd?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            File(cwd, sanitizedSource).normalize().path
+        }
+
         else -> null
     }
+}
+
+private fun normalizeMarkdownLinkTarget(source: String): String {
+    val trimmed = source.trim()
+    if (trimmed.length >= 2 && trimmed.startsWith("<") && trimmed.endsWith(">")) {
+        return trimmed.substring(1, trimmed.length - 1).trim()
+    }
+    return trimmed
+}
+
+private fun stripMarkdownFileLocationSuffix(source: String): String {
+    val withoutFragment = source.substringBefore('#').trim()
+    val windowsDriveLike = withoutFragment.matches(windowsDrivePathRegex) ||
+        (withoutFragment.startsWith("/") && withoutFragment.drop(1).matches(windowsDrivePathRegex))
+    if (windowsDriveLike) {
+        return withoutFragment
+    }
+
+    val uriPath = runCatching { URI(withoutFragment).path }.getOrNull()
+    if (!uriPath.isNullOrBlank() && uriPath.matches(windowsDrivePathRegex)) {
+        return uriPath
+    }
+
+    return withoutFragment.replace(Regex(":(\\d+)(:(\\d+))?$"), "")
+}
+
+private fun looksLikeRelativeLocalFilePath(source: String): Boolean {
+    if (source.isBlank()) {
+        return false
+    }
+    if (source.startsWith("http://", ignoreCase = true) ||
+        source.startsWith("https://", ignoreCase = true) ||
+        source.startsWith("bridge-file://", ignoreCase = true) ||
+        source.startsWith("file://", ignoreCase = true) ||
+        source.startsWith("/api/", ignoreCase = false) ||
+        source.startsWith("//")
+    ) {
+        return false
+    }
+    return source.startsWith("./") ||
+        source.startsWith("../") ||
+        source.contains('\\') ||
+        source.contains('/') ||
+        relativeFileNameRegex.matches(source)
 }
 
 private fun buildTranscriptFileDownloadUrl(

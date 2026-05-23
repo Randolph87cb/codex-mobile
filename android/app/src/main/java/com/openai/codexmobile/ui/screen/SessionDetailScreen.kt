@@ -352,6 +352,7 @@ fun SessionDetailScreen(
                 TranscriptBubbleList(
                     transcript = detail?.transcriptPreview.orEmpty(),
                     liveActivities = sessionRealtimeState.liveExecutionActivities,
+                    sessionCwd = detail?.cwd,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
@@ -1402,6 +1403,7 @@ private fun QueuedInputCard(
 private fun TranscriptBubbleList(
     transcript: String,
     liveActivities: List<com.openai.codexmobile.model.SessionActivityEntry>,
+    sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
@@ -1428,6 +1430,7 @@ private fun TranscriptBubbleList(
                 is TranscriptDisplayItem.BubbleItem -> TranscriptBubbleCard(
                     bubble = item.bubble,
                     toggleTag = TestTags.SessionDetailTranscriptBubbleTogglePrefix + index,
+                    sessionCwd = sessionCwd,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
@@ -1440,6 +1443,7 @@ private fun TranscriptBubbleList(
                 is TranscriptDisplayItem.ExecutionGroup -> ExecutionProcessCard(
                     index = index,
                     group = item,
+                    sessionCwd = sessionCwd,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
@@ -1457,6 +1461,7 @@ private fun TranscriptBubbleList(
 private fun TranscriptBubbleCard(
     bubble: TranscriptBubble,
     toggleTag: String,
+    sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
@@ -1531,6 +1536,7 @@ private fun TranscriptBubbleCard(
                         if (expanded) {
                             TranscriptPartsColumn(
                                 parts = bubble.parts,
+                                sessionCwd = sessionCwd,
                                 bridgeEndpoint = bridgeEndpoint,
                                 bridgeAuthToken = bridgeAuthToken,
                                 onShowMessage = onShowMessage,
@@ -1592,6 +1598,7 @@ private fun TranscriptBubbleCard(
                             ) {
                                 TranscriptPartsColumn(
                                     parts = bubble.parts,
+                                    sessionCwd = sessionCwd,
                                     bridgeEndpoint = bridgeEndpoint,
                                     bridgeAuthToken = bridgeAuthToken,
                                     onShowMessage = onShowMessage,
@@ -1723,6 +1730,7 @@ private fun TranscriptExternalHeader(
 private fun ExecutionProcessCard(
     index: Int,
     group: TranscriptDisplayItem.ExecutionGroup,
+    sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
@@ -1764,6 +1772,7 @@ private fun ExecutionProcessCard(
                             ExecutionActivityCard(
                                 toggleTag = TestTags.SessionDetailExecutionEntryTogglePrefix + "${index}_${activityIndex}",
                                 bubble = bubble,
+                                sessionCwd = sessionCwd,
                                 bridgeEndpoint = bridgeEndpoint,
                                 bridgeAuthToken = bridgeAuthToken,
                                 onShowMessage = onShowMessage,
@@ -1784,6 +1793,7 @@ private fun ExecutionProcessCard(
 private fun ExecutionActivityCard(
     toggleTag: String,
     bubble: TranscriptBubble,
+    sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
@@ -1816,6 +1826,7 @@ private fun ExecutionActivityCard(
             if (expanded) {
                 TranscriptPartsColumn(
                     parts = bubble.parts,
+                    sessionCwd = sessionCwd,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
                     onShowMessage = onShowMessage,
@@ -1947,6 +1958,7 @@ private fun TranscriptStaticHeader(
 @Composable
 private fun TranscriptPartsColumn(
     parts: List<TranscriptPart>,
+    sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     onShowMessage: (String) -> Unit,
@@ -1965,6 +1977,7 @@ private fun TranscriptPartsColumn(
                     text = part.text,
                     style = bodyTextStyle,
                     bridgeEndpoint = bridgeEndpoint,
+                    sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                 )

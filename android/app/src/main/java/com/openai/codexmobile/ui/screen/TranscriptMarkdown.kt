@@ -53,6 +53,7 @@ internal fun MarkdownTextBlock(
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodySmall,
     bridgeEndpoint: String = "",
+    sessionCwd: String? = null,
     onShowMessage: (String) -> Unit = {},
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit = {},
 ) {
@@ -67,6 +68,7 @@ internal fun MarkdownTextBlock(
                     block = block,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
+                    sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                 )
@@ -76,6 +78,7 @@ internal fun MarkdownTextBlock(
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
+                    sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                 )
@@ -85,6 +88,7 @@ internal fun MarkdownTextBlock(
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
+                    sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                 )
@@ -94,6 +98,7 @@ internal fun MarkdownTextBlock(
                     style = style,
                     modifier = Modifier.fillMaxWidth(),
                     bridgeEndpoint = bridgeEndpoint,
+                    sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                 )
@@ -107,6 +112,7 @@ private fun MarkdownHeading(
     block: MarkdownBlock.Heading,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
+    sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
@@ -121,6 +127,7 @@ private fun MarkdownHeading(
         style = style,
         modifier = modifier,
         bridgeEndpoint = bridgeEndpoint,
+        sessionCwd = sessionCwd,
         onShowMessage = onShowMessage,
         onFileDownloadRequest = onFileDownloadRequest,
     )
@@ -132,6 +139,7 @@ private fun MarkdownQuote(
     style: TextStyle,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
+    sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
@@ -150,6 +158,7 @@ private fun MarkdownQuote(
             style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
             modifier = Modifier.weight(1f),
             bridgeEndpoint = bridgeEndpoint,
+            sessionCwd = sessionCwd,
             onShowMessage = onShowMessage,
             onFileDownloadRequest = onFileDownloadRequest,
         )
@@ -162,6 +171,7 @@ private fun MarkdownList(
     style: TextStyle,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
+    sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
@@ -184,6 +194,7 @@ private fun MarkdownList(
                     style = style,
                     modifier = Modifier.weight(1f),
                     bridgeEndpoint = bridgeEndpoint,
+                    sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                 )
@@ -198,6 +209,7 @@ private fun MarkdownAnnotatedText(
     style: TextStyle,
     modifier: Modifier = Modifier,
     bridgeEndpoint: String,
+    sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
@@ -222,6 +234,7 @@ private fun MarkdownAnnotatedText(
                 val localDownloadRequest = resolveTranscriptFileDownloadRequest(
                     source = link,
                     bridgeEndpoint = bridgeEndpoint,
+                    sessionCwd = sessionCwd,
                 )
                 if (localDownloadRequest != null) {
                     onFileDownloadRequest(localDownloadRequest)

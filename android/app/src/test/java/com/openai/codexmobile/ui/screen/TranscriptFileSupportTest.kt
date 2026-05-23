@@ -36,6 +36,69 @@ class TranscriptFileSupportTest {
     }
 
     @Test
+    fun resolveTranscriptFileDownloadRequestSupportsRelativeMarkdownLinks() {
+        val request = resolveTranscriptFileDownloadRequest(
+            source = "docs/report.md",
+            bridgeEndpoint = "http://10.0.2.2:8787",
+            sessionCwd = "D:\\workspace\\codex-mobile",
+        )
+
+        requireNotNull(request)
+        assertEquals(
+            "http://10.0.2.2:8787/api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5Cdocs%5Creport.md",
+            request.url,
+        )
+        assertEquals("report.md", request.displayName)
+    }
+
+    @Test
+    fun resolveTranscriptFileDownloadRequestStripsEditorLocationSuffix() {
+        val request = resolveTranscriptFileDownloadRequest(
+            source = "README.md:12:3",
+            bridgeEndpoint = "http://10.0.2.2:8787",
+            sessionCwd = "D:\\workspace\\codex-mobile",
+        )
+
+        requireNotNull(request)
+        assertEquals(
+            "http://10.0.2.2:8787/api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5CREADME.md",
+            request.url,
+        )
+        assertEquals("README.md", request.displayName)
+    }
+
+    @Test
+    fun resolveTranscriptFileDownloadRequestSupportsWindowsPathWithLeadingSlashAndFragment() {
+        val request = resolveTranscriptFileDownloadRequest(
+            source = "/D:/workspace/codex-mobile/README.md#L12",
+            bridgeEndpoint = "http://10.0.2.2:8787",
+        )
+
+        requireNotNull(request)
+        assertEquals(
+            "http://10.0.2.2:8787/api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5CREADME.md",
+            request.url,
+        )
+        assertEquals("README.md", request.displayName)
+    }
+
+    @Test
+    fun resolveTranscriptFileDownloadRequestSupportsBracketWrappedTargets() {
+        val request = resolveTranscriptFileDownloadRequest(
+            source = "<docs/report.md>",
+            bridgeEndpoint = "http://10.0.2.2:8787",
+            sessionCwd = "D:\\workspace\\codex-mobile",
+        )
+
+        requireNotNull(request)
+        assertEquals(
+            "http://10.0.2.2:8787/api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5Cdocs%5Creport.md",
+            request.url,
+        )
+        assertEquals("report.md", request.displayName)
+    }
+
+    @Test
     fun resolveTranscriptFileDownloadRequestIgnoresRegularWebLinks() {
         val request = resolveTranscriptFileDownloadRequest(
             source = "https://example.com/report.md",
