@@ -1473,7 +1473,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.56f else 0.62f
+        val bubbleWidthFraction = if (isUser) 0.54f else 0.60f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1551,7 +1551,7 @@ private fun TranscriptBubbleCard(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
                     ConversationSpeakerHeader(
                         bubble = bubble,
@@ -1561,8 +1561,8 @@ private fun TranscriptBubbleCard(
                         modifier = Modifier
                             .fillMaxWidth(bubbleWidthFraction)
                             .padding(
-                                start = if (isUser) 0.dp else 22.dp,
-                                end = if (isUser) 22.dp else 0.dp,
+                                start = if (isUser) 0.dp else 20.dp,
+                                end = if (isUser) 20.dp else 0.dp,
                             ),
                         shape = RoundedCornerShape(
                             topStart = 12.dp,
@@ -1576,24 +1576,24 @@ private fun TranscriptBubbleCard(
                         ),
                     ) {
                         Box(
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                         ) {
                             IconButton(
                                 onClick = { onCopyText(bubble.copyText) },
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(14.dp)
+                                    .size(13.dp)
                                     .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.ContentCopy,
                                     contentDescription = "复制消息",
-                                    modifier = Modifier.size(8.dp),
+                                    modifier = Modifier.size(7.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                                 )
                             }
                             Column(
-                                modifier = Modifier.padding(end = 14.dp),
+                                modifier = Modifier.padding(end = 12.dp),
                             ) {
                                 TranscriptPartsColumn(
                                     parts = bubble.parts,
@@ -1620,9 +1620,9 @@ private fun ConversationSpeakerHeader(
     isUser: Boolean,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 2.dp),
+        modifier = Modifier.padding(horizontal = 1.dp),
     ) {
         if (!isUser) {
             ConversationSpeakerBadge(isUser = false)
@@ -1648,13 +1648,13 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
         shape = CircleShape,
         color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(18.dp),
+        modifier = Modifier.size(17.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
                 Box(
                     modifier = Modifier
-                        .size(7.dp)
+                        .size(6.dp)
                         .background(
                             color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
                             shape = CircleShape,
