@@ -26,6 +26,23 @@
 - 问题核心是 Markdown 链接目标格式和 Android 侧识别规则不匹配，不是最近详情页视觉收口类提交导致的。
 - 本次只做只读排查，未修改代码，未执行构建或测试。
 
+## 当前支持的链接目标格式
+
+- `bridge-file://D%3A%5Cworkspace%5Ccodex-mobile%5Creport.md`
+- `file:///D:/workspace/codex-mobile/report.md`
+- `D:\workspace\codex-mobile\report.md`
+- `\\server\share\report.md`
+- `/api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5Creport.md`
+- `http://10.0.2.2:8787/api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5Creport.md`
+
+## 当前不会触发下载的常见格式
+
+- 相对路径：`./report.md`
+- 相对路径：`docs/report.md`
+- 普通 bridge 相对 URL：`/docs/report.md`
+- 带行号的文件目标：`D:\workspace\codex-mobile\README.md:12`
+- Markdown 渲染器点击后才解析的项目内文件链接，如果目标最终不是以上几类格式
+
 ## 后续可选修法
 
 - 在 Android 端补充对更多本地路径目标格式的识别。
