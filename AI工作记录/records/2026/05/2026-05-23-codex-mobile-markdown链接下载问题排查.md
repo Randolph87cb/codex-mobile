@@ -43,6 +43,25 @@
 - 带行号的文件目标：`D:\workspace\codex-mobile\README.md:12`
 - Markdown 渲染器点击后才解析的项目内文件链接，如果目标最终不是以上几类格式
 
+## Bridge 端当前会包装成 bridge-file 的来源
+
+- `bridge/src/session-view.ts` 里的 `buildBridgeFileMarkdown(...)` 当前只在两个转录场景被调用：
+- `item.type === "imageView"` 时，读取 `item.path`，生成 `[下载原图](bridge-file://...)`
+- `item.type === "imageGeneration"` 时，优先读取 `item.savedPath`，否则回退到 `item.path`，生成 `已保存：[文件名](bridge-file://...)`
+
+## Bridge 端当前不会包装成 bridge-file 的来源
+
+- `userMessage` 里的 `localImage` 只会转成 `![xxx](/api/image/file?path=...)`，不是 `bridge-file://...`
+- `fileChange` 目前只展示变更路径文本和 diff，不会生成下载链接
+- `commandExecution` 输出中的普通路径文本不会自动转成下载链接
+- 其他如 `agentMessage`、`plan`、`reasoning`、`webSearch`、`mcpToolCall`、`dynamicToolCall`、`collabAgentToolCall` 也不会自动把路径包装成 `bridge-file://...`
+
+## 额外边界
+
+- 即使 bridge 已经输出了 `bridge-file://...`，Android 端点击后也还要经过 `/api/file/download`
+- `/api/file/download` 只允许下载 `attachmentStore` 中的路径，或安全配置 `allowedCwds` 覆盖到的绝对路径
+- 路径为空、缺少 `savedPath/path`、或命中安全限制时，最终也无法下载
+
 ## 后续可选修法
 
 - 在 Android 端补充对更多本地路径目标格式的识别。
