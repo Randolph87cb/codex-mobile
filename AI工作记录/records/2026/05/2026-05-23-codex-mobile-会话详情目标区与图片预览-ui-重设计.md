@@ -1064,6 +1064,28 @@
 - 本轮继续修的是“像不像”问题：真实消息宽度回拉了一点，截图样本里的用户文案和附图文件名也改得更接近参考稿。
 - `v83` 比 `v82` 的首屏构图更像参考图，尤其是用户气泡的横向比例和发送图片区的文件名密度。
 
+- 首屏构图继续校正后重新执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行；截图导出后已重新拉回工作区核对 `v84`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v84.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v84.png`
+
+## 本轮说明
+
+- 本轮继续修的是“首屏构图”：真实消息宽度再往参考稿比例回拉一层，同时把截图样本收成更接近参考图的三消息首屏。
+- `v84` 比 `v83` 更像参考图，尤其是首屏空白分布、用户气泡高度和附图托盘进入首屏的位置。
+
 - 普通消息骨架改成“侧边徽标 + 气泡”并重新执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过

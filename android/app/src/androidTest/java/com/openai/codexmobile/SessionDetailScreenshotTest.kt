@@ -107,8 +107,6 @@ class SessionDetailScreenshotTest {
 
                                 你：请帮我检查支付回调失败，并把图片预览收紧。
 
-                                Codex：我先接入项目环境，再把图片预览改成固定窗口。
-
                                 Codex：已定位到签名串顺序不一致，接下来调整验签并复测上传链路。
                             """.trimIndent(),
                             cwd = "D:\\workspace\\codex-mobile",

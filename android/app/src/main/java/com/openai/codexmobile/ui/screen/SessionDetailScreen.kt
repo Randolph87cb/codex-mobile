@@ -1468,7 +1468,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.53f else 0.59f
+        val bubbleWidthFraction = if (isUser) 0.54f else 0.60f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1556,8 +1556,8 @@ private fun TranscriptBubbleCard(
                         modifier = Modifier
                             .fillMaxWidth(bubbleWidthFraction)
                             .padding(
-                                start = if (isUser) 0.dp else 17.dp,
-                                end = if (isUser) 17.dp else 0.dp,
+                                start = if (isUser) 0.dp else 18.dp,
+                                end = if (isUser) 18.dp else 0.dp,
                             ),
                         shape = RoundedCornerShape(
                             topStart = 11.dp,
