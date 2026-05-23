@@ -998,6 +998,28 @@
 - 本轮继续压的是首屏默认态密度：整页外层 padding、消息流间距、消息正文 line-height，以及 markdown 段落/引用/列表的节奏都更轻了一层。
 - 消息气泡和头部徽标也继续缩了一点，所以 `v80` 比 `v79` 更接近参考稿那种“顶部更薄、正文更贴内容”的控制台排布。
 
+- 顶部状态区、目标卡默认态和发送图片区托盘继续压缩后重新执行：
+  - `cd android; .\gradlew.bat compileDebugKotlin`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android; .\gradlew.bat testDebugUnitTest`：通过
+  - `cd android; .\gradlew.bat installDebug`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe install -r D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk`：通过
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailReplayTest'`：通过
+  - `D:\workspace\codex-mobile\.tools\android-sdk\platform-tools\adb.exe shell rm -f /sdcard/Download/codex-mobile-ui/*.png`：已执行
+  - `cd android; .\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.openai.codexmobile.SessionDetailScreenshotTest'`：通过
+  - 说明：这轮继续保持 Gradle 串行执行；截图导出后已重新拉回工作区核对 `v81`。
+
+## 最新截图
+
+- 会话列表：`.tmp/ui-screenshots/sessions-showcase-v28.png`
+- 会话详情：`.tmp/ui-screenshots/session-detail-showcase-full-v81.png`
+- 图片托盘：`.tmp/ui-screenshots/session-detail-pending-tray-v81.png`
+
+## 本轮说明
+
+- 本轮继续压的是详情页上半区和发送图片区：顶部状态条四列指标、目标卡默认态、托盘头部 icon 块、单张固定预览窗和底部状态行都又薄了一层。
+- `v81` 比 `v80` 更接近参考稿那种“顶部更扁、附图托盘更轻、缩略卡更规整”的控制台结构。
+
 - 普通消息骨架改成“侧边徽标 + 气泡”并重新执行：
   - `cd android; .\gradlew.bat compileDebugKotlin`：通过
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
