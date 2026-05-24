@@ -811,19 +811,23 @@ private fun StatusStrip(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .padding(horizontal = 18.dp, vertical = 14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                Text(
+                                    text = "连接：${sessionRealtimeState.connectionText}",
+                                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                                )
                                 if (!isDraft) {
                                     TextButton(
                                         onClick = onRefreshSession,
                                         modifier = Modifier.testTag(TestTags.SessionDetailStatusRefreshButton),
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                                     ) {
                                         Text(
                                             text = "刷新",
@@ -832,10 +836,6 @@ private fun StatusStrip(
                                     }
                                 }
                             }
-                            Text(
-                                text = "连接：${sessionRealtimeState.connectionText}",
-                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                            )
                             Text(
                                 text = "状态：${sessionRealtimeState.statusText}",
                                 style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),

@@ -52,6 +52,7 @@
 - 用户随后选定此前给出的 `B` 方向，并明确要求去掉 `目录` 与 `权限` 选项，只保留一排 3 个按钮。
 - 按 `B` 方向重构状态详情扩展区：把文本摘要包进独立轻卡片、把刷新动作缩到右上角、把底部能力区改成仅保留 `模型 / 推理 / 速度` 三个按钮的一排结构。
 - 用户继续指出 `刷新` 不应独立悬在卡片外侧，因此再次微调：把 `刷新` 收进摘要卡内部，并改成右上角轻量文本按钮。
+- 用户随后继续要求摘要三行更居中、`刷新` 与第一行同高对齐，因此再次微调摘要卡内部布局：首行改成“左侧连接信息 + 右侧刷新”，并整体加大左右内边距。
 
 ## 结果
 
@@ -80,6 +81,9 @@
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 - `cd android; .\gradlew.bat testDebugUnitTest`：通过
 - `刷新` 收进摘要卡后再次执行：
+- `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+- `cd android; .\gradlew.bat testDebugUnitTest`：通过
+- 摘要卡再居中与 `刷新` 对齐后再次执行：
 - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
 - `cd android; .\gradlew.bat testDebugUnitTest`：通过
 
