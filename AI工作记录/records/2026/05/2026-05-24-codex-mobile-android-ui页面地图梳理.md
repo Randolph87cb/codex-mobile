@@ -271,3 +271,37 @@
     - `.\.tmp\showcase-sessions-nav-v2.png`
     - `.\.tmp\showcase-draft-nav-v1.png`
     - `.\.tmp\showcase-settings-nav-v1.png`
+
+## 页面迁移完成审计
+
+- 时间：2026-05-25
+- 审计范围：
+  - AI Studio 参考页面：`ConnectScreen.kt`、`SessionsScreen.kt`、`SessionDraftScreen.kt`、`ChatScreen.kt`、`SettingsScreen.kt`。
+  - 当前 Android 真实路由：`connection`、`sessions`、`draft`、`session/{sessionId}`、`settings`。
+- 审计结论：
+  - 连接页已按 AI Studio 的连接管理首屏、端点卡、主操作和底部导航形态迁移，后端仍接当前 bridge `connect` 流程。
+  - 线程列表页已按 AI Studio 的线程 tab、连接条、目录分组、线程卡片、FAB 和底部导航迁移，后端仍接当前 session 列表、归档和草稿创建。
+  - 草稿页已独立迁移为 AI Studio 的会话启动页，配置、首条消息、附件和 `Start Session` 仍接当前 draft/session 创建链路。
+  - 详情页已迁移为 AI Studio 的 chat 结构：顶栏为返回、刷新、三点；三点菜单已实机确认打开“模型设置”，包含模型、推理、速度、目录和权限；顶部状态只保留连接状态、排队消息、目标状态三段；审批留在消息视口内。
+  - 设置页已迁移为 AI Studio 的连接管理、默认偏好、当前默认值和日志控制台结构，底部导航可切到连接和线程。
+- 页面版本计数：
+  - 连接页第 1 版。
+  - 线程列表页第 1 版。
+  - 草稿页第 1 版。
+  - 设置页第 2 版。
+  - 详情页在本轮经历多次修补，但未超过 5 版停下阈值；主要返工点是三点模型设置、三段状态和主题对齐。
+- 验证证据：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - 模拟器安装成功。
+  - 主页面截图：
+    - `.\.tmp\showcase-connection-nav-v1.png`
+    - `.\.tmp\showcase-sessions-nav-v2.png`
+    - `.\.tmp\showcase-draft-nav-v1.png`
+    - `.\.tmp\showcase-settings-nav-v1.png`
+  - 详情页截图：
+    - `.\.tmp\showcase-detail-final-audit.png`
+    - `.\.tmp\showcase-detail-model-menu-final-audit.png`
+- 剩余说明：
+  - 当前仓库还有 README、docs、旧工作记录、`SessionDetailShowcaseActivity.kt`、`CodexMobileApp.kt` 的既有未提交改动，以及 `mobile_uploads/` 等未跟踪文件；这些不是本次页面迁移审计新增内容。
+  - 真实 bridge 连接链路此前一度显示 `restarting/draining`，因此最终视觉审计主要依赖 debug showcase；页面路由、回调接线、构建和单测均已验证。
