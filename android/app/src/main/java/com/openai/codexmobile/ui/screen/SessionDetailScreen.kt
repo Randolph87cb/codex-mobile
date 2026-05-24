@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
@@ -43,10 +44,14 @@ import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MarkChatUnread
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Tune
@@ -57,6 +62,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -66,9 +72,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -188,6 +197,9 @@ fun SessionDetailScreen(
     onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
     autoScrollTranscript: Boolean = true,
+    title: String? = null,
+    onBack: (() -> Unit)? = null,
+    showTopBar: Boolean = true,
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -196,9 +208,10 @@ fun SessionDetailScreen(
         sessionDetail ?: draftSession?.toDraftDetail()
     }
     val currentTranscriptScrollState = transcriptScrollState ?: rememberScrollState()
-    var statusExpanded by rememberSaveable { mutableStateOf(false) }
     var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
     var goalEditorVisible by rememberSaveable { mutableStateOf(false) }
+    var goalManagerVisible by rememberSaveable { mutableStateOf(false) }
+    var queuedDialogVisible by rememberSaveable { mutableStateOf(false) }
     var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
     var pendingFileDownloadRequest by remember { mutableStateOf<TranscriptFileDownloadRequest?>(null) }
@@ -250,6 +263,27 @@ fun SessionDetailScreen(
                 onUpdateGoal(objective, tokenBudget)
                 goalEditorVisible = false
             },
+        )
+    }
+    if (goalManagerVisible) {
+        GoalManagerDialog(
+            detail = detail,
+            isDraft = draftSession != null,
+            isLoading = isLoading,
+            onDismiss = { goalManagerVisible = false },
+            onEditGoal = {
+                goalManagerVisible = false
+                goalEditorVisible = true
+            },
+            onPauseGoal = onPauseGoal,
+            onResumeGoal = onResumeGoal,
+            onClearGoal = onClearGoal,
+        )
+    }
+    if (queuedDialogVisible) {
+        QueuedInputsDialog(
+            messages = queuedInputs,
+            onDismiss = { queuedDialogVisible = false },
         )
     }
 
@@ -317,13 +351,30 @@ fun SessionDetailScreen(
         )
     }
 
-    Box(
+    Scaffold(
         modifier = Modifier
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
-            .padding(paddingValues)
-            .background(MaterialTheme.colorScheme.background),
-    ) {
+            .padding(paddingValues),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            if (showTopBar) {
+                DetailTopAppBar(
+                    title = title ?: detail?.title ?: if (draftSession != null) "草稿线程" else "会话详情",
+                    detail = detail,
+                    onBack = onBack,
+                    onRefreshSession = onRefreshSession,
+                    onOpenEditor = { activeEditor = it },
+                )
+            }
+        },
+    ) { detailPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(detailPadding)
+                .background(MaterialTheme.colorScheme.background),
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -335,10 +386,8 @@ fun SessionDetailScreen(
                 sessionRealtimeState = sessionRealtimeState,
                 queuedInputs = queuedInputs,
                 isDraft = draftSession != null,
-                expanded = statusExpanded,
-                onToggleExpanded = { statusExpanded = !statusExpanded },
-                onOpenEditor = { activeEditor = it },
-                onRefreshSession = onRefreshSession,
+                onShowQueued = { queuedDialogVisible = true },
+                onShowGoal = { goalManagerVisible = true },
             )
             DetailDateChip(text = if (draftSession != null) "草稿" else "今天")
             Box(
@@ -354,23 +403,11 @@ fun SessionDetailScreen(
                         .verticalScroll(currentTranscriptScrollState),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    GoalCard(
-                        detail = detail,
-                        isDraft = draftSession != null,
-                        isLoading = isLoading,
-                        onEditGoal = { goalEditorVisible = true },
-                        onPauseGoal = onPauseGoal,
-                        onResumeGoal = onResumeGoal,
-                        onClearGoal = onClearGoal,
-                    )
                     sessionRealtimeState.pendingApproval?.let { approval ->
                         ApprovalActionCard(
                             approval = approval,
                             onApprovalDecision = onApprovalDecision,
                         )
-                    }
-                    if (queuedInputs.isNotEmpty()) {
-                        QueuedInputCard(messages = queuedInputs)
                     }
                     TranscriptBubbleList(
                         transcript = detail?.transcriptPreview.orEmpty(),
@@ -431,6 +468,7 @@ fun SessionDetailScreen(
                 onSend = onSend,
             )
         }
+    }
     }
 }
 
@@ -782,185 +820,369 @@ private fun ConversationHeader(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailTopAppBar(
+    title: String,
+    detail: SessionDetail?,
+    onBack: (() -> Unit)?,
+    onRefreshSession: () -> Unit,
+    onOpenEditor: (SessionConfigEditor) -> Unit,
+) {
+    var settingsExpanded by rememberSaveable { mutableStateOf(false) }
+
+    TopAppBar(
+        expandedHeight = 54.dp,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onBackground,
+            navigationIconContentColor = MaterialTheme.colorScheme.primary,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        navigationIcon = {
+            if (onBack != null) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = onRefreshSession,
+                enabled = detail != null,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "刷新",
+                    modifier = Modifier.size(19.dp),
+                )
+            }
+            Box {
+                IconButton(
+                    onClick = { settingsExpanded = true },
+                    enabled = detail != null,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag(TestTags.SessionDetailStatusButton),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "模型设置",
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+                DropdownMenu(
+                    expanded = settingsExpanded,
+                    onDismissRequest = { settingsExpanded = false },
+                    modifier = Modifier
+                        .width(330.dp)
+                        .testTag(TestTags.SessionDetailStatusDetails),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "模型设置",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        )
+                        SessionConfigRow(
+                            detail = detail,
+                            onOpenEditor = {
+                                settingsExpanded = false
+                                onOpenEditor(it)
+                            },
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
 @Composable
 private fun StatusStrip(
     detail: SessionDetail?,
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     isDraft: Boolean,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
-    onOpenEditor: (SessionConfigEditor) -> Unit,
-    onRefreshSession: () -> Unit,
+    onShowQueued: () -> Unit,
+    onShowGoal: () -> Unit,
 ) {
-    val statusIcon = when {
-        isDraft -> Icons.Filled.Work
-        detail?.status == "running" -> Icons.Filled.Bolt
-        detail?.status == "awaiting_approval" -> Icons.Filled.HourglassTop
-        detail?.status == "error" -> Icons.Filled.Error
-        else -> Icons.Filled.CheckCircle
-    }
     val connectionIcon = if (sessionRealtimeState.isConnected) {
-        Icons.Filled.CloudDone
+        Icons.Filled.Sensors
     } else {
         Icons.Filled.CloudOff
     }
-    val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
-    val sessionStatusText = when {
-        isDraft -> "草稿"
-        detail == null -> "等待"
-        else -> localizedStatusLabel(detail.status)
-    }
+    val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.MarkChatUnread else Icons.Filled.MarkChatUnread
     val connectionStatusText = when {
         isDraft -> "未创建"
         sessionRealtimeState.isConnected -> "实时流"
         else -> "快照"
     }
     val queueStatusText = if (queuedInputs.isEmpty()) "无排队" else "${queuedInputs.size} 条"
-    val approvalStatusText = if (sessionRealtimeState.pendingApproval != null) "待审批" else "无"
+    val goalStatusText = when {
+        isDraft -> "待开始"
+        detail?.goalCapability == "unsupported" -> "不支持"
+        detail?.goal == null -> "未设置"
+        else -> localizedGoalStatus(detail.goal.status)
+    }
 
     Surface(
-        shape = SessionDetailPanelShape,
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-        tonalElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        tonalElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(
+            SessionStatusMetric(
+                label = "连接状态",
+                value = connectionStatusText,
+                icon = connectionIcon,
+                iconTint = if (sessionRealtimeState.isConnected) Color(0xFF16A34A) else MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f),
+            )
+            StatusMetricDivider()
+            SessionStatusMetric(
+                label = "排队消息",
+                value = queueStatusText,
+                icon = queueIcon,
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(TestTags.SessionDetailStatusButton)
-                    .clickable { onToggleExpanded() },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-                SessionStatusMetric(
-                    label = "会话",
-                    value = sessionStatusText,
-                    icon = statusIcon,
-                    iconTint = when (detail?.status) {
-                        "running" -> MaterialTheme.colorScheme.primary
-                        "awaiting_approval" -> MaterialTheme.colorScheme.tertiary
-                        "error" -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetricDivider()
-                SessionStatusMetric(
-                    label = "连接",
-                    value = connectionStatusText,
-                    icon = connectionIcon,
-                    iconTint = if (sessionRealtimeState.isConnected) {
-                        Color(0xFF16A34A)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetricDivider()
-                SessionStatusMetric(
-                    label = "排队",
-                    value = queueStatusText,
-                    icon = queueIcon,
-                    iconTint = if (queuedInputs.isEmpty()) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetricDivider()
-                SessionStatusMetric(
-                    label = "审批",
-                    value = approvalStatusText,
-                    icon = if (sessionRealtimeState.pendingApproval != null) {
-                        Icons.Filled.HourglassTop
-                    } else {
-                        Icons.Filled.CheckCircle
-                    },
-                    iconTint = if (sessionRealtimeState.pendingApproval != null) {
-                        MaterialTheme.colorScheme.tertiary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            if (expanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(TestTags.SessionDetailStatusDetails),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .weight(1f)
+                    .clickable { onShowQueued() },
+            )
+            StatusMetricDivider()
+            SessionStatusMetric(
+                label = "目标状态",
+                value = goalStatusText,
+                icon = Icons.Filled.PendingActions,
+                iconTint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onShowGoal() },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GoalManagerDialog(
+    detail: SessionDetail?,
+    isDraft: Boolean,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onEditGoal: () -> Unit,
+    onPauseGoal: () -> Unit,
+    onResumeGoal: () -> Unit,
+    onClearGoal: () -> Unit,
+) {
+    val goalStatusText = when {
+        isDraft -> "待开始"
+        detail?.goalCapability == "unsupported" -> "不支持"
+        detail?.goal == null -> "未设置"
+        else -> localizedGoalStatus(detail.goal.status)
+    }
+    val objectiveText = when {
+        detail == null -> "等待会话元数据。"
+        isDraft -> "先发送首条消息创建真实线程，再管理目标。"
+        detail.goalCapability == "unsupported" -> "当前 host 暂不支持目标模式。"
+        detail.goal == null -> "还没有目标。可以给当前线程设置一个持续目标。"
+        else -> detail.goal.objective
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("管理目标", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
-                    OutlinedCard(
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "连接：${sessionRealtimeState.connectionText}",
-                                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                                )
-                                if (!isDraft) {
-                                    TextButton(
-                                        onClick = onRefreshSession,
-                                        modifier = Modifier.testTag(TestTags.SessionDetailStatusRefreshButton),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                                    ) {
-                                        Text(
-                                            text = "刷新",
-                                            style = MaterialTheme.typography.labelMedium,
-                                        )
-                                    }
-                                }
-                            }
-                            Text(
-                                text = "状态：${sessionRealtimeState.statusText}",
-                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                            )
-                            Text(
-                                text = "最近事件：${sessionRealtimeState.lastEventText ?: "等待实时事件。"}",
-                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                            )
-                        }
+                    TranscriptLabelChip(
+                        text = goalStatusText,
+                        icon = Icons.Filled.PendingActions,
+                        containerColor = if (detail?.goal == null) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                        contentColor = if (detail?.goal == null) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                    )
+                    detail?.goal?.tokenBudget?.let { budget ->
+                        GoalMetricChip(text = "预算 $budget")
                     }
-                    sessionRealtimeState.fallbackNotice?.let { notice ->
-                        Text(
-                            text = notice,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                    detail?.goal?.let { goal ->
+                        GoalMetricChip(text = formatTokenUsage(goal.tokensUsed))
                     }
-                    SessionConfigRow(
-                        detail = detail,
-                        onOpenEditor = onOpenEditor,
+                }
+                OutlinedCard(
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                ) {
+                    Text(
+                        text = objectiveText,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                     )
                 }
+                if (!isDraft && detail?.goalCapability != "unsupported") {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = onEditGoal,
+                            enabled = !isLoading && detail != null,
+                            modifier = Modifier.testTag(
+                                if (detail?.goal == null) {
+                                    TestTags.SessionDetailGoalStartButton
+                                } else {
+                                    TestTags.SessionDetailGoalEditButton
+                                },
+                            ),
+                        ) {
+                            Icon(imageVector = Icons.Filled.Flag, contentDescription = null)
+                            Text(
+                                text = if (detail?.goal == null) "开始目标" else "编辑目标",
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                        detail?.goal?.let { goal ->
+                            val paused = goal.status == "paused"
+                            OutlinedButton(
+                                onClick = if (paused) onResumeGoal else onPauseGoal,
+                                enabled = !isLoading,
+                                modifier = Modifier.testTag(
+                                    if (paused) {
+                                        TestTags.SessionDetailGoalResumeButton
+                                    } else {
+                                        TestTags.SessionDetailGoalPauseButton
+                                    },
+                                ),
+                            ) {
+                                Icon(
+                                    imageVector = if (paused) Icons.Filled.Bolt else Icons.Filled.StopCircle,
+                                    contentDescription = null,
+                                )
+                                Text(
+                                    text = if (paused) "恢复" else "暂停",
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = onClearGoal,
+                                enabled = !isLoading,
+                                modifier = Modifier.testTag(TestTags.SessionDetailGoalClearButton),
+                            ) {
+                                Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
+                                Text(text = "清除", modifier = Modifier.padding(start = 8.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("完成")
+            }
+        },
+    )
+}
+
+@Composable
+private fun QueuedInputsDialog(
+    messages: List<String>,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("排队消息", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.testTag(TestTags.SessionDetailQueuedInputsCard),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (messages.isEmpty()) {
+                    Text(
+                        text = "当前没有排队消息。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    messages.forEachIndexed { index, message ->
+                        QueuedItemBlock(index = index, text = message)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("确定")
+            }
+        },
+    )
+}
+
+@Composable
+private fun QueuedItemBlock(
+    index: Int,
+    text: String,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "${index + 1}. $text",
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 19.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = {}) { Text("编辑") }
+                TextButton(onClick = {}) { Text("引导") }
+                TextButton(onClick = {}) { Text("删除", color = MaterialTheme.colorScheme.error) }
             }
         }
     }

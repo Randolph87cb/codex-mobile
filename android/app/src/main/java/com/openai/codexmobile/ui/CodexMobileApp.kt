@@ -235,6 +235,11 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                             snackbarHostState.showSnackbar(message)
                         }
                     },
+                    title = "草稿线程",
+                    onBack = {
+                        appViewModel.discardDraftSession()
+                        navController.popBackStack()
+                    },
                 )
             }
             composable(Routes.SessionDetail) { entry ->
@@ -279,6 +284,8 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                             snackbarHostState.showSnackbar(message)
                         }
                     },
+                    title = uiState.selectedSession?.title ?: "会话详情",
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(Routes.Settings) {
@@ -335,12 +342,12 @@ private fun AppTopBar(
     selectedSessionTitle: String?,
     sessionConnected: Boolean,
 ) {
-    if (currentRoute == Routes.Connection || currentRoute == Routes.Sessions) {
-        return
-    }
     val isSessionDetailRoute = currentRoute == Routes.DraftSession ||
         currentRoute == Routes.SessionDetail ||
         currentRoute?.startsWith("session/") == true
+    if (currentRoute == Routes.Connection || currentRoute == Routes.Sessions || isSessionDetailRoute) {
+        return
+    }
     val title = when (currentRoute) {
         Routes.DraftSession -> "草稿线程"
         Routes.Settings -> "设置"

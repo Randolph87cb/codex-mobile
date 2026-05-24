@@ -96,3 +96,33 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
   - 使用 `adb shell am start -n "com.openai.codexmobile/.SessionDetailShowcaseActivity"` 打开详情页 showcase，并用 `adb exec-out screencap` 进行截图检查；布局可见，底部附件托盘和输入栏没有完全遮挡消息区。
   - `git diff --check` 无空白错误，仅有既有 CRLF 转换 warning。
+
+## 详情页按 AI Studio 前端基准继续对齐
+
+- 时间：2026-05-25
+- 用户进一步明确：目标不是借鉴视觉，而是尽量做到 AI Studio 生成版的显示效果和交互效果，只替换背后的后端调用。
+- 重新拉取 `.tmp/codex-mobile-ui`，结果为 `Already up to date`。
+- 分析原因：
+  - 之前详情页主体已改，但全局 `AppTopBar` 仍保留旧的右上角三点空点击，导致模型设置没有落到用户期望位置。
+  - 顶部状态仍沿用旧结构保留“会话/连接/排队/审批”四段，和 AI Studio 版“连接状态/排队消息/目标状态”三段不一致。
+  - 目标仍作为独立卡片展示，未进入顶部指标和弹窗交互。
+  - 全局主题仍是旧的 Sand/Coral/SlateBlue/Pine 配色，未切到 AI Studio 生成版的冷灰蓝 palette。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Color.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Theme.kt`
+  - `android/app/src/debug/java/com/openai/codexmobile/SessionDetailShowcaseActivity.kt`
+- 改动内容：
+  - 详情页改为内部自带 AI Studio 风格顶栏，右上角三点打开“模型设置”，入口包含模型、推理强度、速度、工作目录和文件权限，回调仍接当前 `AppViewModel`/bridge 数据流。
+  - 全局 `AppTopBar` 在详情页和草稿详情页退场，避免双顶栏。
+  - 顶部状态条改成三段：连接状态、排队消息、目标状态；审批继续作为消息视口内的审批卡片，不再作为顶部状态。
+  - 排队消息和目标状态改为点击弹窗交互；目标弹窗保留开始/编辑、暂停/恢复、清除等目标操作。
+  - 移除详情页常驻目标卡片和常驻排队卡片，让顶部状态承担入口角色。
+  - 主题切到 AI Studio 生成版冷灰蓝 palette；debug showcase 改为复用详情页内部顶栏，便于模拟器验证三点设置菜单。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+  - `adb shell am start -n "com.openai.codexmobile/.SessionDetailShowcaseActivity"` 打开 showcase，并截图确认单顶栏、三段状态条、底部输入栏和附件托盘可见。
+  - `adb shell input tap` 验证目标状态弹窗可打开；验证右上角三点可打开“模型设置”菜单并显示模型、推理、速度、目录和权限。

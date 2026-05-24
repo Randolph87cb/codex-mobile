@@ -76,7 +76,6 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = MaterialTheme.colorScheme.background,
-                    topBar = { ShowcaseTopBar() },
                 ) { paddingValues ->
                     SessionDetailScreen(
                         paddingValues = paddingValues,
@@ -148,6 +147,8 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
                         onRefreshSession = {},
                         onShowMessage = {},
                         autoScrollTranscript = false,
+                        title = "支付系统改造",
+                        onBack = { finish() },
                     )
                 }
             }
