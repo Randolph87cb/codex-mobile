@@ -222,3 +222,28 @@
   - 从连接页点击设置进入设置页并截图 `.\.tmp\settings-ai-studio-v2.png`，确认只剩单个设置顶栏。
   - 点击设置页底部“线程”并截图 `.\.tmp\settings-bottom-sessions-v2.png`，确认能进入线程列表。
   - 在线程列表页点击左下角连接后截图 `.\.tmp\settings-bottom-connect-v2.png`，确认进入连接页并触发当前线程列表断开连接行为。
+
+## 草稿页按 AI Studio 前端基准对齐
+
+- 时间：2026-05-25
+- 页面版本计数：草稿页第 1 版迁移；未超过 5 版停下阈值。
+- 目标：把 `draft` 路由从复用旧详情页改为独立草稿创建页，对齐 AI Studio 生成版的首屏配置、初始提示词和启动会话布局，背后仍接当前项目真实 draft/session 创建链路。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDraftScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+- 实现边界：
+  - 保留当前 `startDraftSession`、`selectedDraftSession`、`draftMessage`、图片选择/上传状态和 `sendInput` 创建远端会话的真实流程。
+  - 目录、模型、推理强度、速度和文件权限继续接 `AppViewModel` 的 `updateSelectedSession*` 回调。
+  - 保留现有详情输入和附件相关 `TestTags`，避免破坏已有测试定位。
+  - 不引入 AI Studio 生成项目里的 mock 数据层、Gemini 调用或独立导航框架。
+- 改动内容：
+  - 新增独立 `SessionDraftScreen`，页面包含 AI Studio 风格顶栏、只读项目/线程名、配置卡片、初始提示词卡片、图片附件托盘和 `Start Session` 主按钮。
+  - `CodexMobileApp.kt` 的 `Routes.DraftSession` 改为渲染 `SessionDraftScreen`，发送仍调用 `appViewModel::sendInput`，返回时仍丢弃草稿并回退导航。
+  - 右上角三点入口接当前设置页，配置项在草稿页内直接编辑并写入当前草稿状态。
+- 遇到的问题：
+  - 第一次构建失败：草稿页使用 `FlowRow` 的函数缺少 `ExperimentalLayoutApi` opt-in。已在同一版内补上，不计为新版本。
+  - 模拟器安装成功后，连接页点击“尝试连接”仍未进入线程列表；本地 bridge `/health` 可访问但 lifecycle 显示 `restarting/draining`，因此本轮未能在模拟器里直接截图验证 `draft` 路由。后续需要先把 bridge/连接状态排通，再做草稿页实机视觉回归。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。

@@ -49,6 +49,7 @@ import com.openai.codexmobile.AppViewModel
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.ui.screen.ConnectionScreen
 import com.openai.codexmobile.ui.screen.SessionDetailScreen
+import com.openai.codexmobile.ui.screen.SessionDraftScreen
 import com.openai.codexmobile.ui.screen.SessionListScreen
 import com.openai.codexmobile.ui.screen.SettingsScreen
 import kotlinx.coroutines.Dispatchers
@@ -203,39 +204,23 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         }
                     }
                 }
-                SessionDetailScreen(
+                SessionDraftScreen(
                     paddingValues = paddingValues,
-                    sessionDetail = null,
                     draftSession = uiState.selectedDraftSession,
-                    sessionRealtimeState = uiState.sessionRealtimeState,
-                    queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
                     pendingImageAttachments = uiState.pendingImageAttachments,
-                    bridgeEndpoint = uiState.endpointInput,
-                    bridgeAuthToken = uiState.authTokenInput,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onPickImage = { imagePickerLauncher.launch("image/*") },
                     onRemovePendingImageAttachment = appViewModel::removePendingImageAttachment,
                     onRetryPendingImageAttachment = appViewModel::retryPendingImageAttachment,
                     onSend = appViewModel::sendInput,
-                    onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
                     onUpdateModel = appViewModel::updateSelectedSessionModel,
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
-                    onUpdateGoal = appViewModel::updateSelectedSessionGoal,
-                    onPauseGoal = appViewModel::pauseSelectedSessionGoal,
-                    onResumeGoal = appViewModel::resumeSelectedSessionGoal,
-                    onClearGoal = appViewModel::clearSelectedSessionGoal,
-                    onRefreshSession = appViewModel::refreshSelectedSession,
-                    onShowMessage = { message ->
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(message)
-                        }
-                    },
-                    title = "草稿线程",
+                    onOpenSettings = { navController.navigate(Routes.Settings) },
                     onBack = {
                         appViewModel.discardDraftSession()
                         navController.popBackStack()
