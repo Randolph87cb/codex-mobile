@@ -40,3 +40,11 @@
 - 建议把输入拆成：产品定位、用户与场景、页面/路由清单、每页功能、关键状态、设计约束、不要做的事、首版验收标准。
 - 推荐先让 Stitch 输出“信息架构确认稿”，再生成高保真界面；这样能降低它直接美化但误解功能的概率。
 - 对当前项目，首版输入应强调：Android 轻客户端、不是通用聊天应用、固定链路 `Android App -> Windows Bridge -> codex app-server`、中文文案、保留审批点、重点页面为连接、会话列表、草稿/详情、设置。
+
+## AI Studio 生成仓库合并可行性初查
+
+- 时间：2026-05-25
+- 用户提供仓库：`https://github.com/Randolph87cb/codex-mobile-ui`
+- 操作：克隆到 `.tmp/codex-mobile-ui` 并只读检查远端分支、提交历史和文件树。
+- 结果：远端 `main` 分支当前只有 `README.md`，没有 Android 源码、Gradle 配置、Compose 页面或 AI Studio 生成项目文件。
+- 判断：当前无法尝试代码级合并；需要先从 AI Studio 导出完整项目或源码 ZIP，并提交至少 `settings.gradle.kts`、`build.gradle.kts`、`app/` 源码后，才能做实际迁移评估。
