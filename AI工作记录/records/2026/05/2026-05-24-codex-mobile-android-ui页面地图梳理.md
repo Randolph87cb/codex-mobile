@@ -61,3 +61,19 @@
   - 构建栈为 AGP 9.1.1、Kotlin 2.2.10、compileSdk 36；当前项目为 AGP 8.5.2、Kotlin 2.0.21、compileSdk 35。
   - 生成仓库没有 Gradle wrapper，未运行其构建；已有 `.build-outputs/app-debug.apk`。
 - 判断：不建议项目级合并或整页直接替换。建议把生成项目作为视觉参考，组件级吸收布局、颜色、分组、详情页状态指标等，保留当前项目 `AppViewModel`、bridge 数据流、`TestTags`、导航和测试。
+
+## 详情页合并尝试
+
+- 时间：2026-05-25
+- 分支：`ui-detail-ai-studio-merge`
+- 目标：先尝试把 AI Studio 生成版消息详情页中较有价值的视觉结构合入当前项目。
+- 改动文件：`android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 改动内容：
+  - 将详情页状态条调整为更接近 AI Studio 版的紧凑指标样式，显示会话、连接、排队、审批四段标签和值。
+  - 保留 `SessionDetailStatusButton` 与展开详情逻辑。
+  - 在展开配置区补齐工作目录和文件权限入口，保留 `SessionDetailConfigCwdButton`、`SessionDetailConfigSandboxButton` 等测试标签。
+  - 未引入 AI Studio 版 mock ViewModel、Room、Gemini REST、Gradle 配置或新依赖。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `git diff --check` 无空白错误，仅有既有 CRLF 转换 warning。

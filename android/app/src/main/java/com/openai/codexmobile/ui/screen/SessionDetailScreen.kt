@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Tune
@@ -740,6 +742,18 @@ private fun StatusStrip(
         Icons.Filled.CloudOff
     }
     val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
+    val sessionStatusText = when {
+        isDraft -> "草稿"
+        detail == null -> "等待"
+        else -> localizedStatusLabel(detail.status)
+    }
+    val connectionStatusText = when {
+        isDraft -> "未创建"
+        sessionRealtimeState.isConnected -> "实时流"
+        else -> "快照"
+    }
+    val queueStatusText = if (queuedInputs.isEmpty()) "无排队" else "${queuedInputs.size} 条"
+    val approvalStatusText = if (sessionRealtimeState.pendingApproval != null) "待审批" else "无"
 
     Surface(
         shape = SessionDetailPanelShape,
@@ -764,28 +778,53 @@ private fun StatusStrip(
             ) {
                 SessionStatusMetric(
                     label = "会话",
+                    value = sessionStatusText,
                     icon = statusIcon,
+                    iconTint = when (detail?.status) {
+                        "running" -> MaterialTheme.colorScheme.primary
+                        "awaiting_approval" -> MaterialTheme.colorScheme.tertiary
+                        "error" -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     modifier = Modifier.weight(1f),
                 )
                 StatusMetricDivider()
                 SessionStatusMetric(
                     label = "连接",
+                    value = connectionStatusText,
                     icon = connectionIcon,
+                    iconTint = if (sessionRealtimeState.isConnected) {
+                        Color(0xFF16A34A)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     modifier = Modifier.weight(1f),
                 )
                 StatusMetricDivider()
                 SessionStatusMetric(
                     label = "排队",
+                    value = queueStatusText,
                     icon = queueIcon,
+                    iconTint = if (queuedInputs.isEmpty()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
                     modifier = Modifier.weight(1f),
                 )
                 StatusMetricDivider()
                 SessionStatusMetric(
                     label = "审批",
+                    value = approvalStatusText,
                     icon = if (sessionRealtimeState.pendingApproval != null) {
                         Icons.Filled.HourglassTop
                     } else {
                         Icons.Filled.CheckCircle
+                    },
+                    iconTint = if (sessionRealtimeState.pendingApproval != null) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     modifier = Modifier.weight(1f),
                 )
@@ -1067,28 +1106,47 @@ private fun GoalMetricChip(
 @Composable
 private fun SessionStatusMetric(
     label: String,
+    value: String,
     icon: ImageVector,
+    iconTint: Color,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Row(
         modifier = modifier
-            .defaultMinSize(minHeight = 28.dp)
-            .padding(horizontal = 2.dp, vertical = 0.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .defaultMinSize(minHeight = 34.dp)
+            .padding(horizontal = 4.dp, vertical = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp, lineHeight = 12.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
-            maxLines = 1,
-        )
+        Surface(
+            modifier = Modifier.size(28.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    tint = iconTint,
+                )
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                maxLines = 1,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, lineHeight = 12.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -1112,70 +1170,91 @@ private fun SessionConfigRow(
         return
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailConfigRow),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.Model) },
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.SessionDetailConfigModelButton),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Filled.Tune,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
+            SessionConfigButton(
                 text = detail.model,
-                modifier = Modifier.padding(start = 6.dp),
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
+                icon = Icons.Filled.Tune,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigModelButton),
+                onClick = { onOpenEditor(SessionConfigEditor.Model) },
             )
-        }
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.ReasoningEffort) },
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.SessionDetailConfigReasoningButton),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Bolt,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
+            SessionConfigButton(
                 text = "推理 ${localizedReasoning(detail.reasoningEffort)}",
-                modifier = Modifier.padding(start = 6.dp),
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
+                icon = Icons.Filled.Bolt,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigReasoningButton),
+                onClick = { onOpenEditor(SessionConfigEditor.ReasoningEffort) },
             )
-        }
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.ServiceTier) },
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.SessionDetailConfigServiceTierButton),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Speed,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
+            SessionConfigButton(
                 text = "速度 ${localizedService(detail.serviceTier)}",
-                modifier = Modifier.padding(start = 6.dp),
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
+                icon = Icons.Filled.Speed,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigServiceTierButton),
+                onClick = { onOpenEditor(SessionConfigEditor.ServiceTier) },
             )
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SessionConfigButton(
+                text = detail.cwd.ifBlank { "未配置目录" },
+                icon = Icons.Filled.Folder,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigCwdButton),
+                onClick = { onOpenEditor(SessionConfigEditor.Cwd) },
+            )
+            SessionConfigButton(
+                text = "权限 ${localizedSandbox(detail.sandboxMode)}",
+                icon = Icons.Filled.Security,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigSandboxButton),
+                onClick = { onOpenEditor(SessionConfigEditor.SandboxMode) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionConfigButton(
+    text: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+        )
+        Text(
+            text = text,
+            modifier = Modifier.padding(start = 6.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }
 
