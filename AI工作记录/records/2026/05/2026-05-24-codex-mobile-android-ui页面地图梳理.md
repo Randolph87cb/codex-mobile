@@ -33,3 +33,10 @@
 - 结论：Stitch 更适合高保真 UI 方案探索和设计系统沉淀；Google AI Studio Android Build 更接近可运行预览，可在浏览器 Android 模拟器中看到真实 Compose 生成结果。
 - 对当前 `codex-mobile` 项目，不建议期待一键替换现有 UI；更稳妥流程是先用页面地图生成设计稿/原型，再把设计规则、截图和交互说明带回项目内按现有 ViewModel、导航、测试标签和 bridge 数据流实现。
 - 参考官方资料：Google Stitch 2026-03-18 “vibe design”介绍、Stitch DESIGN.md 2026-04-21 介绍、Google AI Studio Build mode 文档、Google AI Studio Android Build 文档。
+
+## Stitch 首版输入策略
+
+- 用户继续询问如何让 Stitch 一开始准确理解需求并生成较准初版。
+- 建议把输入拆成：产品定位、用户与场景、页面/路由清单、每页功能、关键状态、设计约束、不要做的事、首版验收标准。
+- 推荐先让 Stitch 输出“信息架构确认稿”，再生成高保真界面；这样能降低它直接美化但误解功能的概率。
+- 对当前项目，首版输入应强调：Android 轻客户端、不是通用聊天应用、固定链路 `Android App -> Windows Bridge -> codex app-server`、中文文案、保留审批点、重点页面为连接、会话列表、草稿/详情、设置。
