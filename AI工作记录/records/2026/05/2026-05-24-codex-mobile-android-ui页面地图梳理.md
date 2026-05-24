@@ -171,3 +171,31 @@
   - 第一次安装验证时模拟器出现 `System UI isn't responding`，排查为模拟器系统 UI 卡住：`adb devices` 一度无设备，停止卡住的 emulator/qemu 进程后重新启动 AVD 成功。
   - 重新安装并截图 `.\.tmp\connection-ai-studio-v2.png`，确认连接页顶栏、连接节点卡、端点编辑卡、固定底部动作和底部导航可见，文字对比度正常。
   - 点击“尝试连接”后仍停留在连接页，当前未证明真实 bridge 已连接；本次只确认入口仍接当前 `onConnect`，未改变后端调用链路。
+
+## 设置页按 AI Studio 前端基准对齐
+
+- 时间：2026-05-25
+- 页面版本计数：设置页第 1 版迁移；未超过 5 版停下阈值。
+- 目标：继续按“一个页面一个页面迁移”推进，把设置页换成 AI Studio 生成版的分区、卡片、分段控件和日志控制台形态，背后仍使用当前项目真实设置回调。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+- 实现边界：
+  - 保留当前项目的保存连接、当前连接名称、endpoint、token、cwd、model、审批模式、推理强度、速度、文件权限和本地诊断日志回调。
+  - 保留现有 `TestTags`，未引入 AI Studio 生成项目里的 mock ViewModel、Room 数据层、Toast/Clipboard 直接调用或假日志实体。
+  - 因 `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt` 当前已有未提交改动，本版没有改全局导航文件，避免混入无关 hunks。
+- 改动内容：
+  - 设置页主体改为 AI Studio 风格的 `Connection Management`、`Default Preferences`、`Current Defaults`、`LOCAL DIAGNOSTIC LOGS` 分区。
+  - 保存连接区改成 summary row、当前连接字段和紧凑连接行；新增、切换、删除仍接当前 ViewModel 回调。
+  - 默认参数区改为输入块和分段选择控件，推理强度、速度、审批模式、文件权限继续使用真实设置值。
+  - 诊断日志改成深色 console 卡片，保留刷新、复制、清空按钮和日志选择复制能力。
+  - 底部增加 Settings 选中态导航栏；Connect/Sessions 暂时复用返回行为。
+- 遇到的问题：
+  - 第 1 次构建失败：`SettingsCard` 的 slot receiver 写成了 `Column.() -> Unit`，应为 `ColumnScope.() -> Unit`。已在同一版内修复，不计为新版本。
+  - 顶部仍由全局 `AppTopBar` 提供，所以截图中存在全局“设置”顶栏和内容区“设置”大标题并存的问题。完整对齐 AI Studio 顶栏需要后续单独处理 `CodexMobileApp.kt` 的已有 dirty 改动或拆分 hunk。
+  - 底部导航的 Connect/Sessions 暂未接独立目标路由，当前复用返回行为；完整导航对齐同样需要后续处理全局导航回调。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+  - 从连接页点击设置进入设置页并截图 `.\.tmp\settings-ai-studio-v1.png`，确认连接管理区可见。
+  - 滚动截图 `.\.tmp\settings-ai-studio-v1-scroll.png`、`.\.tmp\settings-ai-studio-v1-logs.png`、`.\.tmp\settings-ai-studio-v1-console.png`，确认默认参数、分段控件、当前默认项和日志控制台均可见。
