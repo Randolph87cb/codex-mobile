@@ -317,162 +317,226 @@ fun SessionDetailScreen(
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .testTag(TestTags.SessionDetailScreen)
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        StatusStrip(
-            detail = detail,
-            sessionRealtimeState = sessionRealtimeState,
-            queuedInputs = queuedInputs,
-            isDraft = draftSession != null,
-            expanded = statusExpanded,
-            onToggleExpanded = { statusExpanded = !statusExpanded },
-            onOpenEditor = { activeEditor = it },
-            onRefreshSession = onRefreshSession,
-        )
-        GoalCard(
-            detail = detail,
-            isDraft = draftSession != null,
-            isLoading = isLoading,
-            onEditGoal = { goalEditorVisible = true },
-            onPauseGoal = onPauseGoal,
-            onResumeGoal = onResumeGoal,
-            onClearGoal = onClearGoal,
-        )
-        sessionRealtimeState.pendingApproval?.let { approval ->
-            ApprovalActionCard(
-                approval = approval,
-                onApprovalDecision = onApprovalDecision,
-            )
-        }
-        if (queuedInputs.isNotEmpty()) {
-            QueuedInputCard(messages = queuedInputs)
-        }
-        Box(
+        Column(
             modifier = Modifier
-                .testTag(TestTags.SessionDetailTranscript)
-                .fillMaxWidth()
-                .weight(1f),
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 2.dp)
-                    .testTag(TestTags.SessionDetailTranscriptScroll)
-                    .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                TranscriptBubbleList(
-                    transcript = detail?.transcriptPreview.orEmpty(),
-                    liveActivities = sessionRealtimeState.liveExecutionActivities,
-                    sessionCwd = detail?.cwd,
-                    bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
-                    onShowMessage = onShowMessage,
-                    onFileDownloadRequest = { request ->
-                        pendingFileDownloadRequest = request
-                    },
-                    onCopyText = { copyToClipboard(it, "内容已复制到剪贴板。") },
-                    onCopyCode = { copyToClipboard(it, "代码已复制到剪贴板。") },
-                    onOpenImagePreview = { title, source ->
-                        imagePreviewState = ImagePreviewState(
-                            title = title,
-                            source = source,
-                        )
-                    },
-                )
-            }
-        }
-        if (pendingImageAttachments.isNotEmpty()) {
-            PendingImageAttachmentTray(
-                attachments = pendingImageAttachments,
-                bridgeEndpoint = bridgeEndpoint,
-                bridgeAuthToken = bridgeAuthToken,
-                onOpenImagePreview = { attachment ->
-                    imagePreviewState = ImagePreviewState(
-                        title = attachment.displayName,
-                        source = attachment.previewSource,
-                    )
-                },
-                onRemoveAttachment = onRemovePendingImageAttachment,
-                onRetryAttachment = onRetryPendingImageAttachment,
+            StatusStrip(
+                detail = detail,
+                sessionRealtimeState = sessionRealtimeState,
+                queuedInputs = queuedInputs,
+                isDraft = draftSession != null,
+                expanded = statusExpanded,
+                onToggleExpanded = { statusExpanded = !statusExpanded },
+                onOpenEditor = { activeEditor = it },
+                onRefreshSession = onRefreshSession,
             )
-        }
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
-        ) {
-            Row(
+            DetailDateChip(text = if (draftSession != null) "草稿" else "今天")
+            Box(
                 modifier = Modifier
+                    .testTag(TestTags.SessionDetailTranscript)
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .weight(1f),
             ) {
-                FilledTonalIconButton(
-                    onClick = onPickImage,
-                    enabled = !isLoading && detail != null,
+                Column(
                     modifier = Modifier
-                        .size(42.dp)
-                        .testTag(TestTags.SessionDetailAttachImageButton),
+                        .padding(horizontal = 2.dp)
+                        .testTag(TestTags.SessionDetailTranscriptScroll)
+                        .verticalScroll(currentTranscriptScrollState),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Image,
-                        contentDescription = "添加图片",
-                        modifier = Modifier.size(18.dp),
+                    GoalCard(
+                        detail = detail,
+                        isDraft = draftSession != null,
+                        isLoading = isLoading,
+                        onEditGoal = { goalEditorVisible = true },
+                        onPauseGoal = onPauseGoal,
+                        onResumeGoal = onResumeGoal,
+                        onClearGoal = onClearGoal,
                     )
-                }
-                OutlinedTextField(
-                    value = draftMessage,
-                    onValueChange = onDraftMessageChange,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 52.dp)
-                        .testTag(TestTags.SessionDetailDraftField),
-                    placeholder = {
-                        Text(
-                            if (draftSession != null) {
-                                "首条消息发送后才真正创建线程"
-                            } else {
-                                "发送给 Codex"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    },
-                    shape = RoundedCornerShape(20.dp),
-                    maxLines = 3,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                )
-                Button(
-                    onClick = onSend,
-                    enabled = !isLoading &&
-                        detail != null &&
-                        (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
-                        !hasPendingUploadBlockers,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .testTag(TestTags.SessionDetailSendButton),
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(0.dp),
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = if (draftSession != null) "开始" else "发送",
-                            modifier = Modifier.size(20.dp),
+                    sessionRealtimeState.pendingApproval?.let { approval ->
+                        ApprovalActionCard(
+                            approval = approval,
+                            onApprovalDecision = onApprovalDecision,
                         )
                     }
+                    if (queuedInputs.isNotEmpty()) {
+                        QueuedInputCard(messages = queuedInputs)
+                    }
+                    TranscriptBubbleList(
+                        transcript = detail?.transcriptPreview.orEmpty(),
+                        liveActivities = sessionRealtimeState.liveExecutionActivities,
+                        sessionCwd = detail?.cwd,
+                        bridgeEndpoint = bridgeEndpoint,
+                        bridgeAuthToken = bridgeAuthToken,
+                        onShowMessage = onShowMessage,
+                        onFileDownloadRequest = { request ->
+                            pendingFileDownloadRequest = request
+                        },
+                        onCopyText = { copyToClipboard(it, "内容已复制到剪贴板。") },
+                        onCopyCode = { copyToClipboard(it, "代码已复制到剪贴板。") },
+                        onOpenImagePreview = { title, source ->
+                            imagePreviewState = ImagePreviewState(
+                                title = title,
+                                source = source,
+                            )
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(if (pendingImageAttachments.isNotEmpty()) 190.dp else 104.dp))
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (pendingImageAttachments.isNotEmpty()) {
+                PendingImageAttachmentTray(
+                    attachments = pendingImageAttachments,
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onOpenImagePreview = { attachment ->
+                        imagePreviewState = ImagePreviewState(
+                            title = attachment.displayName,
+                            source = attachment.previewSource,
+                        )
+                    },
+                    onRemoveAttachment = onRemovePendingImageAttachment,
+                    onRetryAttachment = onRetryPendingImageAttachment,
+                )
+            }
+            DetailInputDock(
+                draftMessage = draftMessage,
+                isDraft = draftSession != null,
+                isLoading = isLoading,
+                canUseInput = detail != null,
+                hasPendingUploadBlockers = hasPendingUploadBlockers,
+                hasPendingImages = pendingImageAttachments.isNotEmpty(),
+                onDraftMessageChange = onDraftMessageChange,
+                onPickImage = onPickImage,
+                onSend = onSend,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailDateChip(text: String) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        ) {
+            Text(
+                text = text,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailInputDock(
+    draftMessage: String,
+    isDraft: Boolean,
+    isLoading: Boolean,
+    canUseInput: Boolean,
+    hasPendingUploadBlockers: Boolean,
+    hasPendingImages: Boolean,
+    onDraftMessageChange: (String) -> Unit,
+    onPickImage: () -> Unit,
+    onSend: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 4.dp,
+        shadowElevation = 3.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 7.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilledTonalIconButton(
+                onClick = onPickImage,
+                enabled = !isLoading && canUseInput,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag(TestTags.SessionDetailAttachImageButton),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Image,
+                    contentDescription = "添加图片",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            OutlinedTextField(
+                value = draftMessage,
+                onValueChange = onDraftMessageChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .testTag(TestTags.SessionDetailDraftField),
+                placeholder = {
+                    Text(
+                        if (isDraft) {
+                            "首条消息发送后才真正创建线程"
+                        } else {
+                            "输入指令..."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                shape = RoundedCornerShape(22.dp),
+                maxLines = 3,
+                textStyle = MaterialTheme.typography.bodyMedium,
+            )
+            Button(
+                onClick = onSend,
+                enabled = !isLoading &&
+                    canUseInput &&
+                    (draftMessage.isNotBlank() || hasPendingImages) &&
+                    !hasPendingUploadBlockers,
+                modifier = Modifier
+                    .size(46.dp)
+                    .testTag(TestTags.SessionDetailSendButton),
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = if (isDraft) "开始" else "发送",
+                        modifier = Modifier.size(19.dp),
+                    )
                 }
             }
         }
@@ -680,7 +744,7 @@ private fun ConversationHeader(
     detail: SessionDetail?,
     sessionRealtimeState: SessionRealtimeUiState,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
             text = detail?.title ?: "等待会话",
             style = MaterialTheme.typography.titleMedium,
@@ -1591,7 +1655,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.74f else 0.80f
+        val bubbleWidthFraction = if (isUser) 0.78f else 0.88f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1626,19 +1690,20 @@ private fun TranscriptBubbleCard(
             if (isCollapsible) {
                 Card(
                     shape = RoundedCornerShape(
-                        topStart = 12.dp,
-                        topEnd = 12.dp,
-                        bottomStart = if (isUser) 12.dp else 6.dp,
-                        bottomEnd = if (isUser) 6.dp else 12.dp,
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (isUser) 16.dp else 4.dp,
+                        bottomEnd = if (isUser) 4.dp else 16.dp,
                     ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = backgroundColor,
                         contentColor = contentColor,
                     ),
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
-                        verticalArrangement = Arrangement.spacedBy(1.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         TranscriptToggleHeader(
                             bubble = bubble,
@@ -1684,35 +1749,36 @@ private fun TranscriptBubbleCard(
                                 end = if (isUser) 10.dp else 0.dp,
                             ),
                         shape = RoundedCornerShape(
-                            topStart = 11.dp,
-                            topEnd = 11.dp,
-                            bottomStart = if (isUser) 11.dp else 5.dp,
-                            bottomEnd = if (isUser) 5.dp else 11.dp,
+                            topStart = 16.dp,
+                            topEnd = 16.dp,
+                            bottomStart = if (isUser) 16.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 16.dp,
                         ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = backgroundColor,
                             contentColor = contentColor,
                         ),
                     ) {
                         Box(
-                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         ) {
                             IconButton(
                                 onClick = { onCopyText(bubble.copyText) },
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(11.dp)
+                                    .size(28.dp)
                                     .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.ContentCopy,
                                     contentDescription = "复制消息",
-                                    modifier = Modifier.size(5.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                                 )
                             }
                             Column(
-                                modifier = Modifier.padding(end = 10.dp),
+                                modifier = Modifier.padding(end = 30.dp),
                             ) {
                                 TranscriptPartsColumn(
                                     parts = bubble.parts,
@@ -1740,21 +1806,23 @@ private fun ConversationSpeakerHeader(
     isUser: Boolean,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 0.dp),
+        modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
     ) {
         if (!isUser) {
             ConversationSpeakerBadge(isUser = false)
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ConversationSpeakerBadge(isUser = true)
@@ -1768,13 +1836,13 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
         shape = CircleShape,
         color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(13.dp),
+        modifier = Modifier.size(24.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
                 Box(
                     modifier = Modifier
-                        .size(3.dp)
+                        .size(6.dp)
                         .background(
                             color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
                             shape = CircleShape,
@@ -1783,7 +1851,7 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
             } else {
                 Text(
                     text = ">",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             }

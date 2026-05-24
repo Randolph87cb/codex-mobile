@@ -77,3 +77,22 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
   - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
   - `git diff --check` 无空白错误，仅有既有 CRLF 转换 warning。
+
+## 详情页整页替换
+
+- 时间：2026-05-25
+- 用户确认不再小步迁移，希望详情页整体切到 AI Studio 版形态，再逐个修复问题。
+- 改动文件：`android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 改动内容：
+  - 将详情页主骨架改为 AI Studio 风格：顶部固定紧凑状态指标、日期/模式 chip、中部滚动消息视口、底部悬浮 pill 输入栏。
+  - 目标卡片、审批卡片、排队卡片和真实转录内容进入中部滚动视口。
+  - 图片附件托盘贴近底部输入栏，作为发送前上下文区域。
+  - 消息气泡改为更宽的大圆角卡片、较大的说话人标签/头像、较大的复制按钮和更接近生成版的间距。
+  - 继续保留当前项目真实数据流、审批、附件上传、文件下载、Markdown/代码/图片渲染、测试标签和 ViewModel 接口；未引入 AI Studio 的 mock 数据层或依赖。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\start-android-emulator.ps1` 检测模拟器已运行。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+  - 使用 `adb shell am start -n "com.openai.codexmobile/.SessionDetailShowcaseActivity"` 打开详情页 showcase，并用 `adb exec-out screencap` 进行截图检查；布局可见，底部附件托盘和输入栏没有完全遮挡消息区。
+  - `git diff --check` 无空白错误，仅有既有 CRLF 转换 warning。
