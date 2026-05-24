@@ -126,3 +126,25 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
   - `adb shell am start -n "com.openai.codexmobile/.SessionDetailShowcaseActivity"` 打开 showcase，并截图确认单顶栏、三段状态条、底部输入栏和附件托盘可见。
   - `adb shell input tap` 验证目标状态弹窗可打开；验证右上角三点可打开“模型设置”菜单并显示模型、推理、速度、目录和权限。
+
+## 线程列表页按 AI Studio 前端基准对齐
+
+- 时间：2026-05-25
+- 用户继续要求处理线程列表界面，并确认以 AI Studio 生成版的显示效果和交互效果为前端基准，只替换背后后端调用。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+- 实现边界：
+  - 保留当前项目 `SessionSummary`、bridge 连接状态、按 `cwd` 分组、打开详情、归档/恢复、草稿创建、设置入口和断开连接。
+  - 不引入 AI Studio 生成项目里的 mock 会话、Room 数据层、Gemini REST、Gradle 配置或假统计卡。
+  - 保留现有 `TestTags`，避免破坏现有测试定位。
+- 改动内容：
+  - 线程列表改为内嵌 `Scaffold`，顶部标题为“线程”，右上角仅保留三点更多入口并进入设置。
+  - 主体切换为 AI Studio 风格的“现有 / 归档线程”页签、桥接在线连接条、目录分组和更紧凑的线程卡片。
+  - 目录分组支持展开/收起，目录行保留新建草稿入口；非归档页右下角保留圆形 FAB 新建草稿。
+  - 底部增加 Connect / Sessions / Settings 三项导航，当前选中线程；Connect 仍调用当前断开连接逻辑，Settings 进入当前设置页。
+  - 线程卡片使用冷灰蓝主题下的浅色卡片、图标块、状态 badge、会话 ID 和更新时间，归档/恢复继续接当前 ViewModel 回调。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+  - 通过 `adb shell input tap` 从连接页进入线程列表，并用 `adb exec-out screencap` 截图确认：顶部只剩三点入口，现有/归档页签、连接条、目录分组、线程卡片、FAB 和底部导航均可见。
