@@ -148,3 +148,26 @@
   - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
   - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
   - 通过 `adb shell input tap` 从连接页进入线程列表，并用 `adb exec-out screencap` 截图确认：顶部只剩三点入口，现有/归档页签、连接条、目录分组、线程卡片、FAB 和底部导航均可见。
+
+## 连接页按 AI Studio 前端基准对齐
+
+- 时间：2026-05-25
+- 页面版本计数：连接页第 1 版迁移；未超过 5 版停下阈值。
+- 目标：继续按“一个页面一个页面迁移”推进，把连接页换成 AI Studio 生成版的显示和交互结构，背后仍使用当前项目的 bridge 连接逻辑。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
+- 实现边界：
+  - 保留当前项目 `endpointInput`、`BridgeConnectionState`、`onConnect`、`onEndpointChange`、设置入口和 `TestTags`。
+  - 不引入 AI Studio 生成项目里的 Room 连接列表、mock toggle、延迟模拟连接或新增连接弹窗。
+  - 当前连接页只展示当前选中的 bridge 连接；连接管理仍跳转到当前设置页。
+- 改动内容：
+  - 连接页改为内嵌 `Scaffold`，顶部为 AI Studio 风格的 `Codex Bridge` 顶栏和右上角设置入口。
+  - 主体改为“连接”标题、深色连接节点卡和端点编辑卡。
+  - 底部改为固定操作区：主按钮“尝试连接 / 正在连接中 / 重新连接”、次按钮“管理连接”、以及 Connect / Sessions / Settings 底部导航。
+  - 深色连接节点卡和主按钮文字/图标固定为白色，修复冷灰蓝主题下 `onPrimaryContainer` 对比度偏低的问题。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - 第一次安装验证时模拟器出现 `System UI isn't responding`，排查为模拟器系统 UI 卡住：`adb devices` 一度无设备，停止卡住的 emulator/qemu 进程后重新启动 AVD 成功。
+  - 重新安装并截图 `.\.tmp\connection-ai-studio-v2.png`，确认连接页顶栏、连接节点卡、端点编辑卡、固定底部动作和底部导航可见，文字对比度正常。
+  - 点击“尝试连接”后仍停留在连接页，当前未证明真实 bridge 已连接；本次只确认入口仍接当前 `onConnect`，未改变后端调用链路。
