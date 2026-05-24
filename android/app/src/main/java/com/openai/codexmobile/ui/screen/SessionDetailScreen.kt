@@ -804,23 +804,6 @@ private fun StatusStrip(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = onRefreshSession,
-                            modifier = Modifier
-                                .size(32.dp)
-                                .testTag(TestTags.SessionDetailStatusRefreshButton),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Refresh,
-                                contentDescription = "立即同步",
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                    }
                     OutlinedCard(
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
@@ -831,6 +814,24 @@ private fun StatusStrip(
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (!isDraft) {
+                                    TextButton(
+                                        onClick = onRefreshSession,
+                                        modifier = Modifier.testTag(TestTags.SessionDetailStatusRefreshButton),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    ) {
+                                        Text(
+                                            text = "刷新",
+                                            style = MaterialTheme.typography.labelMedium,
+                                        )
+                                    }
+                                }
+                            }
                             Text(
                                 text = "连接：${sessionRealtimeState.connectionText}",
                                 style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
