@@ -26,3 +26,10 @@
 ## 验证
 
 - 本次为只读梳理与记录更新，未运行 Android 构建或单元测试。
+
+## 后续判断：Stitch 与 Google AI Studio UI 生成流程
+
+- 用户希望判断是否可以用 `stitch.withgoogle.com` 和 Google AI Studio 做 UI 重设计，以及是否能达到所见即所得。
+- 结论：Stitch 更适合高保真 UI 方案探索和设计系统沉淀；Google AI Studio Android Build 更接近可运行预览，可在浏览器 Android 模拟器中看到真实 Compose 生成结果。
+- 对当前 `codex-mobile` 项目，不建议期待一键替换现有 UI；更稳妥流程是先用页面地图生成设计稿/原型，再把设计规则、截图和交互说明带回项目内按现有 ViewModel、导航、测试标签和 bridge 数据流实现。
+- 参考官方资料：Google Stitch 2026-03-18 “vibe design”介绍、Stitch DESIGN.md 2026-04-21 介绍、Google AI Studio Build mode 文档、Google AI Studio Android Build 文档。
