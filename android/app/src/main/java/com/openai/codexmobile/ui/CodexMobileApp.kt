@@ -328,6 +328,16 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         }
                     },
                     onBack = { navController.popBackStack() },
+                    onNavigateToConnect = {
+                        navController.navigate(Routes.Connection) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToSessions = {
+                        navController.navigate(Routes.Sessions) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
         }
@@ -345,7 +355,11 @@ private fun AppTopBar(
     val isSessionDetailRoute = currentRoute == Routes.DraftSession ||
         currentRoute == Routes.SessionDetail ||
         currentRoute?.startsWith("session/") == true
-    if (currentRoute == Routes.Connection || currentRoute == Routes.Sessions || isSessionDetailRoute) {
+    if (currentRoute == Routes.Connection ||
+        currentRoute == Routes.Sessions ||
+        currentRoute == Routes.Settings ||
+        isSessionDetailRoute
+    ) {
         return
     }
     val title = when (currentRoute) {

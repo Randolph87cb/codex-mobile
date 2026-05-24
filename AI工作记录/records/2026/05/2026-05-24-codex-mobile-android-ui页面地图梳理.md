@@ -199,3 +199,26 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
   - 从连接页点击设置进入设置页并截图 `.\.tmp\settings-ai-studio-v1.png`，确认连接管理区可见。
   - 滚动截图 `.\.tmp\settings-ai-studio-v1-scroll.png`、`.\.tmp\settings-ai-studio-v1-logs.png`、`.\.tmp\settings-ai-studio-v1-console.png`，确认默认参数、分段控件、当前默认项和日志控制台均可见。
+
+## 设置页第 2 版：顶栏和底部导航接线
+
+- 时间：2026-05-25
+- 页面版本计数：设置页第 2 版迁移；未超过 5 版停下阈值。
+- 目标：修复第 1 版遗留的全局顶栏重复和底部导航未直达目标路由问题。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+- 改动内容：
+  - 设置页内部增加 AI Studio 风格顶栏：返回箭头 + “设置”标题。
+  - 全局 `AppTopBar` 对 `Routes.Settings` 退场，避免页面顶部出现两个“设置”标题。
+  - `SettingsScreen` 增加 `onNavigateToConnect` 和 `onNavigateToSessions` 回调，底部导航分别接到连接页和线程列表页。
+- 注意事项：
+  - `CodexMobileApp.kt` 当前已有未提交的详情页旧按钮删除 hunk；本次提交只暂存设置页接线相关 hunk，不混入既有 dirty 改动。
+  - 从设置页点“线程”可进入线程列表；在线程列表页点左下角“连接”仍会执行线程列表页现有断开连接逻辑，这是线程列表页已有行为，不属于本次设置页接线问题。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+  - 从连接页点击设置进入设置页并截图 `.\.tmp\settings-ai-studio-v2.png`，确认只剩单个设置顶栏。
+  - 点击设置页底部“线程”并截图 `.\.tmp\settings-bottom-sessions-v2.png`，确认能进入线程列表。
+  - 在线程列表页点击左下角连接后截图 `.\.tmp\settings-bottom-connect-v2.png`，确认进入连接页并触发当前线程列表断开连接行为。

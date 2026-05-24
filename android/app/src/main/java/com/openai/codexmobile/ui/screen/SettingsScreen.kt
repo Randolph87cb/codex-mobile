@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -51,6 +52,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,6 +103,8 @@ fun SettingsScreen(
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
     onBack: () -> Unit,
+    onNavigateToConnect: () -> Unit,
+    onNavigateToSessions: () -> Unit,
 ) {
     Scaffold(
         modifier = Modifier
@@ -107,8 +112,36 @@ fun SettingsScreen(
             .fillMaxSize()
             .padding(paddingValues),
         containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "设置",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag(TestTags.SettingsBackButton),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+            )
+        },
         bottomBar = {
-            SettingsBottomBar(onBack = onBack)
+            SettingsBottomBar(
+                onNavigateToConnect = onNavigateToConnect,
+                onNavigateToSessions = onNavigateToSessions,
+            )
         },
     ) { innerPadding ->
         LazyColumn(
@@ -122,12 +155,6 @@ fun SettingsScreen(
         ) {
             item {
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "设置",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
             }
 
             item {
@@ -718,11 +745,14 @@ private fun LogLineText(level: String, message: String) {
 }
 
 @Composable
-private fun SettingsBottomBar(onBack: () -> Unit) {
+private fun SettingsBottomBar(
+    onNavigateToConnect: () -> Unit,
+    onNavigateToSessions: () -> Unit,
+) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
         NavigationBarItem(
             selected = false,
-            onClick = onBack,
+            onClick = onNavigateToConnect,
             icon = {
                 Icon(
                     imageVector = Icons.Filled.Link,
@@ -733,7 +763,7 @@ private fun SettingsBottomBar(onBack: () -> Unit) {
         )
         NavigationBarItem(
             selected = false,
-            onClick = onBack,
+            onClick = onNavigateToSessions,
             icon = {
                 Icon(
                     imageVector = Icons.Filled.Forum,
