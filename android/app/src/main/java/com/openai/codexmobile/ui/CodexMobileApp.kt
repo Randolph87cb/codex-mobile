@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -76,6 +77,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val navigateToSessionsAfterConnect = remember { mutableStateOf(false) }
     val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isEmpty()) {
             return@rememberLauncherForActivityResult
@@ -101,8 +103,12 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
         uiState.message?.let { snackbarHostState.showSnackbar(it) }
     }
 
-    LaunchedEffect(uiState.connectionState, currentRoute) {
-        if (uiState.connectionState is BridgeConnectionState.Connected && currentRoute == Routes.Connection) {
+    LaunchedEffect(uiState.connectionState, currentRoute, navigateToSessionsAfterConnect.value) {
+        if (navigateToSessionsAfterConnect.value &&
+            uiState.connectionState is BridgeConnectionState.Connected &&
+            currentRoute == Routes.Connection
+        ) {
+            navigateToSessionsAfterConnect.value = false
             navController.navigate(Routes.Sessions) {
                 popUpTo(Routes.Connection) {
                     inclusive = false
@@ -167,8 +173,16 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     connectionState = uiState.connectionState,
                     isLoading = uiState.isLoading,
                     onEndpointChange = appViewModel::updateEndpointInput,
-                    onConnect = appViewModel::connect,
+                    onConnect = {
+                        navigateToSessionsAfterConnect.value = true
+                        appViewModel.connect()
+                    },
                     onOpenSettings = { navController.navigate(Routes.Settings) },
+                    onOpenSessions = {
+                        navController.navigate(Routes.Sessions) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
             composable(Routes.Sessions) {
@@ -189,9 +203,10 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         appViewModel.startDraftSession(cwd)
                         navController.navigate(Routes.DraftSession)
                     },
-                    onDisconnect = {
-                        appViewModel.disconnect()
-                        navController.popBackStack(Routes.Connection, inclusive = false)
+                    onNavigateToConnect = {
+                        navController.navigate(Routes.Connection) {
+                            launchSingleTop = true
+                        }
                     },
                     onOpenSettings = { navController.navigate(Routes.Settings) },
                 )

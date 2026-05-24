@@ -247,3 +247,27 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
   - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
   - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+
+## 全局底部导航和主页面 Showcase 对齐
+
+- 时间：2026-05-25
+- 页面版本计数：应用外壳/导航第 1 版修补；未超过 5 版停下阈值。
+- 目标：在连接、线程、设置三个主 tab 之间补齐 AI Studio 生成版的切换逻辑，并让 debug showcase 能直接打开各主页面，避免 bridge 连接状态阻塞视觉验证。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+  - `android/app/src/debug/java/com/openai/codexmobile/PrimaryScreensShowcaseActivity.kt`
+- 改动内容：
+  - 连接页底部“线程”入口接到真实 `Routes.Sessions`，不再使用默认空回调。
+  - 连接成功后的自动跳转改为只在用户点击连接按钮后触发；用户从底部导航主动回到连接页时不再被 `LaunchedEffect` 立即弹回线程列表。
+  - 线程列表底部“连接”改为导航到连接页，不再断开 bridge；图标从电源改成链接图标，语义与 AI Studio 底部导航一致。
+  - `PrimaryScreensShowcaseActivity` 增加 `draft` 和 `settings` 参数，现可直接打开 connection、sessions、draft、settings 四个主页面；详情页仍使用既有 `SessionDetailShowcaseActivity`。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+  - 通过 `adb shell am start -n "com.openai.codexmobile/.PrimaryScreensShowcaseActivity" --es screen <screen>` 分别打开 connection、sessions、draft、settings 并截图：
+    - `.\.tmp\showcase-connection-nav-v1.png`
+    - `.\.tmp\showcase-sessions-nav-v2.png`
+    - `.\.tmp\showcase-draft-nav-v1.png`
+    - `.\.tmp\showcase-settings-nav-v1.png`

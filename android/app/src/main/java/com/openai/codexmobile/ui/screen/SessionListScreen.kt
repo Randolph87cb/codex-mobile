@@ -28,8 +28,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Unarchive
@@ -103,7 +103,7 @@ fun SessionListScreen(
     onArchiveSession: (String) -> Unit,
     onUnarchiveSession: (String) -> Unit,
     onCreateDraft: (String) -> Unit,
-    onDisconnect: () -> Unit,
+    onNavigateToConnect: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val groups = groupSessionsByDirectory(sessions)
@@ -251,7 +251,7 @@ fun SessionListScreen(
         },
         bottomBar = {
             SessionListBottomBar(
-                onDisconnect = onDisconnect,
+                onNavigateToConnect = onNavigateToConnect,
                 onOpenSettings = onOpenSettings,
             )
         },
@@ -440,18 +440,18 @@ private fun ConnectionSummaryStrip(
 
 @Composable
 private fun SessionListBottomBar(
-    onDisconnect: () -> Unit,
+    onNavigateToConnect: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
         NavigationBarItem(
             selected = false,
-            onClick = onDisconnect,
+            onClick = onNavigateToConnect,
             modifier = Modifier.testTag(TestTags.SessionListDisconnectButton),
             icon = {
                 Icon(
-                    imageVector = Icons.Filled.PowerSettingsNew,
-                    contentDescription = "断开连接",
+                    imageVector = Icons.Filled.Link,
+                    contentDescription = "连接",
                 )
             },
             label = { Text("连接") },
