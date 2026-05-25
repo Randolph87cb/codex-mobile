@@ -305,3 +305,35 @@
 - 剩余说明：
   - 当前仓库还有 README、docs、旧工作记录、`SessionDetailShowcaseActivity.kt`、`CodexMobileApp.kt` 的既有未提交改动，以及 `mobile_uploads/` 等未跟踪文件；这些不是本次页面迁移审计新增内容。
   - 真实 bridge 连接链路此前一度显示 `restarting/draining`，因此最终视觉审计主要依赖 debug showcase；页面路由、回调接线、构建和单测均已验证。
+
+## 方案1移除外层重复 Insets
+
+- 时间：2026-05-25
+- 目标：修复迁移后所有页面顶部和底部出现额外留白的问题，采用方案 1：保留每个页面自己的 `Scaffold`，移除应用外壳和 debug showcase 的外层 `Scaffold` padding 传递。
+- 原因确认：
+  - `CodexMobileApp` 外层 `Scaffold` 会生成一份系统栏 `paddingValues`。
+  - 连接、线程、草稿、详情、设置页面内部也各自使用 `Scaffold(topBar/bottomBar)`，并再次处理系统栏和页面栏位 inset。
+  - 外层 padding 传入页面后，系统栏区域被消费两次，表现为顶部标题整体下移、底部导航或输入栏上方/下方多出空白。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/ConnectionScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDraftScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+  - `android/app/src/debug/java/com/openai/codexmobile/PrimaryScreensShowcaseActivity.kt`
+  - `android/app/src/debug/java/com/openai/codexmobile/SessionDetailShowcaseActivity.kt`
+- 改动内容：
+  - `CodexMobileApp` 外层从 `Scaffold` 改为 `Box`，只承载 `NavHost` 和全局 `SnackbarHost`。
+  - 五个页面函数移除 `paddingValues` 入参，页面根 `Scaffold` 不再 `.padding(paddingValues)`。
+  - 两个 debug showcase 入口不再包外层 `Scaffold`，直接渲染目标页面，避免截图验证环境再次引入重复 inset。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装并启动成功。
+  - 模拟器截图复核通过：
+    - `.\.tmp\showcase-connection-insets-v1.png`
+    - `.\.tmp\showcase-sessions-insets-v1.png`
+    - `.\.tmp\showcase-settings-insets-v1.png`
+    - `.\.tmp\showcase-detail-insets-v1.png`
+- 剩余说明：顶部状态栏和底部手势条附近仍会保留系统安全区，这是 Android 系统栏正常行为，不属于重复 padding。

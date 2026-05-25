@@ -3,11 +3,7 @@ package com.openai.codexmobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionSummary
@@ -24,16 +20,11 @@ class PrimaryScreensShowcaseActivity : ComponentActivity() {
 
         setContent {
             CodexMobileTheme(darkTheme = false) {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = MaterialTheme.colorScheme.background,
-                ) { paddingValues ->
-                    when (screen) {
-                        "sessions" -> SessionsShowcase(paddingValues = paddingValues)
-                        "draft" -> DraftShowcase(paddingValues = paddingValues)
-                        "settings" -> SettingsShowcase(paddingValues = paddingValues)
-                        else -> ConnectionShowcase(paddingValues = paddingValues)
-                    }
+                when (screen) {
+                    "sessions" -> SessionsShowcase()
+                    "draft" -> DraftShowcase()
+                    "settings" -> SettingsShowcase()
+                    else -> ConnectionShowcase()
                 }
             }
         }
@@ -41,11 +32,8 @@ class PrimaryScreensShowcaseActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ConnectionShowcase(
-    paddingValues: androidx.compose.foundation.layout.PaddingValues,
-) {
+private fun ConnectionShowcase() {
     ConnectionScreen(
-        paddingValues = paddingValues,
         currentConnectionName = "办公室桥接",
         endpoint = "ws://10.0.0.12:8080",
         connectionState = BridgeConnectionState.Connected(
@@ -61,11 +49,8 @@ private fun ConnectionShowcase(
 }
 
 @Composable
-private fun SessionsShowcase(
-    paddingValues: androidx.compose.foundation.layout.PaddingValues,
-) {
+private fun SessionsShowcase() {
     SessionListScreen(
-        paddingValues = paddingValues,
         sessions = showcaseSessions(),
         showArchivedSessions = false,
         connectionState = BridgeConnectionState.Connected(
@@ -86,11 +71,8 @@ private fun SessionsShowcase(
 }
 
 @Composable
-private fun DraftShowcase(
-    paddingValues: androidx.compose.foundation.layout.PaddingValues,
-) {
+private fun DraftShowcase() {
     SessionDraftScreen(
-        paddingValues = paddingValues,
         draftSession = DraftSessionUiState(
             cwd = "D:\\workspace\\codex-mobile",
             model = "gpt-5.5",
@@ -127,9 +109,7 @@ private fun DraftShowcase(
 }
 
 @Composable
-private fun SettingsShowcase(
-    paddingValues: androidx.compose.foundation.layout.PaddingValues,
-) {
+private fun SettingsShowcase() {
     val connections = listOf(
         SavedBridgeConnection(
             id = "office",
@@ -145,7 +125,6 @@ private fun SettingsShowcase(
         ),
     )
     SettingsScreen(
-        paddingValues = paddingValues,
         items = listOf(
             "桥接模式" to "真实桥接",
             "当前连接" to "办公室桥接",

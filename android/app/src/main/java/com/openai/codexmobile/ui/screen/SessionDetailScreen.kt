@@ -168,7 +168,6 @@ private val SessionDetailPanelShape = RoundedCornerShape(16.dp)
 
 @Composable
 fun SessionDetailScreen(
-    paddingValues: PaddingValues,
     sessionDetail: SessionDetail?,
     draftSession: DraftSessionUiState?,
     sessionRealtimeState: SessionRealtimeUiState,
@@ -354,8 +353,7 @@ fun SessionDetailScreen(
     Scaffold(
         modifier = Modifier
             .testTag(TestTags.SessionDetailScreen)
-            .fillMaxSize()
-            .padding(paddingValues),
+            .fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             if (showTopBar) {

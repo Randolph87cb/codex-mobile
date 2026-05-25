@@ -92,7 +92,6 @@ fun groupSessionsByDirectory(sessions: List<SessionSummary>): List<SessionDirect
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionListScreen(
-    paddingValues: PaddingValues,
     sessions: List<SessionSummary>,
     showArchivedSessions: Boolean,
     connectionState: BridgeConnectionState,
@@ -190,8 +189,7 @@ fun SessionListScreen(
     Scaffold(
         modifier = Modifier
             .testTag(TestTags.SessionListScreen)
-            .fillMaxSize()
-            .padding(paddingValues),
+            .fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(

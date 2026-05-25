@@ -73,7 +73,6 @@ import com.openai.codexmobile.ui.TestTags
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    paddingValues: PaddingValues,
     items: List<Pair<String, String>>,
     selectedConnectionName: String,
     savedConnections: List<SavedBridgeConnection>,
@@ -109,8 +108,7 @@ fun SettingsScreen(
     Scaffold(
         modifier = Modifier
             .testTag(TestTags.SettingsScreen)
-            .fillMaxSize()
-            .padding(paddingValues),
+            .fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(

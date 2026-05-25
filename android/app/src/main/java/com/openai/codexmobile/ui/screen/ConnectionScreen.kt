@@ -64,7 +64,6 @@ import com.openai.codexmobile.ui.TestTags
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionScreen(
-    paddingValues: PaddingValues,
     currentConnectionName: String,
     endpoint: String,
     connectionState: BridgeConnectionState,
@@ -80,8 +79,7 @@ fun ConnectionScreen(
     Scaffold(
         modifier = Modifier
             .testTag(TestTags.ConnectionScreen)
-            .fillMaxSize()
-            .padding(paddingValues),
+            .fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
