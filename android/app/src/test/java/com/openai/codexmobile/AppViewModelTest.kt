@@ -891,6 +891,8 @@ class AppViewModelTest {
         advanceUntilIdle()
 
         assertEquals("error", viewModel.uiState.value.selectedSession?.status)
+        assertEquals(detail.transcriptPreview, viewModel.uiState.value.selectedSession?.transcriptPreview)
+        assertEquals("实时流返回错误", viewModel.uiState.value.sessionRealtimeState.connectionText)
         assertEquals("出错", viewModel.uiState.value.sessionRealtimeState.statusText)
         assertEquals("stream failed", viewModel.uiState.value.sessionRealtimeState.fallbackNotice)
         assertEquals("实时流错误：stream failed", viewModel.uiState.value.message)
@@ -924,6 +926,10 @@ class AppViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, bridgeApi.observeSessionEventsCallCount)
+        assertEquals(
+            "应用回到前台后会自动重连实时流。当前停留在最后一次收到的内容快照。",
+            viewModel.uiState.value.sessionRealtimeState.fallbackNotice,
+        )
 
         viewModel.onAppForegrounded()
         advanceUntilIdle()

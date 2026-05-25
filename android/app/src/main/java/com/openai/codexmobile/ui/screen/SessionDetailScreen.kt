@@ -161,6 +161,19 @@ private data class IndexedTranscriptImage(
     val part: TranscriptPart.Image,
 )
 
+private enum class StatusStripNoticeTone {
+    Info,
+    Warning,
+    Error,
+}
+
+private data class StatusStripNotice(
+    val title: String?,
+    val message: String,
+    val icon: ImageVector,
+    val tone: StatusStripNoticeTone,
+)
+
 private val TranscriptInlineImageWidth = 92.dp
 private val TranscriptInlineImageHeight = 118.dp
 private val PendingImagePreviewWidth = 92.dp
@@ -1017,6 +1030,10 @@ private fun StatusStrip(
         detail?.goal == null -> "未设置"
         else -> localizedGoalStatus(detail.goal.status)
     }
+    val statusNotice = buildStatusStripNotice(
+        sessionRealtimeState = sessionRealtimeState,
+        sessionStatus = sessionStatus,
+    )
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -1090,6 +1107,67 @@ private fun StatusStrip(
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onShowGoal() },
+                )
+            }
+            statusNotice?.let { notice ->
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                SessionStatusNotice(notice = notice)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionStatusNotice(notice: StatusStripNotice) {
+    val (containerColor, contentColor) = when (notice.tone) {
+        StatusStripNoticeTone.Info ->
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f) to
+                MaterialTheme.colorScheme.onPrimaryContainer
+        StatusStripNoticeTone.Warning ->
+            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.72f) to
+                MaterialTheme.colorScheme.onTertiaryContainer
+        StatusStripNoticeTone.Error ->
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.92f) to
+                MaterialTheme.colorScheme.onErrorContainer
+    }
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = containerColor,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailStatusNotice),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                imageVector = notice.icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier
+                    .padding(top = 1.dp)
+                    .size(16.dp),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                notice.title?.let { title ->
+                    Text(
+                        text = title,
+                        color = contentColor,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = notice.message,
+                    color = contentColor,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                 )
             }
         }
@@ -3305,6 +3383,50 @@ private fun sessionStatusTint(status: String): Color {
         "error" -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+}
+
+private fun buildStatusStripNotice(
+    sessionRealtimeState: SessionRealtimeUiState,
+    sessionStatus: String,
+): StatusStripNotice? {
+    val message = sessionRealtimeState.fallbackNotice?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
+    val title = sessionRealtimeState.connectionText
+        .takeUnless {
+            it.isBlank() ||
+                it == "未连接实时流" ||
+                it == "已连接实时流"
+        }
+        ?.takeUnless { it == message }
+        ?: sessionRealtimeState.lastEventText
+            ?.trim()
+            ?.takeUnless { it.isEmpty() || it == message }
+
+    val hintText = listOfNotNull(title, message).joinToString(" ").lowercase()
+    val tone = when {
+        sessionStatus == "error" ||
+            hintText.contains("失败") ||
+            hintText.contains("错误") ||
+            hintText.contains("鉴权") ||
+            hintText.contains("不存在") -> StatusStripNoticeTone.Error
+        hintText.contains("重连") ||
+            hintText.contains("快照") ||
+            hintText.contains("前台") ||
+            hintText.contains("断开") -> StatusStripNoticeTone.Warning
+        else -> StatusStripNoticeTone.Info
+    }
+    val icon = when {
+        hintText.contains("重启") -> Icons.Filled.Refresh
+        tone == StatusStripNoticeTone.Warning -> Icons.Filled.Schedule
+        tone == StatusStripNoticeTone.Error -> Icons.Filled.Error
+        else -> Icons.Filled.CloudOff
+    }
+
+    return StatusStripNotice(
+        title = title,
+        message = message,
+        icon = icon,
+        tone = tone,
+    )
 }
 
 private fun localizedStatusLabel(status: String): String {

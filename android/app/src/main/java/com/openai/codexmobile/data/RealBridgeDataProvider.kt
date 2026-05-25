@@ -520,13 +520,16 @@ class RealBridgeDataProvider(
                     t,
                 )
                 trySend(
-                    SessionStreamEvent.Error(
+                    SessionStreamEvent.StreamClosed(
                         sessionId = sessionId,
-                        message = t.message ?: "实时流连接失败。",
+                        reason = buildStreamFailureNotice(
+                            message = t.message,
+                            statusCode = response?.code,
+                        ),
                         timestamp = null,
                     ),
                 )
-                this@callbackFlow.close(t)
+                this@callbackFlow.close()
             }
         }
 
@@ -1171,6 +1174,28 @@ internal fun shouldSuppressStreamFailure(message: String?, closedByClient: Boole
 
     return message.contains("closed", ignoreCase = true) ||
         message.contains("canceled", ignoreCase = true)
+}
+
+internal fun buildStreamFailureNotice(
+    message: String?,
+    statusCode: Int?,
+): String {
+    return when (statusCode) {
+        401, 403 -> "实时流鉴权失败，请检查 bridge 令牌后重试。"
+        404 -> "实时流对应的会话不存在，请刷新当前会话。"
+        503 -> "bridge 正在重启，实时流暂时不可用。"
+        else -> {
+            val normalized = message?.trim().orEmpty()
+            when {
+                normalized.isBlank() -> "实时流连接失败。"
+                normalized.contains("broken pipe", ignoreCase = true) -> "实时流连接已中断。"
+                normalized.contains("software caused connection abort", ignoreCase = true) -> "实时流连接已中断。"
+                normalized.contains("socket closed", ignoreCase = true) -> "实时流连接已关闭。"
+                normalized.contains("canceled", ignoreCase = true) -> "实时流连接已取消。"
+                else -> normalized
+            }
+        }
+    }
 }
 
 private fun SessionStreamEvent.toLogSummary(): String {

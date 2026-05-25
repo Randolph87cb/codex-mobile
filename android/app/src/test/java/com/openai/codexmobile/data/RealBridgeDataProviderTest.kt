@@ -15,6 +15,23 @@ class RealBridgeDataProviderTest {
     }
 
     @Test
+    fun buildStreamFailureNoticePrefersFriendlyTransportMessages() {
+        assertTrue(buildStreamFailureNotice("Broken pipe", statusCode = null) == "实时流连接已中断。")
+        assertTrue(
+            buildStreamFailureNotice(
+                message = "anything",
+                statusCode = 503,
+            ) == "bridge 正在重启，实时流暂时不可用。",
+        )
+        assertTrue(
+            buildStreamFailureNotice(
+                message = "unauthorized",
+                statusCode = 401,
+            ) == "实时流鉴权失败，请检查 bridge 令牌后重试。",
+        )
+    }
+
+    @Test
     fun parseSessionStartedRestoresPendingApprovalSnapshot() {
         val event = parseSessionStreamEvent(
             sessionId = "sess-pending",

@@ -53,6 +53,12 @@ private const val SessionStreamReconnectMaxAttempts = 5
 private const val ManagedApprovalMode = "auto"
 private const val ManagedSandboxMode = "danger-full-access"
 
+private enum class RealtimeNoticeMode {
+    ImmediateReconnect,
+    ForegroundReconnect,
+    None,
+}
+
 data class AppUiState(
     val endpointInput: String,
     val authTokenInput: String,
@@ -1972,18 +1978,21 @@ class AppViewModel(
                         selectedSession = if (event.isRetryable) {
                             it.selectedSession
                         } else {
-                            it.selectedSession
-                                ?.let { detail -> appendSystemMessage(detail, "系统：${event.message}", event.timestamp) }
-                                ?.copy(
+                            it.selectedSession?.copy(
+                                status = "error",
+                                subtitle = buildSessionSubtitle(
+                                    model = it.selectedSession.model,
+                                    approvalMode = it.selectedSession.approvalMode,
                                     status = "error",
-                                    subtitle = buildSessionSubtitle(
-                                        model = it.selectedSession.model,
-                                        approvalMode = it.selectedSession.approvalMode,
-                                        status = "error",
-                                    ),
-                                )
+                                ),
+                            )
                         },
                         sessionRealtimeState = it.sessionRealtimeState.copy(
+                            connectionText = if (event.isRetryable) {
+                                it.sessionRealtimeState.connectionText
+                            } else {
+                                "实时流返回错误"
+                            },
                             statusText = if (event.isRetryable) {
                                 localizedSessionStatus(it.selectedSession?.status ?: "running")
                             } else {
@@ -2033,6 +2042,8 @@ class AppViewModel(
                     sessionRealtimeState = it.sessionRealtimeState.copy(
                         statusText = localizedSessionStatus(merged.status),
                         fallbackNotice = when {
+                            !it.sessionRealtimeState.isConnected ->
+                                it.sessionRealtimeState.fallbackNotice
                             merged.status == "awaiting_approval" || merged.status == "error" ->
                                 it.sessionRealtimeState.fallbackNotice
                             merged.status == "running" && isRetryableStreamNotice(it.sessionRealtimeState.fallbackNotice) ->
@@ -2205,15 +2216,32 @@ class AppViewModel(
         reconnectScheduled: Boolean,
         reason: String,
     ): String {
-        return if (reconnectScheduled) {
-            "将在前台自动重连实时流（第 $sessionStreamReconnectAttempt 次尝试）。$reason"
-        } else {
-            reason
+        return when {
+            reconnectScheduled -> "正在自动重连实时流（第 $sessionStreamReconnectAttempt 次尝试）。$reason"
+            streamReconnectNoticeMode() == RealtimeNoticeMode.ForegroundReconnect ->
+                "应用回到前台后会自动重连实时流。$reason"
+            else -> reason
         }
     }
 
     private fun buildRetryableStreamNotice(message: String): String {
         return "上游响应流暂时中断，bridge 正在重试：$message"
+    }
+
+    private fun streamReconnectNoticeMode(): RealtimeNoticeMode {
+        val selectedSessionId = uiState.value.selectedSession?.id ?: return RealtimeNoticeMode.None
+        if (pendingReconnectSessionId == selectedSessionId && sessionStreamReconnectJob?.isActive == true) {
+            return RealtimeNoticeMode.ImmediateReconnect
+        }
+        return if (
+            !isAppInForeground &&
+            uiState.value.sessionRealtimeState.isActive &&
+            uiState.value.connectionState is BridgeConnectionState.Connected
+        ) {
+            RealtimeNoticeMode.ForegroundReconnect
+        } else {
+            RealtimeNoticeMode.None
+        }
     }
 
     private fun buildBridgeLifecycleNotice(event: SessionStreamEvent.BridgeLifecycle): String {

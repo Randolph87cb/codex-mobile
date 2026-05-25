@@ -42,6 +42,7 @@ object TestTags {
     const val SessionDetailInterruptButton = "session_detail_interrupt_button"
     const val SessionDetailBackButton = "session_detail_back_button"
     const val SessionDetailStatusStrip = "session_detail_status_strip"
+    const val SessionDetailStatusNotice = "session_detail_status_notice"
     const val SessionDetailStatusButton = "session_detail_status_button"
     const val SessionDetailStatusDetails = "session_detail_status_details"
     const val SessionDetailStatusRefreshButton = "session_detail_status_refresh_button"
