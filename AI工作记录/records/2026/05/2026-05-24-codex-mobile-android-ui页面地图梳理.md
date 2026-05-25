@@ -446,3 +446,18 @@
   - 模拟器截图确认纯色浅蓝 Codex 气泡和深色长按菜单：
     - `.\.tmp\showcase-detail-user-pink-v1.png`
     - `.\.tmp\showcase-detail-design-menu-v4.png`
+
+## 详情页 UI 文档同步
+
+- 时间：2026-05-25
+- 目标：把详情页消息布局、纯色气泡 token、长按复制菜单和全局字体设置同步到项目文档。
+- 改动文件：
+  - `docs/session-detail-ui-notes.md`
+  - `docs/android-ui-collaboration.md`
+  - `AI工作记录/records/2026/05/2026-05-24-codex-mobile-android-ui页面地图梳理.md`
+- 改动内容：
+  - `session-detail-ui-notes.md` 增加当前三栏消息布局、自然宽度气泡、颜色 token 和复制交互说明。
+  - `android-ui-collaboration.md` 将 UI 基线更新到 2026-05-25，并增加后续改会话详情页时必须遵守的消息规则。
+  - 交付同步清单改为优先更新详情页说明文档；README 只保留高层状态，不再作为局部 UI 变更日志。
+- 验证：
+  - `git diff --check` 文档检查通过。
