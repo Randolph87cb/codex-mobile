@@ -425,3 +425,24 @@
   - 模拟器截图确认气泡位于两头像之间且长按菜单可用：
     - `.\.tmp\showcase-detail-bubble-menu-width-v1.png`
     - `.\.tmp\showcase-detail-bubble-menu-open-v1.png`
+
+## 会话气泡设计 token 与菜单配色修正
+
+- 时间：2026-05-25
+- 目标：按项目 UI skill 的 `DESIGN.md` 风格重新收敛详情页消息配色；气泡改为纯色，用户气泡使用淡粉色且头像保持不变，长按复制菜单也同步调整为更协调的深色菜单。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptMarkdown.kt`
+- 改动内容：
+  - Codex 头像深蓝调整为 `#2D4B73`，Codex 气泡保持纯色浅蓝 `#EAF1F8`。
+  - 用户头像保持现状，用户气泡从偏红浅色调整为更柔和的淡粉 `#FFF1F3`，边框为 `#F3D4D9`。
+  - 系统和工具消息统一回到中性浅灰 `#F3F4F5`，避免继续偏向截图里的红蓝对撞风格。
+  - 长按菜单改为深灰 `#2E3132` 容器、浅色文字和图标，并保留“复制”“选择文本”两个入口。
+  - 消息正文默认关闭 `SelectionContainer`，点“选择文本”后才开启；长按菜单手势改在 `PointerEventPass.Initial` 阶段观察，避免被文本选择优先抢走。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装成功。
+  - 模拟器截图确认纯色浅蓝 Codex 气泡和深色长按菜单：
+    - `.\.tmp\showcase-detail-user-pink-v1.png`
+    - `.\.tmp\showcase-detail-design-menu-v4.png`

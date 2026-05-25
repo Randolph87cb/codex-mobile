@@ -1,11 +1,10 @@
 package com.openai.codexmobile.ui.screen
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -57,6 +56,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.StopCircle
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.AlertDialog
@@ -99,6 +99,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -129,6 +131,7 @@ import com.openai.codexmobile.ui.screen.saveTranscriptImage
 import com.openai.codexmobile.ui.screen.TranscriptPreviewMaxDimension
 import com.openai.codexmobile.ui.screen.TranscriptThumbnailMaxDimension
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private enum class SessionConfigEditor {
     Cwd,
@@ -168,17 +171,19 @@ private val SessionDetailPanelShape = RoundedCornerShape(16.dp)
 private val ConversationAvatarSize = 40.dp
 private val ConversationAvatarGap = 10.dp
 private val ConversationBubbleMaxWidth = 560.dp
-private val CodexAvatarContainer = Color(0xFF294761)
+private val CodexAvatarContainer = Color(0xFF2D4B73)
 private val CodexBubbleContainer = Color(0xFFEAF1F8)
 private val CodexBubbleBorder = Color(0xFFD5E0EA)
 private val UserAvatarContainer = Color(0xFFD94F4F)
-private val UserBubbleContainer = Color(0xFFFFEEEE)
-private val UserBubbleBorder = Color(0xFFF2C9C9)
+private val UserBubbleContainer = Color(0xFFFFF1F3)
+private val UserBubbleBorder = Color(0xFFF3D4D9)
 private val AssistantBubbleContainer = CodexBubbleContainer
-private val SystemBubbleContainer = Color(0xFFF5F7FA)
-private val ToolBubbleContainer = Color(0xFFF1F6F3)
-private val TranscriptBubbleBorder = Color(0xFFD9E1EA)
+private val SystemBubbleContainer = Color(0xFFF3F4F5)
+private val ToolBubbleContainer = Color(0xFFF3F4F5)
+private val TranscriptBubbleBorder = Color(0xFFC3C6CF)
 private val CodeBlockContainer = Color(0xFFF8FAFC)
+private val MessageMenuContainer = Color(0xFF2E3132)
+private val MessageMenuContent = Color(0xFFF0F1F2)
 
 @Composable
 fun SessionDetailScreen(
@@ -1943,7 +1948,6 @@ private fun TranscriptBubbleCard(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TranscriptBubbleBodyCard(
     bubble: TranscriptBubble,
@@ -1962,23 +1966,43 @@ private fun TranscriptBubbleBodyCard(
     onToggle: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    var selectionMode by rememberSaveable(toggleTag) { mutableStateOf(false) }
-    val menuModifier = if (selectionMode) {
-        Modifier
-    } else {
-        Modifier.combinedClickable(
-            onClick = {},
-            onLongClick = { menuExpanded = true },
-        )
+    var selectionMode by remember(toggleTag) { mutableStateOf(false) }
+    val menuModifier = Modifier.pointerInput(toggleTag, selectionMode) {
+        if (!selectionMode) {
+            awaitEachGesture {
+                val downChange = awaitPointerEvent(PointerEventPass.Initial)
+                    .changes
+                    .firstOrNull { it.pressed }
+                    ?: return@awaitEachGesture
+                val pointerId = downChange.id
+                val releasedBeforeLongPress = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    var released = false
+                    while (!released) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial)
+                            .changes
+                            .firstOrNull { it.id == pointerId }
+                        released = change == null || !change.pressed
+                    }
+                    true
+                } ?: false
+                if (!releasedBeforeLongPress) {
+                    menuExpanded = true
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                    } while (event.changes.any { it.id == pointerId && it.pressed })
+                }
+            }
+        }
     }
 
     Box(
-        modifier = Modifier.widthIn(max = ConversationBubbleMaxWidth),
+        modifier = Modifier
+            .widthIn(max = ConversationBubbleMaxWidth)
+            .then(menuModifier),
         contentAlignment = if (isUser) Alignment.TopEnd else Alignment.TopStart,
     ) {
-    Card(
-        modifier = menuModifier,
-        shape = transcriptBubbleShape(isUser),
+        Card(
+            shape = transcriptBubbleShape(isUser),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, bubble.conversationBubbleBorder()),
         colors = CardDefaults.cardColors(
@@ -2012,6 +2036,7 @@ private fun TranscriptBubbleBodyCard(
                         onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
                         fillTextWidth = false,
+                        textSelectionEnabled = selectionMode,
                     )
                 }
             }
@@ -2031,6 +2056,7 @@ private fun TranscriptBubbleBodyCard(
                         onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
                         fillTextWidth = false,
+                        textSelectionEnabled = selectionMode,
                     )
                 }
             }
@@ -2039,16 +2065,33 @@ private fun TranscriptBubbleBodyCard(
         DropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
+            containerColor = MessageMenuContainer,
+            tonalElevation = 0.dp,
+            shadowElevation = 8.dp,
         ) {
             DropdownMenuItem(
-                text = { Text("复制") },
+                text = { Text("复制", color = MessageMenuContent) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.ContentCopy,
+                        contentDescription = null,
+                        tint = MessageMenuContent,
+                    )
+                },
                 onClick = {
                     menuExpanded = false
                     onCopyText(bubble.copyText)
                 },
             )
             DropdownMenuItem(
-                text = { Text("选择文本") },
+                text = { Text("选择文本", color = MessageMenuContent) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.TextFields,
+                        contentDescription = null,
+                        tint = MessageMenuContent,
+                    )
+                },
                 onClick = {
                     menuExpanded = false
                     selectionMode = true
@@ -2424,6 +2467,7 @@ private fun TranscriptPartsColumn(
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
     fillTextWidth: Boolean = true,
+    textSelectionEnabled: Boolean = true,
 ) {
     val bodyTextStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
     var index = 0
@@ -2439,6 +2483,7 @@ private fun TranscriptPartsColumn(
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                     fillWidth = fillTextWidth,
+                    selectable = textSelectionEnabled,
                 )
                 index += 1
             }
