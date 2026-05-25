@@ -10,3 +10,4 @@ local.properties
 .logs/
 .tmp/
 .tools/
+mobile_uploads/

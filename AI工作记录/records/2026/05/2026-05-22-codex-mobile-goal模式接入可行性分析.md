@@ -289,3 +289,19 @@
   - bridge 常驻实例已能稳定列会话
   - goal 后端真实接口已实机验证通过
   - Android 数据层与 ViewModel 的 goal 读写、流事件刷新均有单测覆盖并通过
+
+## 文档同步
+
+- 已更新：
+  - `README.md`
+  - `docs/api.md`
+- 本次补充内容：
+  - Cloudflare Tunnel 部署在局域网另一台机器时的推荐链路说明
+  - 后台脚本与 bridge 当前对 `CODEX_EXECUTABLE`、`codex.js`、`codex.cmd` 的实际启动行为
+  - `spawn ENOENT`、`spawn EPERM`、`spawn EFTYPE` 与 `goal-not-supported` 的排障说明
+  - `POST /api/session` 的 `session-initialize-failed` 错误语义
+  - goal 接口在旧 host / 缺少 `thread_goals` 表时的兼容降级语义
+  - Android 当前实际使用的 goal 接口列表
+- 验证：
+  - 本轮为文档同步，没有新增代码路径，因此未额外执行构建或测试
+  - 文档内容基于本轮已经完成的 bridge、Android 与常驻实例实机验证结果同步

@@ -11,14 +11,19 @@
 - `bridge/`：Windows 侧 companion service，TypeScript + Fastify。
 - `android/`：Android 原生客户端，Kotlin + Jetpack Compose。
 - `docs/`：架构、接口文档，以及已提交的 `app-server` 协议生成物。
+- `.codex/skills/`：项目内 Codex skill 与 UI 协作规范引用。
+- `DESIGN.md`：仓库根目录下的设计规范入口文件。
 - `scripts/`：常用启动和构建脚本。
+- `mobile_uploads/`：手机上传图片的本地落盘目录，默认忽略，不提交。
 - `AI工作记录/`：项目内工作记录。
 
 ## 当前目录结构
 
 ```text
 codex-mobile/
+├── .codex/
 ├── AGENTS.md
+├── DESIGN.md
 ├── README.md
 ├── .git/
 ├── .gitignore
@@ -29,6 +34,7 @@ codex-mobile/
 ├── android/
 ├── bridge/
 ├── docs/
+├── mobile_uploads/
 └── scripts/
 ```
 
@@ -109,7 +115,7 @@ codex-mobile/
 
 ## 本地工具链
 
-- `.tools/`、`.logs/`、`.tmp/`、构建产物和缓存目录都是本地资产，不要提交。
+- `.tools/`、`.logs/`、`.tmp/`、`mobile_uploads/`、构建产物和缓存目录都是本地资产，不要提交。
 - Android 构建默认依赖仓库内 `.tools/` 的 JDK/SDK；如果系统全局环境缺失，优先复用项目内工具链。
 
 ## 记录要求
