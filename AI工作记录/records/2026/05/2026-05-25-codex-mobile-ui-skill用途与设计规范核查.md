@@ -28,3 +28,20 @@
 
 - `.codex/skills/codex-mobile-android-ui/agents/openai.yaml` 只定义了该 skill 的展示名、简述和默认提示词。
 - 项目根目录与 `.codex/` 目录下未发现名为 `design.md` 的文件。
+
+## DESIGN.md 对比补充
+
+- 时间：2026-05-25
+- 新增检查文件：
+  - `DESIGN.md`
+- 结论：
+  - `DESIGN.md` 与现有 UI skill 总体方向一致，没有明显硬冲突。
+  - `DESIGN.md` 偏设计系统与视觉规范，提供颜色、字体、圆角、间距、组件语言和品牌语气。
+  - UI skill 偏执行约束与仓库落地流程，提供页面优先级、保留中文文案、保护 `TestTags`、避免协议层改动、验证命令等。
+  - 两者存在少量重复，但不是互斥关系；更合理的方式是让 skill 引用 `DESIGN.md`，而不是直接删除 skill。
+- 风险判断：
+  - 如果只保留 `DESIGN.md`，后续 AI/代理在本仓库做 UI 修改时，会缺少项目约束、文件入口、测试要求和“哪些动作必须保留文本按钮”等安全边界。
+  - 如果只保留现有 skill，不吸收 `DESIGN.md`，则视觉 token、排版和组件语言会继续分散在轻量规则里，不够系统化。
+- 建议：
+  - 保留 `codex-mobile-android-ui` skill，但把视觉规范主来源切到根目录 `DESIGN.md`。
+  - 将 `references/ui-rules.md` 收缩为“仓库特有补充规则”，避免和 `DESIGN.md` 重复维护。
