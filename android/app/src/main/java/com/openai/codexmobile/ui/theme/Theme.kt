@@ -70,6 +70,7 @@ fun CodexMobileTheme(
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) DarkColors else LightColors
+    val transcriptColors = if (darkTheme) DarkTranscriptColors else LightTranscriptColors
     val currentDensity = LocalDensity.current
     val resolvedTypeScale = typeScale.coerceIn(0.88f, 1.18f)
     CompositionLocalProvider(
@@ -77,6 +78,7 @@ fun CodexMobileTheme(
             density = currentDensity.density,
             fontScale = currentDensity.fontScale * resolvedTypeScale,
         ),
+        LocalTranscriptColors provides transcriptColors,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

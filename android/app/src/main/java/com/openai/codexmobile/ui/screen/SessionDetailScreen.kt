@@ -138,6 +138,7 @@ import com.openai.codexmobile.ui.screen.saveTranscriptFile
 import com.openai.codexmobile.ui.screen.saveTranscriptImage
 import com.openai.codexmobile.ui.screen.TranscriptPreviewMaxDimension
 import com.openai.codexmobile.ui.screen.TranscriptThumbnailMaxDimension
+import com.openai.codexmobile.ui.theme.codexTranscriptColors
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -193,16 +194,7 @@ private val ConversationAvatarSize = 40.dp
 private val ConversationAvatarGap = 10.dp
 private val ConversationBubbleMaxWidth = 560.dp
 private val CodexAvatarContainer = Color(0xFF2D4B73)
-private val CodexBubbleContainer = Color(0xFFEAF1F8)
-private val CodexBubbleBorder = Color(0xFFD5E0EA)
 private val UserAvatarContainer = Color(0xFFD94F4F)
-private val UserBubbleContainer = Color(0xFFFFF1F3)
-private val UserBubbleBorder = Color(0xFFF3D4D9)
-private val AssistantBubbleContainer = CodexBubbleContainer
-private val SystemBubbleContainer = Color(0xFFF3F4F5)
-private val ToolBubbleContainer = Color(0xFFF3F4F5)
-private val TranscriptBubbleBorder = Color(0xFFC3C6CF)
-private val CodeBlockContainer = Color(0xFFF8FAFC)
 private val MessageMenuContainer = Color(0xFF2E3132)
 private val MessageMenuContent = Color(0xFFF0F1F2)
 
@@ -2390,25 +2382,27 @@ private fun transcriptBubbleShape(isUser: Boolean): RoundedCornerShape {
 
 @Composable
 private fun TranscriptBubble.conversationBubbleContainer(): Color {
+    val transcriptColors = codexTranscriptColors()
     return when (speaker) {
-        TranscriptSpeaker.User -> UserBubbleContainer
-        TranscriptSpeaker.Assistant -> AssistantBubbleContainer
+        TranscriptSpeaker.User -> transcriptColors.userBubbleContainer
+        TranscriptSpeaker.Assistant -> transcriptColors.assistantBubbleContainer
         TranscriptSpeaker.System -> when (kind) {
-            TranscriptBubbleKind.ToolRequest -> ToolBubbleContainer
-            TranscriptBubbleKind.ToolResult -> ToolBubbleContainer
+            TranscriptBubbleKind.ToolRequest -> transcriptColors.toolBubbleContainer
+            TranscriptBubbleKind.ToolResult -> transcriptColors.toolBubbleContainer
             TranscriptBubbleKind.Status,
             TranscriptBubbleKind.Message,
-            -> SystemBubbleContainer
+            -> transcriptColors.systemBubbleContainer
         }
     }
 }
 
 @Composable
 private fun TranscriptBubble.conversationBubbleBorder(): Color {
+    val transcriptColors = codexTranscriptColors()
     return when (speaker) {
-        TranscriptSpeaker.User -> UserBubbleBorder
-        TranscriptSpeaker.Assistant -> CodexBubbleBorder
-        TranscriptSpeaker.System -> TranscriptBubbleBorder
+        TranscriptSpeaker.User -> transcriptColors.userBubbleBorder
+        TranscriptSpeaker.Assistant -> transcriptColors.assistantBubbleBorder
+        TranscriptSpeaker.System -> transcriptColors.systemBubbleBorder
     }
 }
 
@@ -2555,6 +2549,7 @@ private fun ExecutionProcessBubbleCard(
     onOpenImagePreview: (String, String) -> Unit,
 ) {
     var expanded by rememberSaveable(index, group.summaryLine) { mutableStateOf(false) }
+    val transcriptColors = codexTranscriptColors()
 
     Box(
         modifier = Modifier
@@ -2564,10 +2559,10 @@ private fun ExecutionProcessBubbleCard(
         Card(
             modifier = Modifier.align(Alignment.CenterStart),
             shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, CodexBubbleBorder),
+            border = BorderStroke(1.dp, transcriptColors.assistantBubbleBorder),
             colors = CardDefaults.cardColors(
-                containerColor = CodexBubbleContainer,
-                contentColor = MaterialTheme.colorScheme.onSurface,
+                containerColor = transcriptColors.assistantBubbleContainer,
+                contentColor = transcriptColors.bubbleContent,
             ),
         ) {
             Column(
@@ -2620,12 +2615,13 @@ private fun ExecutionActivityCard(
     onOpenImagePreview: (String, String) -> Unit,
 ) {
     var expanded by rememberSaveable(toggleTag, bubble.summaryLine) { mutableStateOf(false) }
+    val transcriptColors = codexTranscriptColors()
 
     Card(
-        border = BorderStroke(1.dp, TranscriptBubbleBorder.copy(alpha = 0.72f)),
+        border = BorderStroke(1.dp, transcriptColors.systemBubbleBorder.copy(alpha = 0.9f)),
         colors = CardDefaults.cardColors(
-            containerColor = AssistantBubbleContainer,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            containerColor = transcriptColors.systemBubbleContainer,
+            contentColor = transcriptColors.bubbleContent,
         ),
         shape = RoundedCornerShape(11.dp),
     ) {
@@ -2668,6 +2664,7 @@ private fun TranscriptToggleHeader(
     toggleTag: String,
     onToggle: () -> Unit,
 ) {
+    val transcriptColors = codexTranscriptColors()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(0.dp),
@@ -2684,15 +2681,16 @@ private fun TranscriptToggleHeader(
                 text = label,
                 icon = bubble?.headerIcon(),
                 containerColor = bubble?.headerContainerColor()
-                    ?: SystemBubbleContainer,
+                    ?: transcriptColors.systemBubbleContainer,
                 contentColor = bubble?.headerContentColor()
-                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                    ?: transcriptColors.bubbleMutedContent,
                 compact = true,
                 plain = true,
             )
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = transcriptColors.bubbleContent,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -2717,6 +2715,7 @@ private fun TranscriptStaticHeader(
     copyTag: String,
     onCopy: () -> Unit,
 ) {
+    val transcriptColors = codexTranscriptColors()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(1.dp),
@@ -2737,7 +2736,8 @@ private fun TranscriptStaticHeader(
             title?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = transcriptColors.bubbleContent,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -2753,7 +2753,7 @@ private fun TranscriptStaticHeader(
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = "复制消息",
                 modifier = Modifier.size(8.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                tint = transcriptColors.bubbleMutedContent.copy(alpha = 0.86f),
             )
         }
     }
@@ -2773,9 +2773,13 @@ private fun TranscriptPartsColumn(
     fillTextWidth: Boolean = true,
     textSelectionEnabled: Boolean = true,
 ) {
+    val transcriptColors = codexTranscriptColors()
     val content: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            val bodyTextStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
+            val bodyTextStyle = MaterialTheme.typography.bodyMedium.copy(
+                lineHeight = 20.sp,
+                color = transcriptColors.bubbleContent,
+            )
             var index = 0
             while (index < parts.size) {
                 val part = parts[index]
@@ -2842,11 +2846,12 @@ private fun CodeBlockCard(
     copyTag: String,
     onCopyCode: (String) -> Unit,
 ) {
+    val transcriptColors = codexTranscriptColors()
     Card(
-        border = BorderStroke(1.dp, TranscriptBubbleBorder.copy(alpha = 0.72f)),
+        border = BorderStroke(1.dp, transcriptColors.codeBlockBorder),
         colors = CardDefaults.cardColors(
-            containerColor = CodeBlockContainer,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            containerColor = transcriptColors.codeBlockContainer,
+            contentColor = transcriptColors.codeBlockContent,
         ),
         shape = RoundedCornerShape(12.dp),
     ) {
@@ -2882,7 +2887,10 @@ private fun CodeBlockCard(
             Text(
                 text = part.code,
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    lineHeight = 17.sp,
+                    color = transcriptColors.codeBlockContent,
+                ),
                 fontFamily = FontFamily.Monospace,
             )
         }
@@ -3424,24 +3432,30 @@ private fun TranscriptBubble.headerIcon(): ImageVector {
 }
 
 @Composable
-private fun TranscriptBubble.headerContainerColor() = when (speaker) {
-    TranscriptSpeaker.User -> UserBubbleContainer
-    TranscriptSpeaker.Assistant -> AssistantBubbleContainer
-    TranscriptSpeaker.System -> when (kind) {
-        TranscriptBubbleKind.ToolRequest -> ToolBubbleContainer
-        TranscriptBubbleKind.ToolResult -> ToolBubbleContainer
-        TranscriptBubbleKind.Status,
-        TranscriptBubbleKind.Message,
-        -> SystemBubbleContainer
+private fun TranscriptBubble.headerContainerColor(): Color {
+    val transcriptColors = codexTranscriptColors()
+    return when (speaker) {
+        TranscriptSpeaker.User -> transcriptColors.userBubbleContainer
+        TranscriptSpeaker.Assistant -> transcriptColors.assistantBubbleContainer
+        TranscriptSpeaker.System -> when (kind) {
+            TranscriptBubbleKind.ToolRequest -> transcriptColors.toolBubbleContainer
+            TranscriptBubbleKind.ToolResult -> transcriptColors.toolBubbleContainer
+            TranscriptBubbleKind.Status,
+            TranscriptBubbleKind.Message,
+            -> transcriptColors.systemBubbleContainer
+        }
     }
 }
 
 @Composable
-private fun TranscriptBubble.headerContentColor() = when (speaker) {
-    TranscriptSpeaker.User,
-    TranscriptSpeaker.Assistant,
-    TranscriptSpeaker.System,
-    -> MaterialTheme.colorScheme.onSurfaceVariant
+private fun TranscriptBubble.headerContentColor(): Color {
+    val transcriptColors = codexTranscriptColors()
+    return when (speaker) {
+        TranscriptSpeaker.User,
+        TranscriptSpeaker.Assistant,
+        TranscriptSpeaker.System,
+        -> transcriptColors.bubbleMutedContent
+    }
 }
 
 private fun DraftSessionUiState.toDraftDetail(): SessionDetail {

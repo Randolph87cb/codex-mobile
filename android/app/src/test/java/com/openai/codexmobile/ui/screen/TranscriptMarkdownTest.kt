@@ -45,6 +45,8 @@ class TranscriptMarkdownTest {
         val annotated = buildMarkdownAnnotatedString(
             text = "**加粗** 和 `代码` 还有 [链接](https://example.com)",
             linkColor = Color.Unspecified,
+            inlineCodeBackground = Color(0x1F000000),
+            inlineCodeColor = Color.Black,
         )
 
         assertEquals("加粗 和 代码 还有 链接", annotated.text)

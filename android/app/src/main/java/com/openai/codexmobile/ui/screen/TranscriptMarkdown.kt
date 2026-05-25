@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.openai.codexmobile.ui.theme.codexTranscriptColors
 
 private const val MarkdownLinkTag = "markdown_link"
 
@@ -215,10 +216,18 @@ private fun MarkdownAnnotatedText(
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
-    val annotated = remember(text, style.color) {
+    val transcriptColors = codexTranscriptColors()
+    val annotated = remember(
+        text,
+        transcriptColors.link,
+        transcriptColors.inlineCodeBackground,
+        transcriptColors.inlineCodeContent,
+    ) {
         buildMarkdownAnnotatedString(
             text = text,
-            linkColor = if (style.color == Color.Unspecified) Color.Unspecified else style.color,
+            linkColor = transcriptColors.link,
+            inlineCodeBackground = transcriptColors.inlineCodeBackground,
+            inlineCodeColor = transcriptColors.inlineCodeContent,
         )
     }
     val content: @Composable () -> Unit = {
@@ -358,12 +367,16 @@ internal fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {
 internal fun buildMarkdownAnnotatedString(
     text: String,
     linkColor: Color,
+    inlineCodeBackground: Color,
+    inlineCodeColor: Color,
 ): AnnotatedString {
     return buildAnnotatedString {
         appendMarkdownInline(
             builder = this,
             text = text,
             linkColor = linkColor,
+            inlineCodeBackground = inlineCodeBackground,
+            inlineCodeColor = inlineCodeColor,
         )
     }
 }
@@ -372,6 +385,8 @@ private fun appendMarkdownInline(
     builder: AnnotatedString.Builder,
     text: String,
     linkColor: Color,
+    inlineCodeBackground: Color,
+    inlineCodeColor: Color,
 ) {
     var index = 0
     while (index < text.length) {
@@ -390,6 +405,8 @@ private fun appendMarkdownInline(
                         builder = builder,
                         text = text.substring(index + 2, closing),
                         linkColor = linkColor,
+                        inlineCodeBackground = inlineCodeBackground,
+                        inlineCodeColor = inlineCodeColor,
                     )
                     builder.pop()
                     index = closing + 2
@@ -407,6 +424,8 @@ private fun appendMarkdownInline(
                         builder = builder,
                         text = text.substring(index + 2, closing),
                         linkColor = linkColor,
+                        inlineCodeBackground = inlineCodeBackground,
+                        inlineCodeColor = inlineCodeColor,
                     )
                     builder.pop()
                     index = closing + 2
@@ -422,7 +441,8 @@ private fun appendMarkdownInline(
                     builder.pushStyle(
                         SpanStyle(
                             fontFamily = FontFamily.Monospace,
-                            background = Color(0x1F000000),
+                            background = inlineCodeBackground,
+                            color = inlineCodeColor,
                         ),
                     )
                     builder.append(text.substring(index + 1, closing))
@@ -460,6 +480,8 @@ private fun appendMarkdownInline(
                         builder = builder,
                         text = label,
                         linkColor = linkColor,
+                        inlineCodeBackground = inlineCodeBackground,
+                        inlineCodeColor = inlineCodeColor,
                     )
                     builder.pop()
                     builder.pop()
@@ -479,6 +501,8 @@ private fun appendMarkdownInline(
                         builder = builder,
                         text = text.substring(index + 1, closing),
                         linkColor = linkColor,
+                        inlineCodeBackground = inlineCodeBackground,
+                        inlineCodeColor = inlineCodeColor,
                     )
                     builder.pop()
                     index = closing + 1
