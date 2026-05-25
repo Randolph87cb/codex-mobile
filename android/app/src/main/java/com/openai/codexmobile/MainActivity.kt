@@ -3,7 +3,9 @@ package com.openai.codexmobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.getValue
 import com.openai.codexmobile.data.AppSettingsDefaults
 import com.openai.codexmobile.data.RealBridgeDataProvider
 import com.openai.codexmobile.data.SharedPreferencesAppSettingsStore
@@ -30,15 +32,16 @@ class MainActivity : ComponentActivity() {
         val dataProvider = RealBridgeDataProvider(appLogger)
 
         setContent {
-            CodexMobileTheme {
-                val appViewModel: AppViewModel = viewModel(
-                    factory = AppViewModelFactory(
-                        bridgeApi = dataProvider,
-                        sessionRepository = dataProvider,
-                        settingsStore = settingsStore,
-                        appLogger = appLogger,
-                    ),
-                )
+            val appViewModel: AppViewModel = viewModel(
+                factory = AppViewModelFactory(
+                    bridgeApi = dataProvider,
+                    sessionRepository = dataProvider,
+                    settingsStore = settingsStore,
+                    appLogger = appLogger,
+                ),
+            )
+            val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
+            CodexMobileTheme(typeScale = uiState.fontSizeTypeScale) {
                 CodexMobileApp(appViewModel = appViewModel)
             }
         }

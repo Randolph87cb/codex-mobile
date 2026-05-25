@@ -160,11 +160,13 @@ private val PendingAttachmentMetaTextStyle = TextStyle(
     fontSize = 8.sp,
     lineHeight = 10.sp,
 )
-private val TranscriptBodyTextStyle = TextStyle(
-    fontSize = 12.sp,
-    lineHeight = 15.sp,
-)
 private val SessionDetailPanelShape = RoundedCornerShape(16.dp)
+private val UserBubbleContainer = Color(0xFFEAF2FF)
+private val AssistantBubbleContainer = Color(0xFFFFFFFF)
+private val SystemBubbleContainer = Color(0xFFF5F7FA)
+private val ToolBubbleContainer = Color(0xFFF1F6F3)
+private val TranscriptBubbleBorder = Color(0xFFD9E1EA)
+private val CodeBlockContainer = Color(0xFFF8FAFC)
 
 @Composable
 fun SessionDetailScreen(
@@ -1880,26 +1882,21 @@ private fun TranscriptBubbleCard(
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
         val backgroundColor = when (bubble.speaker) {
-            TranscriptSpeaker.User -> MaterialTheme.colorScheme.secondaryContainer
-            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.primaryContainer
+            TranscriptSpeaker.User -> UserBubbleContainer
+            TranscriptSpeaker.Assistant -> AssistantBubbleContainer
             TranscriptSpeaker.System -> when (bubble.kind) {
-                TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
-                TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.secondaryContainer
+                TranscriptBubbleKind.ToolRequest -> ToolBubbleContainer
+                TranscriptBubbleKind.ToolResult -> ToolBubbleContainer
                 TranscriptBubbleKind.Status,
                 TranscriptBubbleKind.Message,
-                -> MaterialTheme.colorScheme.surfaceVariant
+                -> SystemBubbleContainer
             }
         }
         val contentColor = when (bubble.speaker) {
-            TranscriptSpeaker.User -> MaterialTheme.colorScheme.onSecondaryContainer
-            TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onPrimaryContainer
-            TranscriptSpeaker.System -> when (bubble.kind) {
-                TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.onTertiaryContainer
-                TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.onSecondaryContainer
-                TranscriptBubbleKind.Status,
-                TranscriptBubbleKind.Message,
-                -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
+            TranscriptSpeaker.User,
+            TranscriptSpeaker.Assistant,
+            TranscriptSpeaker.System,
+            -> MaterialTheme.colorScheme.onSurface
         }
         Column(
             modifier = Modifier
@@ -1916,6 +1913,7 @@ private fun TranscriptBubbleCard(
                         bottomEnd = if (isUser) 4.dp else 16.dp,
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    border = BorderStroke(1.dp, TranscriptBubbleBorder),
                     colors = CardDefaults.cardColors(
                         containerColor = backgroundColor,
                         contentColor = contentColor,
@@ -1975,6 +1973,7 @@ private fun TranscriptBubbleCard(
                             bottomEnd = if (isUser) 4.dp else 16.dp,
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        border = BorderStroke(1.dp, TranscriptBubbleBorder),
                         colors = CardDefaults.cardColors(
                             containerColor = backgroundColor,
                             contentColor = contentColor,
@@ -2153,7 +2152,11 @@ private fun ExecutionProcessCard(
                 .align(Alignment.CenterStart)
                 .fillMaxWidth(0.67f),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            border = BorderStroke(1.dp, TranscriptBubbleBorder),
+            colors = CardDefaults.cardColors(
+                containerColor = SystemBubbleContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
         ) {
             Column(
                 modifier = Modifier.padding(4.dp),
@@ -2211,7 +2214,11 @@ private fun ExecutionActivityCard(
     var expanded by rememberSaveable(toggleTag, bubble.summaryLine) { mutableStateOf(false) }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, TranscriptBubbleBorder.copy(alpha = 0.72f)),
+        colors = CardDefaults.cardColors(
+            containerColor = AssistantBubbleContainer,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
         shape = RoundedCornerShape(11.dp),
     ) {
         Column(
@@ -2373,7 +2380,7 @@ private fun TranscriptPartsColumn(
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
-    val bodyTextStyle = MaterialTheme.typography.bodySmall.merge(TranscriptBodyTextStyle)
+    val bodyTextStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
     var index = 0
     while (index < parts.size) {
         val part = parts[index]
@@ -2431,8 +2438,10 @@ private fun CodeBlockCard(
     onCopyCode: (String) -> Unit,
 ) {
     Card(
+        border = BorderStroke(1.dp, TranscriptBubbleBorder.copy(alpha = 0.72f)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = CodeBlockContainer,
+            contentColor = MaterialTheme.colorScheme.onSurface,
         ),
         shape = RoundedCornerShape(12.dp),
     ) {
@@ -3013,28 +3022,23 @@ private fun TranscriptBubble.headerIcon(): ImageVector {
 
 @Composable
 private fun TranscriptBubble.headerContainerColor() = when (speaker) {
-    TranscriptSpeaker.User -> MaterialTheme.colorScheme.secondaryContainer
-    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.primaryContainer
+    TranscriptSpeaker.User -> UserBubbleContainer
+    TranscriptSpeaker.Assistant -> SystemBubbleContainer
     TranscriptSpeaker.System -> when (kind) {
-        TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.tertiaryContainer
-        TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.secondaryContainer
+        TranscriptBubbleKind.ToolRequest -> ToolBubbleContainer
+        TranscriptBubbleKind.ToolResult -> ToolBubbleContainer
         TranscriptBubbleKind.Status,
         TranscriptBubbleKind.Message,
-        -> MaterialTheme.colorScheme.surface
+        -> SystemBubbleContainer
     }
 }
 
 @Composable
 private fun TranscriptBubble.headerContentColor() = when (speaker) {
-    TranscriptSpeaker.User -> MaterialTheme.colorScheme.onSecondaryContainer
-    TranscriptSpeaker.Assistant -> MaterialTheme.colorScheme.onPrimaryContainer
-    TranscriptSpeaker.System -> when (kind) {
-        TranscriptBubbleKind.ToolRequest -> MaterialTheme.colorScheme.onTertiaryContainer
-        TranscriptBubbleKind.ToolResult -> MaterialTheme.colorScheme.onSecondaryContainer
-        TranscriptBubbleKind.Status,
-        TranscriptBubbleKind.Message,
-        -> MaterialTheme.colorScheme.onSurface
-    }
+    TranscriptSpeaker.User,
+    TranscriptSpeaker.Assistant,
+    TranscriptSpeaker.System,
+    -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private fun DraftSessionUiState.toDraftDetail(): SessionDetail {

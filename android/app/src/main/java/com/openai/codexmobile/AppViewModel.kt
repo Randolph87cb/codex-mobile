@@ -63,6 +63,7 @@ data class AppUiState(
     val reasoningEffortInput: String,
     val serviceTierInput: String,
     val sandboxModeInput: String,
+    val fontSizeInput: String,
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     val showArchivedSessions: Boolean = false,
     val sessions: List<SessionSummary> = emptyList(),
@@ -82,6 +83,9 @@ data class AppUiState(
 
     val selectedConnection: SavedBridgeConnection?
         get() = savedConnections.firstOrNull { it.id == selectedConnectionId }
+
+    val fontSizeTypeScale: Float
+        get() = typeScaleForFontSize(fontSizeInput)
 }
 
 data class DraftSessionUiState(
@@ -299,6 +303,14 @@ class AppViewModel(
         updateSettingsState {
             it.copy(
                 sandboxModeInput = ManagedSandboxMode,
+            )
+        }
+    }
+
+    fun updateFontSizeInput(value: String) {
+        updateSettingsState {
+            it.copy(
+                fontSizeInput = normalizeFontSize(value),
             )
         }
     }
@@ -2089,6 +2101,7 @@ class AppViewModel(
                 reasoningEffort = state.reasoningEffortInput,
                 serviceTier = state.serviceTierInput,
                 sandboxMode = state.sandboxModeInput,
+                fontSize = state.fontSizeInput,
                 savedConnections = normalizedConnections,
                 selectedConnectionId = state.selectedConnectionId,
             ),
@@ -2551,6 +2564,7 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
         reasoningEffortInput = settings.reasoningEffort,
         serviceTierInput = settings.serviceTier,
         sandboxModeInput = settings.sandboxMode,
+        fontSizeInput = settings.fontSize,
         settingsItems = defaultSettingsItems(
             savedConnections = settings.savedConnections,
             selectedConnectionId = settings.selectedConnectionId ?: settings.savedConnections.first().id,
@@ -2562,6 +2576,7 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
             reasoningEffortInput = settings.reasoningEffort,
             serviceTierInput = settings.serviceTier,
             sandboxModeInput = settings.sandboxMode,
+            fontSizeInput = settings.fontSize,
         ),
     )
 }
@@ -2580,6 +2595,7 @@ private fun AppUiState.withSettingsItems(): AppUiState {
             reasoningEffortInput = reasoningEffortInput,
             serviceTierInput = serviceTierInput,
             sandboxModeInput = sandboxModeInput,
+            fontSizeInput = fontSizeInput,
         ),
     )
 }
@@ -2618,6 +2634,7 @@ private fun AppSettings.sanitize(): AppSettings {
         reasoningEffort = normalizeReasoningEffort(reasoningEffort),
         serviceTier = normalizeServiceTier(serviceTier),
         sandboxMode = ManagedSandboxMode,
+        fontSize = normalizeFontSize(fontSize),
         savedConnections = normalizedConnections,
         selectedConnectionId = resolvedSelectedConnection.id,
     )
@@ -3173,6 +3190,7 @@ private fun defaultSettingsItems(
     reasoningEffortInput: String = "medium",
     serviceTierInput: String = "default",
     sandboxModeInput: String = "workspace-write",
+    fontSizeInput: String = "standard",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     val selectedConnection = savedConnections.firstOrNull { it.id == selectedConnectionId }
@@ -3186,12 +3204,28 @@ private fun defaultSettingsItems(
         "默认模型" to modelInput.ifBlank { "未配置" },
         "推理强度" to localizedReasoningEffort(reasoningEffortInput),
         "速度档位" to localizedServiceTier(serviceTierInput),
+        "字体大小" to localizedFontSize(fontSizeInput),
         "文件权限" to localizedSandboxMode(sandboxModeInput),
         "审批模式" to localizedApprovalMode(approvalModeInput),
         "运行器" to (connectedState?.runnerMode ?: "未连接"),
         "遥测" to "已关闭",
         "应用日志" to "已开启（本地文件）",
     )
+}
+
+internal fun typeScaleForFontSize(value: String): Float {
+    return when (normalizeFontSize(value)) {
+        "small" -> 0.92f
+        "large" -> 1.12f
+        else -> 1.0f
+    }
+}
+
+private fun normalizeFontSize(value: String): String {
+    return when (value) {
+        "small", "standard", "large" -> value
+        else -> "standard"
+    }
 }
 
 private fun List<SavedBridgeConnection>.replaceConnection(
@@ -3241,6 +3275,14 @@ private fun localizedServiceTier(value: String): String {
         "default" -> "普通"
         "fast" -> "快速"
         else -> "普通"
+    }
+}
+
+private fun localizedFontSize(value: String): String {
+    return when (normalizeFontSize(value)) {
+        "small" -> "小"
+        "large" -> "大"
+        else -> "标准"
     }
 }
 

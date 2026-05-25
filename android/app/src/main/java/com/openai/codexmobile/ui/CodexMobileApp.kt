@@ -268,6 +268,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     reasoningEffortInput = uiState.reasoningEffortInput,
                     serviceTierInput = uiState.serviceTierInput,
                     sandboxModeInput = uiState.sandboxModeInput,
+                    fontSizeInput = uiState.fontSizeInput,
                     diagnosticsLog = uiState.diagnosticsLog,
                     onConnectionNameChange = appViewModel::updateSelectedConnectionName,
                     onAddSavedConnection = appViewModel::addSavedConnection,
@@ -281,6 +282,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onReasoningEffortChange = appViewModel::updateReasoningEffortInput,
                     onServiceTierChange = appViewModel::updateServiceTierInput,
                     onSandboxModeChange = appViewModel::updateSandboxModeInput,
+                    onFontSizeChange = appViewModel::updateFontSizeInput,
                     onRefreshLogs = appViewModel::refreshDiagnosticsLog,
                     onClearLogs = appViewModel::clearDiagnosticsLog,
                     onCopyLogs = { logs ->

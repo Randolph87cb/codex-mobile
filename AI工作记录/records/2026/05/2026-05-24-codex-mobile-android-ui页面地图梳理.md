@@ -335,5 +335,34 @@
     - `.\.tmp\showcase-connection-insets-v1.png`
     - `.\.tmp\showcase-sessions-insets-v1.png`
     - `.\.tmp\showcase-settings-insets-v1.png`
-    - `.\.tmp\showcase-detail-insets-v1.png`
+  - `.\.tmp\showcase-detail-insets-v1.png`
 - 剩余说明：顶部状态栏和底部手势条附近仍会保留系统安全区，这是 Android 系统栏正常行为，不属于重复 padding。
+
+## 浅色对话气泡与全局字体大小设置
+
+- 时间：2026-05-25
+- 目标：把会话详情页深色对话气泡调整为浅色，保证消息正文、链接和代码块在浅背景上清晰可读；同时在设置页增加全局字体大小选项。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SettingsScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/theme/Theme.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/MainActivity.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/data/AppSettingsStore.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/TestTags.kt`
+  - `android/app/src/debug/java/com/openai/codexmobile/PrimaryScreensShowcaseActivity.kt`
+- 改动内容：
+  - 详情页用户、助手、系统和工具消息统一改为浅色容器、深色正文和细边框；代码块改为浅灰背景，避免深色气泡下正文和链接对比度不足。
+  - 消息正文改用 `MaterialTheme.typography.bodyMedium`，保留更宽松行高，避免固定小字号导致长文本难读。
+  - 设置页“Default Preferences”中增加“字体大小”分段选项：小、标准、大。
+  - `AppSettingsStore` 持久化 `fontSize`，`AppViewModel` 负责校验、展示设置摘要和输出全局字号缩放值。
+  - `CodexMobileTheme` 通过 `LocalDensity` 调整全局 `fontScale`，让所有使用 `sp` 的页面文字跟随设置变化。
+- 验证：
+  - 在干净 main worktree 中首次构建因缺少本地 `.tools` 失败，已通过本地 junction 指向原项目 `.tools` 后重新验证；该 junction 未纳入提交。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装成功。
+  - 模拟器截图复核通过：
+    - `.\.tmp\showcase-detail-light-bubbles-v3.png`
+    - `.\.tmp\showcase-settings-font-size-v4.png`

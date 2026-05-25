@@ -5,6 +5,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 
 private val LightColors = lightColorScheme(
     primary = Primary,
@@ -63,12 +66,22 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun CodexMobileTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    typeScale: Float = 1.0f,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) DarkColors else LightColors
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = CodexTypography,
-        content = content,
-    )
+    val currentDensity = LocalDensity.current
+    val resolvedTypeScale = typeScale.coerceIn(0.88f, 1.18f)
+    CompositionLocalProvider(
+        LocalDensity provides Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * resolvedTypeScale,
+        ),
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = CodexTypography,
+            content = content,
+        )
+    }
 }

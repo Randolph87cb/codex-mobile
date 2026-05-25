@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Link
@@ -85,6 +86,7 @@ fun SettingsScreen(
     reasoningEffortInput: String,
     serviceTierInput: String,
     sandboxModeInput: String,
+    fontSizeInput: String,
     diagnosticsLog: String,
     onConnectionNameChange: (String) -> Unit,
     onAddSavedConnection: () -> Unit,
@@ -98,6 +100,7 @@ fun SettingsScreen(
     onReasoningEffortChange: (String) -> Unit,
     onServiceTierChange: (String) -> Unit,
     onSandboxModeChange: (String) -> Unit,
+    onFontSizeChange: (String) -> Unit,
     onRefreshLogs: () -> Unit,
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
@@ -267,6 +270,19 @@ fun SettingsScreen(
                             SettingOption("自动", "auto", TestTags.SettingsApprovalAutoButton),
                         ),
                         onValueChange = onApprovalModeChange,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+                    SettingsSegmentedRow(
+                        title = "字体大小",
+                        subtitle = "调整全局界面文字显示",
+                        icon = Icons.Filled.FormatSize,
+                        currentValue = fontSizeInput,
+                        options = listOf(
+                            SettingOption("小", "small", TestTags.SettingsFontSizeSmallButton),
+                            SettingOption("标准", "standard", TestTags.SettingsFontSizeStandardButton),
+                            SettingOption("大", "large", TestTags.SettingsFontSizeLargeButton),
+                        ),
+                        onValueChange = onFontSizeChange,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
                     SettingsSegmentedRow(
