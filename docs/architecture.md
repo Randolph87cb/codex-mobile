@@ -35,6 +35,7 @@ codex.exe app-server
 - 展示会话列表与详情页
 - 渲染实时流、历史 transcript、执行过程和图片
 - 维护结构化实时执行活动，不再只靠 transcript 文本猜系统消息边界
+- 在前后台切换和实时流恢复后主动补拉详情快照，追平断线窗口内的状态
 - 在发送前预上传图片，再按 bridge 暂存路径提交输入
 
 ### Windows Bridge
