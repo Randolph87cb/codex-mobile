@@ -152,6 +152,11 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 )
             }
             composable(Routes.Sessions) {
+                LaunchedEffect(uiState.connectionState) {
+                    if (uiState.connectionState is BridgeConnectionState.Connected) {
+                        appViewModel.refreshSessionList()
+                    }
+                }
                 SessionListScreen(
                     sessions = uiState.sessions,
                     showArchivedSessions = uiState.showArchivedSessions,

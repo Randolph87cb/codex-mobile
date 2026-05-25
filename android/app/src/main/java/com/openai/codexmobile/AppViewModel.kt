@@ -843,6 +843,7 @@ class AppViewModel(
                     ),
                 )
             }
+            syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
 
             startSessionStream(sessionId)
             maybeAutoApprovePending(sessionId)
@@ -1107,6 +1108,12 @@ class AppViewModel(
         val sessionId = uiState.value.selectedSession?.id ?: return
         viewModelScope.launch {
             refreshSessionSnapshot(sessionId)
+        }
+    }
+
+    fun refreshSessionList() {
+        viewModelScope.launch {
+            refreshSessions()
         }
     }
 
@@ -1585,6 +1592,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                syncVisibleSessionSummary(nextDetail)
                 maybeAutoApprovePending(sessionId)
             }
 
@@ -1601,6 +1609,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
             }
 
             is SessionStreamEvent.GoalCleared -> {
@@ -1616,6 +1625,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
             }
 
             is SessionStreamEvent.BridgeLifecycle -> {
@@ -1672,6 +1682,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                syncVisibleSessionSummary(rendered.detail)
             }
 
             is SessionStreamEvent.AssistantDone -> {
@@ -1705,6 +1716,7 @@ class AppViewModel(
                         message = event.errorMessage,
                     )
                 }
+                syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
                 refreshSessionSnapshot(sessionId)
             }
 
@@ -1762,6 +1774,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
                 if (event.status == "idle") {
                     flushNextQueuedInputIfIdle(sessionId)
                 }
@@ -1793,6 +1806,7 @@ class AppViewModel(
                         message = "当前任务已中断。",
                     )
                 }
+                syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
                 refreshSessionSnapshot(sessionId)
                 flushNextQueuedInputIfIdle(sessionId)
             }
@@ -1836,6 +1850,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
                 maybeAutoApprovePending(sessionId)
             }
 
@@ -1873,6 +1888,7 @@ class AppViewModel(
                         ),
                     )
                 }
+                syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
                 if (event.status == "idle") {
                     flushNextQueuedInputIfIdle(sessionId)
                 }
@@ -1990,19 +2006,59 @@ class AppViewModel(
             val sessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
             val visibleIds = sessions.map { it.id }.toSet()
             _uiState.update {
+                val selectedSession = if (visibleIds.isEmpty()) {
+                    it.selectedSession
+                } else {
+                    it.selectedSession?.takeIf { detail -> visibleIds.contains(detail.id) }
+                }
+                val overlayDetail = selectedSession?.takeIf { detail ->
+                    shouldOverlayVisibleSessionSummary(
+                        detail = detail,
+                        realtimeState = it.sessionRealtimeState,
+                    )
+                }
                 it.copy(
-                    sessions = sessions,
-                    selectedSession = if (visibleIds.isEmpty()) {
-                        it.selectedSession
-                    } else {
-                        it.selectedSession?.takeIf { detail -> visibleIds.contains(detail.id) }
-                    },
+                    sessions = overlaySessionSummary(sessions, overlayDetail),
+                    selectedSession = selectedSession,
                 )
             }
         } catch (error: Exception) {
             appLogger.error("AppViewModel", "刷新会话列表失败。", error)
             // Keep the latest visible list if list refresh fails.
         }
+    }
+
+    private fun syncVisibleSessionSummary(detail: SessionDetail?) {
+        val realtimeState = uiState.value.sessionRealtimeState
+        if (detail == null || !shouldOverlayVisibleSessionSummary(detail, realtimeState)) {
+            return
+        }
+        _uiState.update { state ->
+            state.copy(
+                sessions = overlaySessionSummary(state.sessions, detail),
+            )
+        }
+    }
+
+    private fun overlaySessionSummary(
+        sessions: List<SessionSummary>,
+        selectedSession: SessionDetail?,
+    ): List<SessionSummary> {
+        val detail = selectedSession ?: return sessions
+        return sessions.map { session ->
+            if (session.id != detail.id) {
+                session
+            } else {
+                detail.toVisibleSummary(session.archived)
+            }
+        }
+    }
+
+    private fun shouldOverlayVisibleSessionSummary(
+        detail: SessionDetail,
+        realtimeState: SessionRealtimeUiState,
+    ): Boolean {
+        return realtimeState.isActive
     }
 
     private fun scheduleSessionStreamReconnect(
@@ -2366,6 +2422,7 @@ class AppViewModel(
                 ),
             )
         }
+        syncVisibleSessionSummary(uiState.value.selectedSession)
         refreshDiagnosticsLog()
     }
 
@@ -2395,6 +2452,7 @@ class AppViewModel(
                 )
             }
         }
+        syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
         refreshDiagnosticsLog()
     }
 
@@ -2714,6 +2772,31 @@ private fun enforceManagedSessionSummaryLocally(session: SessionSummary): Sessio
         approvalMode = ManagedApprovalMode,
         sandboxMode = ManagedSandboxMode,
         subtitle = "${session.model} • ${localizedSessionStatus(session.status)} • ${session.cwd}",
+    )
+}
+
+private fun SessionDetail.toVisibleSummary(
+    archived: Boolean,
+): SessionSummary {
+    return enforceManagedSessionSummaryLocally(
+        SessionSummary(
+            id = id,
+            title = title,
+            subtitle = buildSessionSubtitle(
+                model = model,
+                approvalMode = approvalMode,
+                status = status,
+            ),
+            lastUpdated = lastUpdated,
+            archived = archived,
+            cwd = cwd,
+            model = model,
+            approvalMode = approvalMode,
+            reasoningEffort = reasoningEffort,
+            serviceTier = serviceTier,
+            sandboxMode = sandboxMode,
+            status = status,
+        ),
     )
 }
 

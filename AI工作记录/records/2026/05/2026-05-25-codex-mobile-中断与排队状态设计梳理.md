@@ -376,3 +376,39 @@
   - `bridge.lifecycle` 已实现事件类型
   - Android 当前实际依赖链路包含 `interrupt`
 - 本轮仅更新文档，未额外重跑构建或测试。
+
+## 线程列表状态完整版实现
+
+- 用户随后提出：线程列表中应明确显示会话状态，至少区分 `进行中 / 空闲`，并希望实现“完整版”，而不是只改 badge 文案。
+- 最终实现范围包含两部分：
+  - 线程列表 badge 文案与状态映射统一为中文：`进行中 / 待审批 / 出错 / 草稿 / 空闲`
+  - 列表状态刷新链路增强：
+    - 进入线程列表页时主动刷新当前筛选的会话摘要
+    - 详情页实时流事件会在详情页活跃时把当前会话状态本地回写到列表，避免详情页显示进行中而列表还停在空闲
+    - 保留整表刷新，但只在详情页活跃时才用本地详情覆盖列表项，避免离开详情页后把列表刷新得到的新状态又覆盖回旧值
+
+## 本次代码修改
+
+- `android/app/src/main/java/com/openai/codexmobile/AppViewModel.kt`
+  - 新增 `refreshSessionList()`
+  - `refreshSessions()` 改为按需叠加当前活跃详情页的本地状态
+  - 在 `SessionStarted / AssistantDelta / AssistantDone / RunStatus / RunInterrupted / ToolRequest / ToolResult` 等状态变化点同步更新可见列表项
+- `android/app/src/main/java/com/openai/codexmobile/ui/CodexMobileApp.kt`
+  - 进入 `Routes.Sessions` 时，如果 bridge 已连接，主动刷新线程列表
+- `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionListScreen.kt`
+  - 列表 badge 文案从旧的“在线 / 异常”统一成“进行中 / 待审批 / 出错”
+- `android/app/src/test/java/com/openai/codexmobile/AppViewModelTest.kt`
+  - 增补线程列表状态同步与主动刷新单测
+  - 修正测试前置条件：涉及列表断言的用例先建立连接，让线程列表真实加载
+
+## 本次验证
+
+- 已执行 Android 单测：
+  - `cd android`
+  - `$env:JAVA_HOME = "D:\workspace\codex-mobile\.tools\jdk\jdk-17.0.19+10"`
+  - `$env:ANDROID_SDK_ROOT = "D:\workspace\codex-mobile\.tools\android-sdk"`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过
+- 已执行 Android debug 构建：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：通过

@@ -714,14 +714,19 @@ private fun SessionItemCard(
 private fun SessionStatusBadge(status: String) {
     val (label, containerColor, contentColor) = when (status) {
         "running" -> Triple(
-            "在线",
+            "进行中",
             MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.onTertiaryContainer,
         )
+        "awaiting_approval" -> Triple(
+            "待审批",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+        )
         "error" -> Triple(
-            "异常",
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.onSecondaryContainer,
+            "出错",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
         )
         "draft" -> Triple(
             "草稿",

@@ -145,7 +145,10 @@ class AppViewModelTest {
     @Test
     fun sessionStartedEventUpdatesConfigFields() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_stream", status = "idle")
-        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail,
+            approvalDelayMs = 1_000L,
+        )
         val repository = FakeSessionRepository(
             sessionSummaries = listOf(detail.toSummary()),
             detailsById = mapOf(
@@ -155,6 +158,8 @@ class AppViewModelTest {
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
+        viewModel.connect()
+        advanceUntilIdle()
         viewModel.openSessionDetail("sess_stream")
         advanceUntilIdle()
 
@@ -185,6 +190,10 @@ class AppViewModelTest {
         assertEquals("fast", selected?.serviceTier)
         assertEquals("danger-full-access", selected?.sandboxMode)
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertEquals("running", viewModel.uiState.value.sessions.single().status)
+        assertEquals("D:\\workspace\\other", viewModel.uiState.value.sessions.single().cwd)
+        assertEquals("gpt-5.5-coder", viewModel.uiState.value.sessions.single().model)
+        assertTrue(viewModel.uiState.value.sessions.single().subtitle.contains("进行中"))
     }
 
     @Test
@@ -373,6 +382,8 @@ class AppViewModelTest {
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
+        viewModel.connect()
+        advanceUntilIdle()
         viewModel.openSessionDetail("sess_queue")
         advanceUntilIdle()
 
@@ -405,6 +416,53 @@ class AppViewModelTest {
 
         assertEquals(listOf("这条消息应该排队"), bridgeApi.sentInputs)
         assertTrue(viewModel.uiState.value.queuedInputs.isEmpty())
+        assertEquals("running", viewModel.uiState.value.sessions.single().status)
+        assertTrue(viewModel.uiState.value.sessions.single().subtitle.contains("进行中"))
+    }
+
+    @Test
+    fun sessionStartedAwaitingApprovalUpdatesVisibleSessionSummary() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_waiting", status = "idle")
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail,
+            approvalDelayMs = 1_000L,
+        )
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail("sess_waiting")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.SessionStarted(
+                sessionId = "sess_waiting",
+                status = "awaiting_approval",
+                cwd = detail.cwd,
+                model = detail.model,
+                approvalMode = detail.approvalMode,
+                reasoningEffort = detail.reasoningEffort,
+                serviceTier = detail.serviceTier,
+                sandboxMode = detail.sandboxMode,
+                threadId = "thread-waiting",
+                goal = null,
+                goalCapability = null,
+                pendingApproval = PendingApprovalSnapshot(
+                    requestId = BridgeRequestId.Text("req-waiting"),
+                    method = "item/commandExecution/requestApproval",
+                    paramsSummary = "等待审批：测试命令",
+                ),
+                timestamp = "2026-05-19T16:00:02.000Z",
+            ),
+        )
+        runCurrent()
+
+        assertEquals("awaiting_approval", viewModel.uiState.value.sessions.single().status)
+        assertTrue(viewModel.uiState.value.sessions.single().subtitle.contains("等待批准"))
     }
 
     @Test
@@ -560,6 +618,34 @@ class AppViewModelTest {
         assertTrue(viewModel.uiState.value.showArchivedSessions)
         assertEquals(listOf("sess_archived"), viewModel.uiState.value.sessions.map { it.id })
         assertTrue(viewModel.uiState.value.sessions.all { it.archived })
+    }
+
+    @Test
+    fun refreshSessionListReloadsCurrentFilterSessions() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_refresh_list", status = "idle")
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = detail),
+            sessionRepository = repository,
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = FakeAppLogger(),
+        )
+
+        viewModel.connect()
+        advanceUntilIdle()
+
+        repository.replaceActiveSessions(
+            listOf(detail.copy(status = "running").toSummary()),
+        )
+        viewModel.refreshSessionList()
+        advanceUntilIdle()
+
+        assertEquals("running", viewModel.uiState.value.sessions.single().status)
+        assertTrue(viewModel.uiState.value.sessions.single().subtitle.contains("进行中"))
+        assertEquals(false, repository.listArchivedFlags.last())
     }
 
     @Test
@@ -1503,6 +1589,7 @@ class AppViewModelTest {
 private class FakeBridgeApi(
     private val createdDetail: SessionDetail,
     private val uploadDelayMs: Long = 0L,
+    private val approvalDelayMs: Long = 0L,
     private var failUploadsRemaining: Int = 0,
     private val returnSavedPathForUploads: Boolean = false,
 ) : BridgeApi {
@@ -1643,6 +1730,9 @@ private class FakeBridgeApi(
         requestId: BridgeRequestId?,
         decision: ApprovalDecision,
     ): ApprovalActionResult {
+        if (approvalDelayMs > 0) {
+            kotlinx.coroutines.delay(approvalDelayMs)
+        }
         approvalCalls += ApprovalCall(sessionId, requestId, decision)
         return ApprovalActionResult(
             requestId = requestId ?: BridgeRequestId.Text("req-fake"),
@@ -1707,6 +1797,11 @@ private class FakeSessionRepository(
             val session = archivedSessions.removeAt(index)
             activeSessions += session.copy(archived = false)
         }
+    }
+
+    fun replaceActiveSessions(sessions: List<SessionSummary>) {
+        activeSessions.clear()
+        activeSessions += sessions
     }
 }
 
