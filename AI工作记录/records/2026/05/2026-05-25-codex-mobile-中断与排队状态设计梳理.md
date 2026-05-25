@@ -361,3 +361,18 @@
 ## 额外处理
 
 - 由于 `SessionDetailScreen` 新增了 `connectionState` 和 `onInterrupt` 参数，debug 源集里的 `SessionDetailShowcaseActivity.kt` 也同步补了展示态占位参数，避免 debug 编译失败。
+
+## 文档更新
+
+- 已按用户要求同步更新正式文档：
+  - `README.md`
+  - `docs/api.md`
+- `README.md` 已补充：
+  - 会话详情页独立终止按钮
+  - 运行中发送进入排队
+  - 顶部两行状态区的可见结构
+- `docs/api.md` 已补充：
+  - Android 对 `POST /api/session/:id/interrupt` 的实际使用语义
+  - `bridge.lifecycle` 已实现事件类型
+  - Android 当前实际依赖链路包含 `interrupt`
+- 本轮仅更新文档，未额外重跑构建或测试。

@@ -142,6 +142,17 @@ Android 客户端当前已经支持在设置页填写并携带 Bearer token。
 }
 ```
 
+初始化底层线程失败时返回：
+
+```json
+{
+  "error": "session-initialize-failed",
+  "message": "spawn codex.exe ENOENT"
+}
+```
+
+这类错误通常表示 bridge 所在主机未能正确拉起本地 `codex app-server`，而不是 Android 到 bridge 的网络本身有问题。
+
 ### `PATCH /api/session/:id/config`
 
 更新会话配置。所有字段均可选，但至少需要提交一个有效字段。
@@ -187,6 +198,11 @@ Android 客户端当前已经支持在设置页填写并携带 Bearer token。
 - 当前配置与状态
 
 Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 和详情页状态。
+
+Android 当前会把详情页顶部状态拆成两层来消费：
+
+- 第一行：`bridge 状态 / 同步方式 / 会话状态`
+- 第二行：`排队消息 / 目标状态`
 
 如果底层 runner 支持目标能力，详情响应还会带上：
 
@@ -239,6 +255,13 @@ Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 
 }
 ```
 
+当前 bridge 会把以下情况统一视为不支持目标能力：
+
+- 底层 runner 没有 goal 方法
+- host 的 Codex 数据库还没有 `thread_goals` 相关表
+
+也就是说，旧 host 不会再因为 goal 直接把详情接口打成 `500`。
+
 ### `PUT /api/session/:id/goal`
 
 创建或更新当前线程目标。
@@ -260,6 +283,14 @@ Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 
 }
 ```
 
+如果当前 host 不支持目标能力，返回：
+
+```json
+{
+  "error": "goal-not-supported"
+}
+```
+
 ### `DELETE /api/session/:id/goal`
 
 清除当前线程目标。
@@ -271,6 +302,14 @@ Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 
   "ok": true,
   "capability": "supported",
   "cleared": true
+}
+```
+
+如果当前 host 不支持目标能力，返回：
+
+```json
+{
+  "error": "goal-not-supported"
 }
 ```
 
@@ -303,6 +342,12 @@ Android 当前依赖这条接口读取完整历史 transcript、图片 Markdown 
 ### `POST /api/session/:id/interrupt`
 
 中断当前运行。成功时返回 `200`。
+
+Android 当前把它作为独立的“终止当前轮”动作使用，和发送按钮分离：
+
+- 运行中继续点击发送，纯文本会进入客户端排队
+- 点击终止，调用这条接口请求中断当前轮
+- 后续以 `run.interrupted` 或新的 `run.status=idle` 收尾，再继续发送队列中的下一条文本
 
 ### `POST /api/session/:id/approve`
 
@@ -439,6 +484,7 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 - `session.started`
 - `goal.updated`
 - `goal.cleared`
+- `bridge.lifecycle`
 - `assistant.delta`
 - `assistant.done`
 - `activity`
@@ -483,7 +529,11 @@ Android 当前已经实际使用这些接口与行为：
 - `POST /api/session`
 - `PATCH /api/session/:id/config`
 - `GET /api/session/:id`
+- `GET /api/session/:id/goal`
+- `PUT /api/session/:id/goal`
+- `DELETE /api/session/:id/goal`
 - `POST /api/session/:id/input`
+- `POST /api/session/:id/interrupt`
 - `POST /api/session/:id/archive`
 - `POST /api/session/:id/unarchive`
 - `POST /api/attachment/image`（multipart）
