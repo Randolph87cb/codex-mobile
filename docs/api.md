@@ -466,6 +466,8 @@ Android 当前把它作为独立的“终止当前轮”动作使用，和发送
 
 如果请求里带上 `sessionId`，bridge 会在暂存成功后，继续把图片保存到该会话 `cwd` 下的 `mobile_uploads/` 目录，并在响应里返回正式保存路径。
 
+这里的字段名目前仍叫 `sessionId`，是为了兼容已有 Android/bridge 请求结构；对正式线程来说，传入的值就是该线程的 `threadId`，不是另一套独立主键。
+
 当前支持两种上传格式：
 
 1. 推荐：`multipart/form-data`
@@ -499,8 +501,8 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 
 链路补充：
 
-- Android 在已选中的正式会话里上传图片时，会直接附带 `sessionId`，因此通常会一次上传同时完成正式保存。
-- Android 在草稿会话里先选图、再发送首条消息时，首次预上传还拿不到 `sessionId`；等真实会话创建完成后，会再补一次带 `sessionId` 的上传，以拿到正式保存路径。
+- Android 在已选中的正式会话里上传图片时，会直接附带 `sessionId`，其值实际就是当前线程的 `threadId`，因此通常会一次上传同时完成正式保存。
+- Android 在草稿会话里先选图、再发送首条消息时，首次预上传还拿不到 `sessionId`；等真实线程创建完成、拿到 `threadId` 后，会再补一次带 `sessionId` 的上传，以拿到正式保存路径。
 - 旧 bridge 只返回 `path` 时，Android 会继续回退到原有暂存路径链路，不影响兼容。
 
 成功响应：

@@ -57,6 +57,7 @@
   - app 层测试改为校验 `createSession` 路径。
 - `docs/api.md`
   - 明确正式线程的 `id` 与 `threadId` 相同，`/api/session/:id` 的 `:id` 直接使用上游 `threadId`。
+  - 补充说明图片上传接口沿用的 `sessionId` 字段名只是兼容命名；正式线程下这里传的值仍是 `threadId`。
 - `docs/thread-archive-collaboration.md`
   - 明确正式线程不再额外包装另一层稳定 ID，草稿不属于 thread 体系。
 
