@@ -938,6 +938,64 @@ class AppViewModelTest {
     }
 
     @Test
+    fun sessionStartedAfterReconnectRefreshesTranscriptSnapshot() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_resume_refresh", status = "running")
+        val refreshed = detail.copy(
+            status = "running",
+            transcriptPreview = "工作目录：${detail.cwd}\n\nCodex：断线期间补回来的回复",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to refreshed,
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail(detail.id)
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.StreamClosed(
+                sessionId = detail.id,
+                reason = "socket closed",
+                timestamp = "2026-05-25T14:10:00.000Z",
+            ),
+        )
+        runCurrent()
+
+        advanceTimeBy(1_500L)
+        runCurrent()
+
+        bridgeApi.emit(
+            SessionStreamEvent.SessionStarted(
+                sessionId = detail.id,
+                status = "running",
+                cwd = detail.cwd,
+                model = detail.model,
+                approvalMode = detail.approvalMode,
+                reasoningEffort = detail.reasoningEffort,
+                serviceTier = detail.serviceTier,
+                sandboxMode = detail.sandboxMode,
+                threadId = "thread-reconnect",
+                goal = null,
+                goalCapability = null,
+                pendingApproval = null,
+                timestamp = "2026-05-25T14:10:03.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(refreshed.transcriptPreview, viewModel.uiState.value.selectedSession?.transcriptPreview)
+        assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
+        assertNull(viewModel.uiState.value.sessionRealtimeState.fallbackNotice)
+    }
+
+    @Test
     fun updatingSessionConfigKeepsGlobalSettingsAndCallsBridge() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_config", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)

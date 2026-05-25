@@ -1629,6 +1629,7 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.SessionStarted -> {
+                val previousRealtimeState = uiState.value.sessionRealtimeState
                 appLogger.info(
                     "AppViewModel",
                     "会话实时流就绪：sessionId=$sessionId, status=${event.status}, threadId=${event.threadId ?: "none"}",
@@ -1663,6 +1664,9 @@ class AppViewModel(
                 }
                 syncVisibleSessionSummary(nextDetail)
                 maybeAutoApprovePending(sessionId)
+                if (shouldRefreshSessionSnapshotAfterRealtimeRecovery(previousRealtimeState)) {
+                    refreshSessionSnapshot(sessionId)
+                }
             }
 
             is SessionStreamEvent.GoalUpdated -> {
@@ -2709,6 +2713,14 @@ class AppViewModel(
             return false
         }
         return detail.status == "running" || detail.status == "awaiting_approval"
+    }
+
+    private fun shouldRefreshSessionSnapshotAfterRealtimeRecovery(
+        previousRealtimeState: SessionRealtimeUiState,
+    ): Boolean {
+        return !previousRealtimeState.isConnected &&
+            previousRealtimeState.connectionText != "正在连接实时流" &&
+            previousRealtimeState.connectionText != "正在加载会话"
     }
 
     private fun enqueueQueuedInput(sessionId: String, text: String) {
