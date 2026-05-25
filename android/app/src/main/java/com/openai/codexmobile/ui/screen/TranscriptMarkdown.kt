@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.ClickableText
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,7 +56,6 @@ internal fun MarkdownTextBlock(
     onShowMessage: (String) -> Unit = {},
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit = {},
     fillWidth: Boolean = true,
-    selectable: Boolean = true,
 ) {
     val blocks = remember(text) { parseMarkdownBlocks(text) }
     val blockWidthModifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier
@@ -74,7 +72,6 @@ internal fun MarkdownTextBlock(
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
-                    selectable = selectable,
                 )
 
                 is MarkdownBlock.Paragraph -> MarkdownAnnotatedText(
@@ -85,7 +82,6 @@ internal fun MarkdownTextBlock(
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
-                    selectable = selectable,
                 )
 
                 is MarkdownBlock.Quote -> MarkdownQuote(
@@ -96,7 +92,6 @@ internal fun MarkdownTextBlock(
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
-                    selectable = selectable,
                 )
 
                 is MarkdownBlock.ListBlock -> MarkdownList(
@@ -107,7 +102,6 @@ internal fun MarkdownTextBlock(
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
-                    selectable = selectable,
                 )
             }
         }
@@ -122,7 +116,6 @@ private fun MarkdownHeading(
     sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
-    selectable: Boolean,
 ) {
     val style = when (block.level) {
         1 -> MaterialTheme.typography.headlineSmall
@@ -138,7 +131,6 @@ private fun MarkdownHeading(
         sessionCwd = sessionCwd,
         onShowMessage = onShowMessage,
         onFileDownloadRequest = onFileDownloadRequest,
-        selectable = selectable,
     )
 }
 
@@ -151,7 +143,6 @@ private fun MarkdownQuote(
     sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
-    selectable: Boolean,
 ) {
     Row(
         modifier = modifier,
@@ -171,7 +162,6 @@ private fun MarkdownQuote(
             sessionCwd = sessionCwd,
             onShowMessage = onShowMessage,
             onFileDownloadRequest = onFileDownloadRequest,
-            selectable = selectable,
         )
     }
 }
@@ -185,7 +175,6 @@ private fun MarkdownList(
     sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
-    selectable: Boolean,
 ) {
     Column(
         modifier = modifier,
@@ -209,7 +198,6 @@ private fun MarkdownList(
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
-                    selectable = selectable,
                 )
             }
         }
@@ -225,7 +213,6 @@ private fun MarkdownAnnotatedText(
     sessionCwd: String?,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
-    selectable: Boolean,
 ) {
     val uriHandler = LocalUriHandler.current
     val annotated = remember(text, style.color) {
@@ -267,13 +254,7 @@ private fun MarkdownAnnotatedText(
             },
         )
     }
-    if (selectable) {
-        SelectionContainer {
-            content()
-        }
-    } else {
-        content()
-    }
+    content()
 }
 
 internal fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {

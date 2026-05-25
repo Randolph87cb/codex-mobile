@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -92,8 +93,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -101,6 +105,8 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -204,8 +210,8 @@ private val MessageMenuContent = Color(0xFFF0F1F2)
 fun SessionDetailScreen(
     sessionDetail: SessionDetail?,
     draftSession: DraftSessionUiState?,
-    connectionState: BridgeConnectionState,
-    accountQuota: AccountQuotaUiState,
+    connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
+    accountQuota: AccountQuotaUiState = AccountQuotaUiState(),
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     draftMessage: String,
@@ -218,7 +224,7 @@ fun SessionDetailScreen(
     onRemovePendingImageAttachment: (String) -> Unit,
     onRetryPendingImageAttachment: (String) -> Unit,
     onSend: () -> Unit,
-    onInterrupt: () -> Unit,
+    onInterrupt: () -> Unit = {},
     onApprovalDecision: (ApprovalDecision) -> Unit,
     onUpdateCwd: (String) -> Unit,
     onUpdateModel: (String) -> Unit,
@@ -236,6 +242,7 @@ fun SessionDetailScreen(
     title: String? = null,
     onBack: (() -> Unit)? = null,
     showTopBar: Boolean = true,
+    paddingValues: PaddingValues = PaddingValues(0.dp),
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -252,6 +259,9 @@ fun SessionDetailScreen(
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
     var pendingFileDownloadRequest by remember { mutableStateOf<TranscriptFileDownloadRequest?>(null) }
     var fileDownloadDialogState by remember { mutableStateOf<FileDownloadDialogState?>(null) }
+    var activeSelectionBubbleTag by rememberSaveable(detail?.id) { mutableStateOf<String?>(null) }
+    var activeSelectionBubbleBounds by remember { mutableStateOf<Rect?>(null) }
+    var contentBoundsInRoot by remember { mutableStateOf<Rect?>(null) }
     val hasPendingUploadBlockers = pendingImageAttachments.any {
         it.uploadState == PendingImageUploadState.Uploading || it.uploadState == PendingImageUploadState.Failed
     }
@@ -278,6 +288,11 @@ fun SessionDetailScreen(
             currentTranscriptScrollState.animateScrollTo(currentTranscriptScrollState.maxValue)
         }
         previousTranscriptScrollMax = currentTranscriptScrollState.maxValue
+    }
+    LaunchedEffect(activeSelectionBubbleTag) {
+        if (activeSelectionBubbleTag == null) {
+            activeSelectionBubbleBounds = null
+        }
     }
 
     ConfigEditorDialogs(
@@ -409,7 +424,26 @@ fun SessionDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(detailPadding)
-                .background(MaterialTheme.colorScheme.background),
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
+                .onGloballyPositioned { coordinates ->
+                    contentBoundsInRoot = coordinates.boundsInRoot()
+                }
+                .pointerInput(activeSelectionBubbleTag, activeSelectionBubbleBounds, contentBoundsInRoot) {
+                    if (activeSelectionBubbleTag != null) {
+                        awaitEachGesture {
+                            val downChange = awaitFirstDown(pass = PointerEventPass.Initial)
+                            if (shouldClearTranscriptSelection(
+                                    activeBubbleBoundsInRoot = activeSelectionBubbleBounds,
+                                    containerBoundsInRoot = contentBoundsInRoot,
+                                    touchPositionInContainer = downChange.position,
+                                )
+                            ) {
+                                activeSelectionBubbleTag = null
+                            }
+                        }
+                    }
+                },
         ) {
         Column(
             modifier = Modifier
@@ -452,6 +486,16 @@ fun SessionDetailScreen(
                         sessionCwd = detail?.cwd,
                         bridgeEndpoint = bridgeEndpoint,
                         bridgeAuthToken = bridgeAuthToken,
+                        activeSelectionBubbleTag = activeSelectionBubbleTag,
+                        onActivateTextSelection = { bubbleTag ->
+                            activeSelectionBubbleTag = bubbleTag
+                        },
+                        onClearActiveTextSelection = {
+                            activeSelectionBubbleTag = null
+                        },
+                        onActiveSelectionBoundsChanged = { bounds ->
+                            activeSelectionBubbleBounds = bounds
+                        },
                         onShowMessage = onShowMessage,
                         onFileDownloadRequest = { request ->
                             pendingFileDownloadRequest = request
@@ -1992,6 +2036,10 @@ private fun TranscriptBubbleList(
     sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    activeSelectionBubbleTag: String?,
+    onActivateTextSelection: (String) -> Unit,
+    onClearActiveTextSelection: () -> Unit,
+    onActiveSelectionBoundsChanged: (Rect?) -> Unit,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     onCopyText: (String) -> Unit,
@@ -2019,6 +2067,13 @@ private fun TranscriptBubbleList(
                     sessionCwd = sessionCwd,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
+                    isTextSelectionEnabled = activeSelectionBubbleTag ==
+                        (TestTags.SessionDetailTranscriptBubbleTogglePrefix + index),
+                    onActivateTextSelection = {
+                        onActivateTextSelection(TestTags.SessionDetailTranscriptBubbleTogglePrefix + index)
+                    },
+                    onClearTextSelection = onClearActiveTextSelection,
+                    onTextSelectionBoundsChanged = onActiveSelectionBoundsChanged,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
                     onCopyText = onCopyText,
@@ -2050,6 +2105,10 @@ private fun TranscriptBubbleCard(
     sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    isTextSelectionEnabled: Boolean,
+    onActivateTextSelection: () -> Unit,
+    onClearTextSelection: () -> Unit,
+    onTextSelectionBoundsChanged: (Rect?) -> Unit,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     onCopyText: (String) -> Unit,
@@ -2094,12 +2153,21 @@ private fun TranscriptBubbleCard(
                 sessionCwd = sessionCwd,
                 bridgeEndpoint = bridgeEndpoint,
                 bridgeAuthToken = bridgeAuthToken,
+                isTextSelectionEnabled = isTextSelectionEnabled,
+                onActivateTextSelection = onActivateTextSelection,
+                onClearTextSelection = onClearTextSelection,
+                onTextSelectionBoundsChanged = onTextSelectionBoundsChanged,
                 onShowMessage = onShowMessage,
                 onFileDownloadRequest = onFileDownloadRequest,
                 onCopyText = onCopyText,
                 onCopyCode = onCopyCode,
                 onOpenImagePreview = onOpenImagePreview,
-                onToggle = { expanded = !expanded },
+                onToggle = {
+                    if (isTextSelectionEnabled) {
+                        onClearTextSelection()
+                    }
+                    expanded = !expanded
+                },
             )
         }
 
@@ -2123,6 +2191,10 @@ private fun TranscriptBubbleBodyCard(
     sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    isTextSelectionEnabled: Boolean,
+    onActivateTextSelection: () -> Unit,
+    onClearTextSelection: () -> Unit,
+    onTextSelectionBoundsChanged: (Rect?) -> Unit,
     onShowMessage: (String) -> Unit,
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
     onCopyText: (String) -> Unit,
@@ -2131,9 +2203,9 @@ private fun TranscriptBubbleBodyCard(
     onToggle: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    var selectionMode by remember(toggleTag) { mutableStateOf(false) }
-    val menuModifier = Modifier.pointerInput(toggleTag, selectionMode) {
-        if (!selectionMode) {
+    val bodyTag = TestTags.SessionDetailTranscriptBubbleBodyPrefix + toggleTag
+    val menuModifier = Modifier.pointerInput(toggleTag, isTextSelectionEnabled) {
+        if (!isTextSelectionEnabled) {
             awaitEachGesture {
                 val downChange = awaitPointerEvent(PointerEventPass.Initial)
                     .changes
@@ -2163,6 +2235,13 @@ private fun TranscriptBubbleBodyCard(
     Box(
         modifier = Modifier
             .widthIn(max = ConversationBubbleMaxWidth)
+            .testTag(bodyTag)
+            .semantics { selected = isTextSelectionEnabled }
+            .onGloballyPositioned { coordinates ->
+                if (isTextSelectionEnabled) {
+                    onTextSelectionBoundsChanged(coordinates.boundsInRoot())
+                }
+            }
             .then(menuModifier),
         contentAlignment = if (isUser) Alignment.TopEnd else Alignment.TopStart,
     ) {
@@ -2201,7 +2280,7 @@ private fun TranscriptBubbleBodyCard(
                         onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
                         fillTextWidth = false,
-                        textSelectionEnabled = selectionMode,
+                        textSelectionEnabled = isTextSelectionEnabled,
                     )
                 }
             }
@@ -2221,7 +2300,7 @@ private fun TranscriptBubbleBodyCard(
                         onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
                         fillTextWidth = false,
-                        textSelectionEnabled = selectionMode,
+                        textSelectionEnabled = isTextSelectionEnabled,
                     )
                 }
             }
@@ -2246,6 +2325,7 @@ private fun TranscriptBubbleBodyCard(
                 onClick = {
                     menuExpanded = false
                     onCopyText(bubble.copyText)
+                    onClearTextSelection()
                 },
             )
             DropdownMenuItem(
@@ -2259,7 +2339,7 @@ private fun TranscriptBubbleBodyCard(
                 },
                 onClick = {
                     menuExpanded = false
-                    selectionMode = true
+                    onActivateTextSelection()
                     onShowMessage("可拖选文本后复制。")
                 },
             )
@@ -2634,56 +2714,66 @@ private fun TranscriptPartsColumn(
     fillTextWidth: Boolean = true,
     textSelectionEnabled: Boolean = true,
 ) {
-    val bodyTextStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
-    var index = 0
-    while (index < parts.size) {
-        val part = parts[index]
-        when (part) {
-            is TranscriptPart.Text -> {
-                MarkdownTextBlock(
-                    text = part.text,
-                    style = bodyTextStyle,
-                    bridgeEndpoint = bridgeEndpoint,
-                    sessionCwd = sessionCwd,
-                    onShowMessage = onShowMessage,
-                    onFileDownloadRequest = onFileDownloadRequest,
-                    fillWidth = fillTextWidth,
-                    selectable = textSelectionEnabled,
-                )
-                index += 1
-            }
+    val content: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            val bodyTextStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
+            var index = 0
+            while (index < parts.size) {
+                val part = parts[index]
+                when (part) {
+                    is TranscriptPart.Text -> {
+                        MarkdownTextBlock(
+                            text = part.text,
+                            style = bodyTextStyle,
+                            bridgeEndpoint = bridgeEndpoint,
+                            sessionCwd = sessionCwd,
+                            onShowMessage = onShowMessage,
+                            onFileDownloadRequest = onFileDownloadRequest,
+                            fillWidth = fillTextWidth,
+                        )
+                        index += 1
+                    }
 
-            is TranscriptPart.Image -> {
-                val images = buildList {
-                    var nextIndex = index
-                    while (nextIndex < parts.size) {
-                        val nextPart = parts[nextIndex]
-                        if (nextPart !is TranscriptPart.Image) {
-                            break
+                    is TranscriptPart.Image -> {
+                        val images = buildList {
+                            var nextIndex = index
+                            while (nextIndex < parts.size) {
+                                val nextPart = parts[nextIndex]
+                                if (nextPart !is TranscriptPart.Image) {
+                                    break
+                                }
+                                add(IndexedTranscriptImage(index = nextIndex, part = nextPart))
+                                nextIndex += 1
+                            }
                         }
-                        add(IndexedTranscriptImage(index = nextIndex, part = nextPart))
-                        nextIndex += 1
+                        TranscriptImageGallery(
+                            images = images,
+                            bridgeEndpoint = bridgeEndpoint,
+                            bridgeAuthToken = bridgeAuthToken,
+                            testTagPrefix = testTagPrefix,
+                            onOpenImagePreview = onOpenImagePreview,
+                        )
+                        index += images.size
+                    }
+
+                    is TranscriptPart.CodeBlock -> {
+                        CodeBlockCard(
+                            part = part,
+                            copyTag = TestTags.SessionDetailCodeBlockCopyPrefix + "${testTagPrefix}_$index",
+                            onCopyCode = onCopyCode,
+                        )
+                        index += 1
                     }
                 }
-                TranscriptImageGallery(
-                    images = images,
-                    bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
-                    testTagPrefix = testTagPrefix,
-                    onOpenImagePreview = onOpenImagePreview,
-                )
-                index += images.size
-            }
-
-            is TranscriptPart.CodeBlock -> {
-                CodeBlockCard(
-                    part = part,
-                    copyTag = TestTags.SessionDetailCodeBlockCopyPrefix + "${testTagPrefix}_$index",
-                    onCopyCode = onCopyCode,
-                )
-                index += 1
             }
         }
+    }
+    if (textSelectionEnabled) {
+        SelectionContainer {
+            content()
+        }
+    } else {
+        content()
     }
 }
 
@@ -2730,14 +2820,12 @@ private fun CodeBlockCard(
                     )
                 }
             }
-            SelectionContainer {
-                Text(
-                    text = part.code,
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
-                    fontFamily = FontFamily.Monospace,
-                )
-            }
+            Text(
+                text = part.code,
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+                fontFamily = FontFamily.Monospace,
+            )
         }
     }
 }

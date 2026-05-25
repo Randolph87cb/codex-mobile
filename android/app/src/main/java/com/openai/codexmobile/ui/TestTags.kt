@@ -63,6 +63,7 @@ object TestTags {
     const val SessionDetailTranscriptScroll = "session_detail_transcript_scroll"
     const val SessionDetailTranscriptImagePrefix = "session_detail_transcript_image_"
     const val SessionDetailTranscriptBubbleTogglePrefix = "session_detail_transcript_bubble_toggle_"
+    const val SessionDetailTranscriptBubbleBodyPrefix = "session_detail_transcript_bubble_body_"
     const val SessionDetailTranscriptBubbleCopyPrefix = "session_detail_transcript_bubble_copy_"
     const val SessionDetailExecutionGroupTogglePrefix = "session_detail_execution_group_toggle_"
     const val SessionDetailExecutionEntryTogglePrefix = "session_detail_execution_entry_toggle_"
