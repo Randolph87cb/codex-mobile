@@ -1,6 +1,13 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { randomUUID } from "node:crypto";
 import type { BridgeEventListener, BridgeRunner } from "./bridge-runner.js";
-import type { BridgeEvent, ResolvedSessionInput, SessionApprovalInput, SessionApprovalResult } from "./types.js";
+import type {
+  BridgeEvent,
+  CreateSessionInput,
+  ResolvedSessionInput,
+  SessionApprovalInput,
+  SessionApprovalResult,
+} from "./types.js";
 import { SessionStore } from "./session-store.js";
 
 export class MockRunner implements BridgeRunner {
@@ -9,8 +16,24 @@ export class MockRunner implements BridgeRunner {
 
   constructor(private readonly store: SessionStore) {}
 
-  async initializeSession(_sessionId: string): Promise<void> {
-    return;
+  async createSession(input: CreateSessionInput) {
+    const now = new Date().toISOString();
+    const threadId = `mock-thread-${randomUUID()}`;
+    return this.store.attach({
+      id: threadId,
+      cwd: input.cwd,
+      model: input.model,
+      approvalMode: input.approvalMode,
+      reasoningEffort: input.reasoningEffort,
+      serviceTier: input.serviceTier,
+      sandboxMode: input.sandboxMode,
+      status: "idle",
+      threadId,
+      activeTurnId: null,
+      lastError: null,
+      createdAt: now,
+      updatedAt: now,
+    });
   }
 
   subscribe(sessionId: string, listener: BridgeEventListener): () => void {

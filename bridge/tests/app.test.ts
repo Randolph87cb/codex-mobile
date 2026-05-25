@@ -18,9 +18,21 @@ import type {
 
 class TestRunner implements HistoryCapableBridgeRunner {
   readonly mode = "mock" as const;
-  readonly initializeSession = vi.fn(async (sessionId: string) => {
-    this.store.update(sessionId, { threadId: "thread-test" });
-  });
+  readonly createSession = vi.fn(async (input) => this.store.attach({
+    id: "thread-test",
+    cwd: input.cwd,
+    model: input.model,
+    approvalMode: input.approvalMode,
+    reasoningEffort: input.reasoningEffort,
+    serviceTier: input.serviceTier,
+    sandboxMode: input.sandboxMode,
+    status: "idle",
+    threadId: "thread-test",
+    activeTurnId: null,
+    lastError: null,
+    createdAt: "2026-05-19T01:00:00.000Z",
+    updatedAt: "2026-05-19T01:00:00.000Z",
+  }));
   readonly submitInput = vi.fn(async (_sessionId: string, _input: ResolvedSessionInput) => undefined);
   readonly approve = vi.fn(async (_sessionId: string, input: SessionApprovalInput): Promise<SessionApprovalResult> => ({
     requestId: input.requestId ?? 1,
@@ -244,7 +256,7 @@ describe("buildBridgeApp", () => {
     });
 
     expect(create.statusCode).toBe(201);
-    expect(runner.initializeSession).toHaveBeenCalledTimes(1);
+    expect(runner.createSession).toHaveBeenCalledTimes(1);
     expect(create.json()).toMatchObject({
       cwd: "D:\\workspace\\codex-mobile",
       model: "gpt-5.5",

@@ -122,7 +122,13 @@ Android 当前消费方式：
 
 ### `GET /api/sessions`
 
-返回会话摘要列表，既可能来自当前 bridge 维护的本地会话，也可能来自历史线程视图。
+返回会话摘要列表，既可能来自当前 bridge 已 attach 的正式线程，也可能来自历史线程视图。
+
+当前约定：
+
+- 对已 materialize 的正式线程，响应里的 `id` 与 `threadId` 相同；
+- 其他以 `:id` 为参数的正式线程接口，也直接使用这个 `threadId`；
+- 草稿不属于正式线程，不会出现在这里。
 
 查询参数：
 
@@ -137,7 +143,7 @@ Android 当前消费方式：
 {
   "items": [
     {
-      "id": "sess_xxx",
+      "id": "thr_123",
       "title": "现在有个 bug",
       "subtitle": "gpt-5.5 • 空闲 • D:\\workspace\\codex-mobile",
       "lastUpdated": "2026-05-19T07:24:08.000Z",
@@ -151,7 +157,7 @@ Android 当前消费方式：
       "serviceTier": "default",
       "sandboxMode": "workspace-write",
       "status": "idle",
-      "threadId": "019e...",
+      "threadId": "thr_123",
       "activeTurnId": null,
       "lastError": null,
       "createdAt": "2026-05-19T07:23:00.000Z",
@@ -163,7 +169,7 @@ Android 当前消费方式：
 
 ### `POST /api/session`
 
-创建本地会话并初始化 `codex app-server` 线程。
+创建正式线程并初始化 `codex app-server` 会话。
 
 请求体：
 
@@ -191,7 +197,7 @@ Android 当前消费方式：
 
 ```json
 {
-  "id": "sess_xxx",
+  "id": "thr_123",
   "cwd": "D:\\workspace\\codex-mobile",
   "model": "gpt-5.5",
   "approvalMode": "manual",
@@ -199,13 +205,19 @@ Android 当前消费方式：
   "serviceTier": "default",
   "sandboxMode": "workspace-write",
   "status": "idle",
-  "threadId": "019e...",
+  "threadId": "thr_123",
   "activeTurnId": null,
   "lastError": null,
   "createdAt": "2026-05-19T15:00:00.000Z",
   "updatedAt": "2026-05-19T15:00:00.000Z"
 }
 ```
+
+说明：
+
+- 成功创建后，bridge 直接以上游 `threadId` 作为正式线程主键返回；
+- 不再单独生成一层本地正式会话 ID；
+- 草稿阶段如果尚未真正创建线程，也不会拿到这里的 `id`。
 
 初始化底层线程失败时返回：
 
@@ -534,12 +546,14 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 
 建立 WebSocket 实时流。
 
+对正式线程来说，这里的 `:id` 也是 `threadId`。
+
 事件基础结构：
 
 ```json
 {
   "type": "assistant.delta",
-  "sessionId": "sess_xxx",
+  "sessionId": "thr_123",
   "timestamp": "2026-05-19T15:00:10.000Z",
   "data": {}
 }

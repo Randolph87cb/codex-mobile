@@ -49,7 +49,7 @@ class FakeAppServerClient {
 function createSessionStore(): SessionStore {
   const store = new SessionStore();
   store.attach({
-    id: "sess-1",
+    id: "thread-1",
     cwd: "D:\\workspace\\codex-mobile",
     model: "gpt-5.5",
     approvalMode: "manual",
@@ -209,25 +209,16 @@ describe("AppServerRunner", () => {
       return {};
     });
 
-    store.attach({
-      id: "sess-2",
+    const runner = new AppServerRunner(store, client);
+    const created = await runner.createSession({
       cwd: "D:\\workspace\\codex-mobile",
       model: "gpt-5.5",
       approvalMode: "manual",
       reasoningEffort: "high",
       serviceTier: "default",
       sandboxMode: "read-only",
-      status: "idle",
-      threadId: null,
-      activeTurnId: null,
-      lastError: null,
-      createdAt: "2026-05-19T01:10:00.000Z",
-      updatedAt: "2026-05-19T01:10:00.000Z",
     });
-
-    const runner = new AppServerRunner(store, client);
-    await runner.initializeSession("sess-2");
-    await runner.submitInput("sess-2", {
+    await runner.submitInput(created.id, {
       text: "请继续",
       attachments: [],
     });
@@ -262,13 +253,13 @@ describe("AppServerRunner", () => {
       }),
     );
     expect(client.request.mock.calls[2]?.[1]).not.toHaveProperty("serviceTier");
-    expect(store.get("sess-2")?.serviceTier).toBe("default");
-    expect(store.get("sess-2")?.sandboxMode).toBe("read-only");
+    expect(store.get("thread-2")?.serviceTier).toBe("default");
+    expect(store.get("thread-2")?.sandboxMode).toBe("read-only");
   });
 
   test("submits image attachments as localImage input blocks", async () => {
     const store = createSessionStore();
-    store.update("sess-1", {
+    store.update("thread-1", {
       status: "idle",
       activeTurnId: null,
     });
@@ -297,7 +288,7 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    await runner.submitInput("sess-1", {
+    await runner.submitInput("thread-1", {
       text: "看这张图",
       attachments: [
         {
@@ -336,7 +327,7 @@ describe("AppServerRunner", () => {
         ],
       }),
     );
-    expect(store.get("sess-1")).toMatchObject({
+    expect(store.get("thread-1")).toMatchObject({
       activeTurnId: "turn-image",
       status: "running",
       lastError: null,
@@ -345,7 +336,7 @@ describe("AppServerRunner", () => {
 
   test("submits image-only input with a fallback text block", async () => {
     const store = createSessionStore();
-    store.update("sess-1", {
+    store.update("thread-1", {
       status: "idle",
       activeTurnId: null,
     });
@@ -374,7 +365,7 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    await runner.submitInput("sess-1", {
+    await runner.submitInput("thread-1", {
       text: "",
       attachments: [
         {
@@ -411,7 +402,7 @@ describe("AppServerRunner", () => {
     const client = new FakeAppServerClient();
     const runner = new AppServerRunner(store, client);
     const events: BridgeEvent[] = [];
-    runner.subscribe("sess-1", (event) => {
+    runner.subscribe("thread-1", (event) => {
       events.push(event);
     });
 
@@ -426,7 +417,7 @@ describe("AppServerRunner", () => {
       },
     });
 
-    expect(store.get("sess-1")?.status).toBe("awaiting_approval");
+    expect(store.get("thread-1")?.status).toBe("awaiting_approval");
     expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -446,7 +437,7 @@ describe("AppServerRunner", () => {
       ]),
     );
 
-    const result = await runner.approve("sess-1", {
+    const result = await runner.approve("thread-1", {
       requestId: "req-1",
       decision: "reject",
     });
@@ -465,7 +456,7 @@ describe("AppServerRunner", () => {
         },
       },
     ]);
-    expect(store.get("sess-1")?.status).toBe("running");
+    expect(store.get("thread-1")?.status).toBe("running");
     expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -491,7 +482,7 @@ describe("AppServerRunner", () => {
     const client = new FakeAppServerClient();
     const runner = new AppServerRunner(store, client);
     const events: BridgeEvent[] = [];
-    runner.subscribe("sess-1", (event) => {
+    runner.subscribe("thread-1", (event) => {
       events.push(event);
     });
 
@@ -557,7 +548,7 @@ describe("AppServerRunner", () => {
     const client = new FakeAppServerClient();
     const runner = new AppServerRunner(store, client);
     const events: BridgeEvent[] = [];
-    runner.subscribe("sess-1", (event) => {
+    runner.subscribe("thread-1", (event) => {
       events.push(event);
     });
 
@@ -625,7 +616,7 @@ describe("AppServerRunner", () => {
       },
     });
 
-    await runner.approve("sess-1", {
+    await runner.approve("thread-1", {
       requestId: 7,
       decision: "approve_for_session",
     });
@@ -676,10 +667,10 @@ describe("AppServerRunner", () => {
       },
     });
 
-    const view = await runner.getSessionView("sess-1");
+    const view = await runner.getSessionView("thread-1");
 
     expect(view).toMatchObject({
-      id: "sess-1",
+      id: "thread-1",
       status: "awaiting_approval",
       pendingApproval: {
         requestId: "req-view",
@@ -718,14 +709,14 @@ describe("AppServerRunner", () => {
 
     const runner = new AppServerRunner(store, client);
 
-    const view = await runner.getSessionView("sess-1");
+    const view = await runner.getSessionView("thread-1");
 
     expect(view).toMatchObject({
-      id: "sess-1",
+      id: "thread-1",
       status: "running",
       pendingApproval: null,
     });
-    expect(store.get("sess-1")?.status).toBe("running");
+    expect(store.get("thread-1")?.status).toBe("running");
   });
 
   test("rejects unsupported non-approval server requests", async () => {
@@ -752,12 +743,12 @@ describe("AppServerRunner", () => {
         data: undefined,
       },
     ]);
-    expect(store.get("sess-1")?.status).toBe("running");
+    expect(store.get("thread-1")?.status).toBe("running");
   });
 
   test("retries turn/start after resuming a historical thread when app-server reports thread not found", async () => {
     const store = createSessionStore();
-    store.update("sess-1", {
+    store.update("thread-1", {
       status: "idle",
       activeTurnId: null,
     });
@@ -806,7 +797,7 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    await runner.submitInput("sess-1", {
+    await runner.submitInput("thread-1", {
       text: "继续这个历史线程",
       attachments: [],
     });
@@ -841,7 +832,7 @@ describe("AppServerRunner", () => {
         threadId: "thread-1",
       }),
     );
-    expect(store.get("sess-1")).toMatchObject({
+    expect(store.get("thread-1")).toMatchObject({
       activeTurnId: "turn-2",
       status: "running",
       lastError: null,
@@ -890,7 +881,7 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    const attached = await runner.attachSession("sess-1");
+    const attached = await runner.attachSession("thread-1");
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
@@ -903,7 +894,7 @@ describe("AppServerRunner", () => {
       }),
     );
     expect(attached).toMatchObject({
-      id: "sess-1",
+      id: "thread-1",
       status: "idle",
       activeTurnId: null,
       approvalMode: "auto",
@@ -978,7 +969,7 @@ describe("AppServerRunner", () => {
   test("filters archived thread lists and keeps archived attached sessions out of active list", async () => {
     const store = createSessionStore();
     store.attach({
-      id: "sess-archived-local",
+      id: "thread-archived",
       cwd: "D:\\workspace\\archived",
       model: "gpt-5.5",
       approvalMode: "manual",
@@ -1033,9 +1024,9 @@ describe("AppServerRunner", () => {
     const activeViews = await runner.listSessionViews(false);
     const archivedViews = await runner.listSessionViews(true);
 
-    expect(activeViews.map((view) => view.id)).toEqual(["sess-1"]);
+    expect(activeViews.map((view) => view.id)).toEqual(["thread-1"]);
     expect(activeViews.every((view) => !view.archived)).toBe(true);
-    expect(archivedViews.map((view) => view.id)).toEqual(["sess-archived-local"]);
+    expect(archivedViews.map((view) => view.id)).toEqual(["thread-archived"]);
     expect(archivedViews.every((view) => view.archived)).toBe(true);
   });
 
@@ -1044,12 +1035,12 @@ describe("AppServerRunner", () => {
     const client = new FakeAppServerClient();
     const runner = new AppServerRunner(store, client);
 
-    await runner.archiveSession("sess-1");
+    await runner.archiveSession("thread-1");
 
     expect(client.request).toHaveBeenCalledWith("thread/archive", {
       threadId: "thread-1",
     });
-    expect(store.get("sess-1")).toBeUndefined();
+    expect(store.get("thread-1")).toBeUndefined();
   });
 
   test("unarchives history sessions by thread id", async () => {
@@ -1083,7 +1074,7 @@ describe("AppServerRunner", () => {
 
   test("blocks turn/start when the thread is already active in another client", async () => {
     const store = createSessionStore();
-    store.update("sess-1", {
+    store.update("thread-1", {
       status: "idle",
       activeTurnId: null,
     });
@@ -1118,12 +1109,12 @@ describe("AppServerRunner", () => {
 
     const runner = new AppServerRunner(store, client);
     await expect(
-      runner.submitInput("sess-1", {
+      runner.submitInput("thread-1", {
         text: "新输入",
         attachments: [],
       }),
     ).rejects.toThrow("thread-busy");
-    expect(store.get("sess-1")).toMatchObject({
+    expect(store.get("thread-1")).toMatchObject({
       status: "running",
       activeTurnId: "turn-external",
     });
@@ -1139,7 +1130,7 @@ describe("AppServerRunner", () => {
 
   test("discovers the active turn from thread/read before interrupting", async () => {
     const store = createSessionStore();
-    store.update("sess-1", {
+    store.update("thread-1", {
       status: "running",
       activeTurnId: null,
     });
@@ -1177,7 +1168,7 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    await runner.interrupt("sess-1");
+    await runner.interrupt("thread-1");
 
     expect(client.request).toHaveBeenNthCalledWith(
       1,
@@ -1195,7 +1186,7 @@ describe("AppServerRunner", () => {
         turnId: "turn-external",
       },
     );
-    expect(store.get("sess-1")).toMatchObject({
+    expect(store.get("thread-1")).toMatchObject({
       status: "idle",
       activeTurnId: null,
     });
@@ -1250,7 +1241,7 @@ describe("AppServerRunner", () => {
     });
 
     const runner = new AppServerRunner(store, client);
-    await expect(runner.getSessionGoal("sess-1")).resolves.toMatchObject({
+    await expect(runner.getSessionGoal("thread-1")).resolves.toMatchObject({
       capability: "supported",
       goal: {
         objective: "把详情页实时流稳定下来",
@@ -1261,7 +1252,7 @@ describe("AppServerRunner", () => {
       },
     });
     await expect(
-      runner.updateSessionGoal("sess-1", {
+      runner.updateSessionGoal("thread-1", {
         objective: "把详情页实时流稳定下来",
         tokenBudget: 250000,
       }),
@@ -1272,7 +1263,7 @@ describe("AppServerRunner", () => {
         tokensUsed: 3300,
       },
     });
-    await expect(runner.clearSessionGoal("sess-1")).resolves.toEqual({
+    await expect(runner.clearSessionGoal("thread-1")).resolves.toEqual({
       capability: "supported",
       cleared: true,
     });
@@ -1313,21 +1304,21 @@ describe("AppServerRunner", () => {
 
     const runner = new AppServerRunner(store, client);
 
-    await expect(runner.getSessionGoal("sess-1")).resolves.toEqual({
+    await expect(runner.getSessionGoal("thread-1")).resolves.toEqual({
       capability: "unsupported",
       goal: null,
     });
-    await expect(runner.getSessionView("sess-1")).resolves.toMatchObject({
-      id: "sess-1",
+    await expect(runner.getSessionView("thread-1")).resolves.toMatchObject({
+      id: "thread-1",
       goal: null,
       goalCapability: "unsupported",
     });
     await expect(
-      runner.updateSessionGoal("sess-1", {
+      runner.updateSessionGoal("thread-1", {
         objective: "验证 goal 可用性",
       }),
     ).rejects.toThrow("goal-not-supported");
-    await expect(runner.clearSessionGoal("sess-1")).rejects.toThrow("goal-not-supported");
+    await expect(runner.clearSessionGoal("thread-1")).rejects.toThrow("goal-not-supported");
   });
 
   test("emits goal updates and clears as bridge events", async () => {
@@ -1335,7 +1326,7 @@ describe("AppServerRunner", () => {
     const client = new FakeAppServerClient();
     const runner = new AppServerRunner(store, client);
     const events: BridgeEvent[] = [];
-    runner.subscribe("sess-1", (event) => {
+    runner.subscribe("thread-1", (event) => {
       events.push(event);
     });
 
@@ -1386,3 +1377,4 @@ describe("AppServerRunner", () => {
     );
   });
 });
+

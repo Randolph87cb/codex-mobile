@@ -368,21 +368,18 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       });
     }
 
-    const session = store.create({
-      ...parsed.data,
-      cwd: validatedCwd.cwd ?? parsed.data.cwd,
-    });
     try {
-      await runner.initializeSession(session.id);
+      const session = await runner.createSession({
+        ...parsed.data,
+        cwd: validatedCwd.cwd ?? parsed.data.cwd,
+      });
+      return reply.status(201).send(session);
     } catch (error) {
-      store.delete(session.id);
       return reply.status(502).send({
         error: "session-initialize-failed",
         message: error instanceof Error ? error.message : String(error),
       });
     }
-
-    return reply.status(201).send(store.get(session.id));
   });
 
   app.patch("/api/session/:id/config", async (request, reply) => {

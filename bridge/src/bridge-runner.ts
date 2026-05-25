@@ -1,6 +1,7 @@
 import type {
   AccountQuotaSnapshot,
   BridgeEvent,
+  CreateSessionInput,
   ResolvedSessionInput,
   SessionApprovalInput,
   SessionApprovalResult,
@@ -14,7 +15,7 @@ export type BridgeEventListener = (event: BridgeEvent) => void;
 
 export interface BridgeRunner {
   readonly mode: "mock" | "app-server";
-  initializeSession(sessionId: string): Promise<void>;
+  createSession(input: CreateSessionInput): Promise<SessionRecord>;
   submitInput(sessionId: string, input: ResolvedSessionInput): Promise<void>;
   approve(sessionId: string, input: SessionApprovalInput): Promise<SessionApprovalResult>;
   interrupt(sessionId: string): Promise<void>;

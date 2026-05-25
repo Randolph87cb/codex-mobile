@@ -6,8 +6,9 @@ export class SessionStore {
 
   create(input: CreateSessionInput): SessionRecord {
     const now = new Date().toISOString();
+    const threadId = `thread_${randomUUID()}`;
     return this.attach({
-      id: `sess_${randomUUID()}`,
+      id: threadId,
       cwd: input.cwd,
       model: input.model,
       approvalMode: input.approvalMode,
@@ -15,7 +16,7 @@ export class SessionStore {
       serviceTier: input.serviceTier,
       sandboxMode: input.sandboxMode,
       status: "idle",
-      threadId: null,
+      threadId,
       activeTurnId: null,
       lastError: null,
       createdAt: now,

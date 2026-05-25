@@ -23,6 +23,12 @@
 - 恢复归档后线程重新回到当前会话列表；
 - 历史 transcript、thread id、cwd 等底层信息保持原样。
 
+当前额外约定：
+
+- 对已 materialize 的正式线程，bridge API 暴露的 `id` 就是上游 `threadId`；
+- bridge 不再为正式线程额外包装另一层稳定 ID；
+- 草稿不属于 thread 体系，因此没有可归档的正式线程 ID。
+
 ## 当前 bridge 行为
 
 相关入口：
@@ -33,8 +39,8 @@
 
 当前实现约束：
 
-- `archived=false` 时，bridge 仍会把本地 `SessionStore` 中尚未出现在 `thread/list` 的会话补进列表；
-- 但会额外排除已经出现在 archived thread 集合里的 `threadId`，避免已归档线程被本地残留 attach 记录错误混回当前列表；
+- `archived=false` 时，bridge 仍可能把本地 `SessionStore` 中尚未出现在 `thread/list` 的正式线程补进列表；
+- 但会额外排除已经出现在 archived thread 集合里的 `id/threadId`，避免已归档线程被本地残留 attach 记录错误混回当前列表；
 - `archived=true` 时，只返回已归档线程视图，不再混入本地草稿或未 materialize 会话。
 
 ## 当前 Android 行为
@@ -88,7 +94,7 @@
 
 ### 不要把本地草稿塞进归档流
 
-草稿在线程真正创建前没有稳定 `threadId`，当前实现不支持归档。
+草稿在线程真正创建前不属于正式 thread，当前实现不支持归档。
 
 ### 不要让 archived thread 回流到当前列表
 
