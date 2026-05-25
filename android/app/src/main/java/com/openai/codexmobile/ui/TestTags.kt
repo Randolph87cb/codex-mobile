@@ -37,6 +37,7 @@ object TestTags {
     const val SessionDetailPendingImageErrorPrefix = "session_detail_pending_image_error_"
     const val SessionDetailClearImageButton = "session_detail_clear_image_button"
     const val SessionDetailSendButton = "session_detail_send_button"
+    const val SessionDetailInterruptButton = "session_detail_interrupt_button"
     const val SessionDetailBackButton = "session_detail_back_button"
     const val SessionDetailStatusStrip = "session_detail_status_strip"
     const val SessionDetailStatusButton = "session_detail_status_button"

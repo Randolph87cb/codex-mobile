@@ -101,6 +101,7 @@ data class DraftSessionUiState(
 data class SessionRealtimeUiState(
     val isActive: Boolean = false,
     val isConnected: Boolean = false,
+    val isInterrupting: Boolean = false,
     val connectionText: String = "未连接实时流",
     val statusText: String = "等待会话详情",
     val lastEventText: String? = null,
@@ -990,6 +991,51 @@ class AppViewModel(
         }
     }
 
+    fun interruptSelectedSession() {
+        val detail = uiState.value.selectedSession
+        if (!canInterruptSession(detail, uiState.value.sessionRealtimeState)) {
+            _uiState.update { it.copy(message = "当前没有可中断的任务。") }
+            return
+        }
+
+        val sessionId = detail?.id ?: return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    sessionRealtimeState = it.sessionRealtimeState.copy(
+                        isInterrupting = true,
+                        lastEventText = "正在请求中断当前任务。",
+                    ),
+                    message = null,
+                )
+            }
+            try {
+                appLogger.info("AppViewModel", "请求中断当前任务：sessionId=$sessionId")
+                bridgeApi.interruptSession(sessionId)
+                _uiState.update {
+                    it.copy(
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            isInterrupting = false,
+                            lastEventText = "已发送中断请求，等待会话停止。",
+                        ),
+                        message = "已发送中断请求。",
+                    )
+                }
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "请求中断当前任务失败：sessionId=$sessionId", error)
+                _uiState.update {
+                    it.copy(
+                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                            isInterrupting = false,
+                        ),
+                        message = error.message ?: "中断当前任务失败。",
+                    )
+                }
+            }
+            refreshDiagnosticsLog()
+        }
+    }
+
     fun submitApproval(decision: ApprovalDecision) {
         val detail = uiState.value.selectedSession ?: return
         val approval = uiState.value.sessionRealtimeState.pendingApproval ?: return
@@ -1442,6 +1488,7 @@ class AppViewModel(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             isActive = true,
                             isConnected = true,
+                            isInterrupting = false,
                             connectionText = "已连接实时流",
                             lastEventText = "已接入会话实时流。",
                             fallbackNotice = null,
@@ -1522,6 +1569,7 @@ class AppViewModel(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             isActive = true,
                             isConnected = true,
+                            isInterrupting = false,
                             connectionText = "已连接实时流",
                             statusText = localizedSessionStatus(nextDetail.status),
                             lastEventText = "会话实时流已就绪。",
@@ -1619,6 +1667,7 @@ class AppViewModel(
                         selectedSession = rendered.detail,
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("running"),
+                            isInterrupting = false,
                             lastEventText = "Codex 正在实时输出回复。",
                         ),
                     )
@@ -1650,6 +1699,7 @@ class AppViewModel(
                                 "failed" -> "本轮回复以错误结束。"
                                 else -> "本轮回复已结束。"
                             },
+                            isInterrupting = false,
                             fallbackNotice = event.errorMessage,
                         ),
                         message = event.errorMessage,
@@ -1699,6 +1749,11 @@ class AppViewModel(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus(normalizedStatus),
                             lastEventText = statusEventText(normalizedStatus),
+                            isInterrupting = if (normalizedStatus == "running" || normalizedStatus == "awaiting_approval") {
+                                it.sessionRealtimeState.isInterrupting
+                            } else {
+                                false
+                            },
                             fallbackNotice = if (normalizedStatus == "awaiting_approval") {
                                 it.sessionRealtimeState.fallbackNotice
                             } else {
@@ -1731,6 +1786,7 @@ class AppViewModel(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             statusText = localizedSessionStatus("idle"),
                             lastEventText = "当前任务已中断。",
+                            isInterrupting = false,
                             fallbackNotice = null,
                             pendingApproval = null,
                         ),
@@ -2396,6 +2452,7 @@ class AppViewModel(
                 queuedInputs = queuedInputsFor(detail.id),
                 sessionRealtimeState = it.sessionRealtimeState.copy(
                     statusText = localizedSessionStatus("running"),
+                    isInterrupting = false,
                     lastEventText = if (fromQueue) {
                         "已发送一条排队消息，等待 Codex 回复。"
                     } else if (pendingImageAttachments.isNotEmpty()) {
@@ -2453,6 +2510,18 @@ class AppViewModel(
         realtimeState: SessionRealtimeUiState,
     ): Boolean {
         if (detail.status == "draft") {
+            return false
+        }
+        return realtimeState.pendingApproval != null ||
+            detail.status == "awaiting_approval" ||
+            detail.status == "running"
+    }
+
+    private fun canInterruptSession(
+        detail: SessionDetail?,
+        realtimeState: SessionRealtimeUiState,
+    ): Boolean {
+        if (detail == null || detail.status == "draft") {
             return false
         }
         return realtimeState.pendingApproval != null ||

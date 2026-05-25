@@ -110,6 +110,7 @@ interface BridgeApi {
     suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult
     suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment
     suspend fun sendInput(sessionId: String, request: SendInputRequest)
+    suspend fun interruptSession(sessionId: String)
     suspend fun approveSession(
         sessionId: String,
         requestId: BridgeRequestId?,

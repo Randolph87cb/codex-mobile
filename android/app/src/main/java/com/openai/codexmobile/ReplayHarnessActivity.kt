@@ -217,6 +217,8 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
 
     override suspend fun sendInput(sessionId: String, request: SendInputRequest) = Unit
 
+    override suspend fun interruptSession(sessionId: String) = Unit
+
     override suspend fun approveSession(
         sessionId: String,
         requestId: BridgeRequestId?,

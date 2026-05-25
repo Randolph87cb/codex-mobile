@@ -219,6 +219,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                 SessionDetailScreen(
                     sessionDetail = uiState.selectedSession,
                     draftSession = null,
+                    connectionState = uiState.connectionState,
                     sessionRealtimeState = uiState.sessionRealtimeState,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
@@ -231,6 +232,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onRemovePendingImageAttachment = appViewModel::removePendingImageAttachment,
                     onRetryPendingImageAttachment = appViewModel::retryPendingImageAttachment,
                     onSend = appViewModel::sendInput,
+                    onInterrupt = appViewModel::interruptSelectedSession,
                     onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
                     onUpdateModel = appViewModel::updateSelectedSessionModel,

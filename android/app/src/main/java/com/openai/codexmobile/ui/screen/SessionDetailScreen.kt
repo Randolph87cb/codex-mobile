@@ -116,6 +116,7 @@ import com.openai.codexmobile.PendingImageUploadState
 import com.openai.codexmobile.PendingApprovalUiState
 import com.openai.codexmobile.SessionRealtimeUiState
 import com.openai.codexmobile.data.ApprovalDecision
+import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.ui.TestTags
 import com.openai.codexmobile.ui.screen.copyText
@@ -189,6 +190,7 @@ private val MessageMenuContent = Color(0xFFF0F1F2)
 fun SessionDetailScreen(
     sessionDetail: SessionDetail?,
     draftSession: DraftSessionUiState?,
+    connectionState: BridgeConnectionState,
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     draftMessage: String,
@@ -201,6 +203,7 @@ fun SessionDetailScreen(
     onRemovePendingImageAttachment: (String) -> Unit,
     onRetryPendingImageAttachment: (String) -> Unit,
     onSend: () -> Unit,
+    onInterrupt: () -> Unit,
     onApprovalDecision: (ApprovalDecision) -> Unit,
     onUpdateCwd: (String) -> Unit,
     onUpdateModel: (String) -> Unit,
@@ -400,6 +403,7 @@ fun SessionDetailScreen(
         ) {
             StatusStrip(
                 detail = detail,
+                connectionState = connectionState,
                 sessionRealtimeState = sessionRealtimeState,
                 queuedInputs = queuedInputs,
                 isDraft = draftSession != null,
@@ -478,11 +482,14 @@ fun SessionDetailScreen(
                 isDraft = draftSession != null,
                 isLoading = isLoading,
                 canUseInput = detail != null,
+                showInterruptButton = draftSession == null && shouldShowInterruptButton(detail, sessionRealtimeState),
+                isInterrupting = sessionRealtimeState.isInterrupting,
                 hasPendingUploadBlockers = hasPendingUploadBlockers,
                 hasPendingImages = pendingImageAttachments.isNotEmpty(),
                 onDraftMessageChange = onDraftMessageChange,
                 onPickImage = onPickImage,
                 onSend = onSend,
+                onInterrupt = onInterrupt,
             )
         }
     }
@@ -515,12 +522,19 @@ private fun DetailInputDock(
     isDraft: Boolean,
     isLoading: Boolean,
     canUseInput: Boolean,
+    showInterruptButton: Boolean,
+    isInterrupting: Boolean,
     hasPendingUploadBlockers: Boolean,
     hasPendingImages: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
     onSend: () -> Unit,
+    onInterrupt: () -> Unit,
 ) {
+    val sendEnabled = !isLoading &&
+        canUseInput &&
+        (draftMessage.isNotBlank() || hasPendingImages) &&
+        !hasPendingUploadBlockers
     Surface(
         shape = RoundedCornerShape(28.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
@@ -569,29 +583,53 @@ private fun DetailInputDock(
                 maxLines = 3,
                 textStyle = MaterialTheme.typography.bodyMedium,
             )
-            Button(
-                onClick = onSend,
-                enabled = !isLoading &&
-                    canUseInput &&
-                    (draftMessage.isNotBlank() || hasPendingImages) &&
-                    !hasPendingUploadBlockers,
-                modifier = Modifier
-                    .size(46.dp)
-                    .testTag(TestTags.SessionDetailSendButton),
-                shape = CircleShape,
-                contentPadding = PaddingValues(0.dp),
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = if (isDraft) "开始" else "发送",
-                        modifier = Modifier.size(19.dp),
-                    )
+                if (showInterruptButton) {
+                    FilledTonalIconButton(
+                        onClick = onInterrupt,
+                        enabled = canUseInput && !isInterrupting,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag(TestTags.SessionDetailInterruptButton),
+                    ) {
+                        if (isInterrupting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.StopCircle,
+                                contentDescription = "中断当前轮",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+                Button(
+                    onClick = onSend,
+                    enabled = sendEnabled,
+                    modifier = Modifier
+                        .size(46.dp)
+                        .testTag(TestTags.SessionDetailSendButton),
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = if (isDraft) "开始" else "发送",
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
                 }
             }
         }
@@ -937,23 +975,32 @@ private fun DetailTopAppBar(
 @Composable
 private fun StatusStrip(
     detail: SessionDetail?,
+    connectionState: BridgeConnectionState,
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     isDraft: Boolean,
     onShowQueued: () -> Unit,
     onShowGoal: () -> Unit,
 ) {
-    val connectionIcon = if (sessionRealtimeState.isConnected) {
-        Icons.Filled.Sensors
+    val bridgeConnected = connectionState is BridgeConnectionState.Connected
+    val bridgeStatusIcon = if (bridgeConnected) {
+        Icons.Filled.CloudDone
     } else {
         Icons.Filled.CloudOff
     }
-    val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.MarkChatUnread else Icons.Filled.MarkChatUnread
-    val connectionStatusText = when {
+    val syncStatusIcon = when {
+        isDraft -> Icons.Filled.CloudOff
+        sessionRealtimeState.isConnected -> Icons.Filled.Sensors
+        else -> Icons.Filled.CloudDone
+    }
+    val syncStatusText = when {
         isDraft -> "未创建"
         sessionRealtimeState.isConnected -> "实时流"
         else -> "快照"
     }
+    val sessionStatus = detail?.status ?: if (isDraft) "draft" else "idle"
+    val sessionStatusText = localizedStatusLabel(sessionStatus)
+    val queueIcon = Icons.Filled.MarkChatUnread
     val queueStatusText = if (queuedInputs.isEmpty()) "无排队" else "${queuedInputs.size} 条"
     val goalStatusText = when {
         isDraft -> "待开始"
@@ -971,40 +1018,71 @@ private fun StatusStrip(
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SessionStatusMetric(
-                label = "连接状态",
-                value = connectionStatusText,
-                icon = connectionIcon,
-                iconTint = if (sessionRealtimeState.isConnected) Color(0xFF16A34A) else MaterialTheme.colorScheme.error,
-                modifier = Modifier.weight(1f),
-            )
-            StatusMetricDivider()
-            SessionStatusMetric(
-                label = "排队消息",
-                value = queueStatusText,
-                icon = queueIcon,
-                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onShowQueued() },
-            )
-            StatusMetricDivider()
-            SessionStatusMetric(
-                label = "目标状态",
-                value = goalStatusText,
-                icon = Icons.Filled.PendingActions,
-                iconTint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onShowGoal() },
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                SessionStatusMetric(
+                    label = "bridge 状态",
+                    value = if (bridgeConnected) "已连接" else "未连接",
+                    icon = bridgeStatusIcon,
+                    iconTint = if (bridgeConnected) Color(0xFF16A34A) else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+                StatusMetricDivider()
+                SessionStatusMetric(
+                    label = "同步方式",
+                    value = syncStatusText,
+                    icon = syncStatusIcon,
+                    iconTint = if (sessionRealtimeState.isConnected) {
+                        Color(0xFF16A34A)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                StatusMetricDivider()
+                SessionStatusMetric(
+                    label = "会话状态",
+                    value = sessionStatusText,
+                    icon = sessionStatusIcon(sessionStatus),
+                    iconTint = sessionStatusTint(sessionStatus),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                SessionStatusMetric(
+                    label = "排队消息",
+                    value = queueStatusText,
+                    icon = queueIcon,
+                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onShowQueued() },
+                )
+                StatusMetricDivider(height = 28.dp)
+                SessionStatusMetric(
+                    label = "目标状态",
+                    value = goalStatusText,
+                    icon = Icons.Filled.Flag,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onShowGoal() },
+                )
+            }
         }
     }
 }
@@ -1454,11 +1532,11 @@ private fun SessionStatusMetric(
 }
 
 @Composable
-private fun StatusMetricDivider() {
+private fun StatusMetricDivider(height: Dp = 30.dp) {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(30.dp)
+            .height(height)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
     )
 }
@@ -3186,6 +3264,37 @@ private fun localizedSandbox(mode: String): String {
         "read-only" -> "只读"
         "danger-full-access" -> "完全访问"
         else -> "工作区可写"
+    }
+}
+
+private fun shouldShowInterruptButton(
+    detail: SessionDetail?,
+    sessionRealtimeState: SessionRealtimeUiState,
+): Boolean {
+    if (detail == null || detail.status == "draft") {
+        return false
+    }
+    return sessionRealtimeState.pendingApproval != null ||
+        detail.status == "awaiting_approval" ||
+        detail.status == "running"
+}
+
+private fun sessionStatusIcon(status: String): ImageVector {
+    return when (status) {
+        "running" -> Icons.Filled.Bolt
+        "awaiting_approval" -> Icons.Filled.PendingActions
+        "error" -> Icons.Filled.Error
+        else -> Icons.Filled.Schedule
+    }
+}
+
+@Composable
+private fun sessionStatusTint(status: String): Color {
+    return when (status) {
+        "running" -> Color(0xFF2563EB)
+        "awaiting_approval" -> MaterialTheme.colorScheme.tertiary
+        "error" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 }
 

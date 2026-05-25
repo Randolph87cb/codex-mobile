@@ -297,6 +297,22 @@ class RealBridgeDataProvider(
         }
     }
 
+    override suspend fun interruptSession(sessionId: String) = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "请求中断当前任务：sessionId=$sessionId")
+        val response = request(
+            method = "POST",
+            url = "${requireBaseUrl()}/api/session/$sessionId/interrupt",
+            summary = "interrupt session, sessionId=$sessionId",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "中断当前任务失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+    }
+
     override suspend fun approveSession(
         sessionId: String,
         requestId: BridgeRequestId?,

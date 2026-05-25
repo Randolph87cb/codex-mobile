@@ -408,6 +408,27 @@ class AppViewModelTest {
     }
 
     @Test
+    fun interruptSelectedSessionCallsBridgeInterruptApi() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_interrupt", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_interrupt")
+        advanceUntilIdle()
+
+        viewModel.interruptSelectedSession()
+        advanceUntilIdle()
+
+        assertEquals(listOf("sess_interrupt"), bridgeApi.interruptedSessionIds)
+        assertEquals("已发送中断请求。", viewModel.uiState.value.message)
+        assertEquals(false, viewModel.uiState.value.sessionRealtimeState.isInterrupting)
+    }
+
+    @Test
     fun reopenAwaitingApprovalSessionRestoresAndAutoApprovesPendingRequest() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(
             id = "sess_restore_approval",
@@ -1496,6 +1517,7 @@ private class FakeBridgeApi(
     val sessionConfigUpdates = mutableListOf<SessionConfigUpdate>()
     val sessionGoalUpdates = mutableListOf<SessionGoalUpdateRequest>()
     val clearedSessionGoals = mutableListOf<String>()
+    val interruptedSessionIds = mutableListOf<String>()
     var updatedAuthToken: String = ""
     var authTokenAtConnect: String = ""
     var lastCreateSessionRequest: CreateSessionRequest? = null
@@ -1610,6 +1632,10 @@ private class FakeBridgeApi(
     override suspend fun sendInput(sessionId: String, request: SendInputRequest) {
         sendInputRequests += request
         request.text?.let { sentInputs += it }
+    }
+
+    override suspend fun interruptSession(sessionId: String) {
+        interruptedSessionIds += sessionId
     }
 
     override suspend fun approveSession(

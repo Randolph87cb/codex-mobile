@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionGoalSnapshot
 import com.openai.codexmobile.ui.screen.SessionDetailScreen
@@ -74,6 +75,7 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
                         landscapeImage = landscapeImage,
                     ),
                     draftSession = null,
+                    connectionState = BridgeConnectionState.Connected(endpoint = "http://10.0.2.2:8787"),
                     sessionRealtimeState = SessionRealtimeUiState(
                         isConnected = true,
                         connectionText = "Bridge 已连接",
@@ -127,6 +129,7 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
                     onRemovePendingImageAttachment = {},
                     onRetryPendingImageAttachment = {},
                     onSend = {},
+                    onInterrupt = {},
                     onApprovalDecision = {},
                     onUpdateCwd = {},
                     onUpdateModel = {},

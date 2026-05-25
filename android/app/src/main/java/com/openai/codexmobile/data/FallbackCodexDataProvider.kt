@@ -78,6 +78,10 @@ class FallbackCodexDataProvider(
         requireActiveProvider().sendInput(sessionId, request)
     }
 
+    override suspend fun interruptSession(sessionId: String) {
+        requireActiveProvider().interruptSession(sessionId)
+    }
+
     override suspend fun approveSession(
         sessionId: String,
         requestId: BridgeRequestId?,

@@ -134,6 +134,10 @@ class FakeCodexDataProvider : CodexDataProvider {
         delay(100)
     }
 
+    override suspend fun interruptSession(sessionId: String) {
+        delay(80)
+    }
+
     override suspend fun approveSession(
         sessionId: String,
         requestId: BridgeRequestId?,
