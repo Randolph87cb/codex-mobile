@@ -1,6 +1,8 @@
 package com.openai.codexmobile.ui.screen
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
@@ -63,6 +66,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -163,6 +167,7 @@ private val PendingAttachmentMetaTextStyle = TextStyle(
 private val SessionDetailPanelShape = RoundedCornerShape(16.dp)
 private val ConversationAvatarSize = 40.dp
 private val ConversationAvatarGap = 10.dp
+private val ConversationBubbleMaxWidth = 560.dp
 private val CodexAvatarContainer = Color(0xFF294761)
 private val CodexBubbleContainer = Color(0xFFEAF1F8)
 private val CodexBubbleBorder = Color(0xFFD5E0EA)
@@ -1889,12 +1894,15 @@ private fun TranscriptBubbleCard(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(ConversationAvatarGap),
         verticalAlignment = Alignment.Top,
     ) {
         if (!isUser) {
             ConversationSpeakerBadge(isUser = false)
+        } else {
+            Spacer(modifier = Modifier.size(ConversationAvatarSize))
         }
+
+        Spacer(modifier = Modifier.width(ConversationAvatarGap))
 
         Column(
             modifier = Modifier.weight(1f),
@@ -1925,12 +1933,17 @@ private fun TranscriptBubbleCard(
             )
         }
 
+        Spacer(modifier = Modifier.width(ConversationAvatarGap))
+
         if (isUser) {
             ConversationSpeakerBadge(isUser = true)
+        } else {
+            Spacer(modifier = Modifier.size(ConversationAvatarSize))
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TranscriptBubbleBodyCard(
     bubble: TranscriptBubble,
@@ -1948,8 +1961,23 @@ private fun TranscriptBubbleBodyCard(
     onOpenImagePreview: (String, String) -> Unit,
     onToggle: () -> Unit,
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var selectionMode by rememberSaveable(toggleTag) { mutableStateOf(false) }
+    val menuModifier = if (selectionMode) {
+        Modifier
+    } else {
+        Modifier.combinedClickable(
+            onClick = {},
+            onLongClick = { menuExpanded = true },
+        )
+    }
+
+    Box(
+        modifier = Modifier.widthIn(max = ConversationBubbleMaxWidth),
+        contentAlignment = if (isUser) Alignment.TopEnd else Alignment.TopStart,
+    ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = menuModifier,
         shape = transcriptBubbleShape(isUser),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, bubble.conversationBubbleBorder()),
@@ -1969,8 +1997,6 @@ private fun TranscriptBubbleBodyCard(
                     title = bubble.summaryLine,
                     expanded = expanded,
                     toggleTag = toggleTag,
-                    copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
-                    onCopy = { onCopyText(bubble.copyText) },
                     onToggle = onToggle,
                 )
 
@@ -1985,6 +2011,7 @@ private fun TranscriptBubbleBodyCard(
                         testTagPrefix = toggleTag,
                         onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
+                        fillTextWidth = false,
                     )
                 }
             }
@@ -1992,23 +2019,7 @@ private fun TranscriptBubbleBodyCard(
             Box(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             ) {
-                IconButton(
-                    onClick = { onCopyText(bubble.copyText) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(28.dp)
-                        .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.ContentCopy,
-                        contentDescription = "复制消息",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    )
-                }
-                Column(
-                    modifier = Modifier.padding(end = 30.dp),
-                ) {
+                Column {
                     TranscriptPartsColumn(
                         parts = bubble.parts,
                         sessionCwd = sessionCwd,
@@ -2019,9 +2030,31 @@ private fun TranscriptBubbleBodyCard(
                         testTagPrefix = toggleTag,
                         onCopyCode = onCopyCode,
                         onOpenImagePreview = onOpenImagePreview,
+                        fillTextWidth = false,
                     )
                 }
             }
+        }
+    }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("复制") },
+                onClick = {
+                    menuExpanded = false
+                    onCopyText(bubble.copyText)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("选择文本") },
+                onClick = {
+                    menuExpanded = false
+                    selectionMode = true
+                    onShowMessage("可拖选文本后复制。")
+                },
+            )
         }
     }
 }
@@ -2200,10 +2233,6 @@ private fun ExecutionProcessCard(
                     title = group.summaryLine,
                     expanded = expanded,
                     toggleTag = TestTags.SessionDetailExecutionGroupTogglePrefix + index,
-                    copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + "execution_group_" + index,
-                    onCopy = {
-                        onCopyText(group.activities.joinToString("\n\n") { it.copyText })
-                    },
                     onToggle = { expanded = !expanded },
                 )
 
@@ -2263,8 +2292,6 @@ private fun ExecutionActivityCard(
                 title = bubble.summaryLine,
                 expanded = expanded,
                 toggleTag = toggleTag,
-                copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
-                onCopy = { onCopyText(bubble.copyText) },
                 onToggle = { expanded = !expanded },
             )
 
@@ -2292,8 +2319,6 @@ private fun TranscriptToggleHeader(
     title: String,
     expanded: Boolean,
     toggleTag: String,
-    copyTag: String,
-    onCopy: () -> Unit,
     onToggle: () -> Unit,
 ) {
     Row(
@@ -2323,19 +2348,6 @@ private fun TranscriptToggleHeader(
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-            )
-        }
-        IconButton(
-            onClick = onCopy,
-            modifier = Modifier
-                .size(14.dp)
-                .testTag(copyTag),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.ContentCopy,
-                contentDescription = "复制消息",
-                modifier = Modifier.size(8.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
             )
         }
         Icon(
@@ -2411,6 +2423,7 @@ private fun TranscriptPartsColumn(
     testTagPrefix: String,
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
+    fillTextWidth: Boolean = true,
 ) {
     val bodyTextStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
     var index = 0
@@ -2425,6 +2438,7 @@ private fun TranscriptPartsColumn(
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
                     onFileDownloadRequest = onFileDownloadRequest,
+                    fillWidth = fillTextWidth,
                 )
                 index += 1
             }

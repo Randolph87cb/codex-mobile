@@ -404,3 +404,24 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装成功。
   - 模拟器截图确认头像、宽度和配色：
     - `.\.tmp\showcase-detail-avatar-bubble-v1.png`
+
+## 会话气泡宽度与长按复制菜单
+
+- 时间：2026-05-25
+- 目标：继续修正会话气泡布局，确保消息只位于左右头像之间；短消息按内容自然宽度显示；复制交互改为长按菜单，不再常驻复制按钮。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/TranscriptMarkdown.kt`
+- 改动内容：
+  - `TranscriptBubbleCard` 改为固定三栏：左头像槽、中间消息槽、右头像槽；无头像的一侧也保留 40dp 空槽，避免任一方向的消息侵占对方头像下方。
+  - 普通消息气泡移除 `fillMaxWidth()`，改为 `widthIn(max = ConversationBubbleMaxWidth)`，在最大宽度内按内容自然撑开。
+  - 移除普通消息和折叠消息头部常驻复制按钮。
+  - 气泡长按弹出菜单，包含“复制”和“选择文本”；“复制”复制整条消息，“选择文本”进入可拖选文本状态。
+  - `MarkdownTextBlock` 增加 `fillWidth` 参数，消息气泡内关闭强制填满宽度，其他使用场景保持默认填满。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装成功。
+  - 模拟器截图确认气泡位于两头像之间且长按菜单可用：
+    - `.\.tmp\showcase-detail-bubble-menu-width-v1.png`
+    - `.\.tmp\showcase-detail-bubble-menu-open-v1.png`

@@ -56,17 +56,19 @@ internal fun MarkdownTextBlock(
     sessionCwd: String? = null,
     onShowMessage: (String) -> Unit = {},
     onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit = {},
+    fillWidth: Boolean = true,
 ) {
     val blocks = remember(text) { parseMarkdownBlocks(text) }
+    val blockWidthModifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = if (fillWidth) modifier.fillMaxWidth() else modifier,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         blocks.forEach { block ->
             when (block) {
                 is MarkdownBlock.Heading -> MarkdownHeading(
                     block = block,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = blockWidthModifier,
                     bridgeEndpoint = bridgeEndpoint,
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
@@ -76,7 +78,7 @@ internal fun MarkdownTextBlock(
                 is MarkdownBlock.Paragraph -> MarkdownAnnotatedText(
                     text = block.text,
                     style = style,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = blockWidthModifier,
                     bridgeEndpoint = bridgeEndpoint,
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
@@ -86,7 +88,7 @@ internal fun MarkdownTextBlock(
                 is MarkdownBlock.Quote -> MarkdownQuote(
                     text = block.text,
                     style = style,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = blockWidthModifier,
                     bridgeEndpoint = bridgeEndpoint,
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
@@ -96,7 +98,7 @@ internal fun MarkdownTextBlock(
                 is MarkdownBlock.ListBlock -> MarkdownList(
                     block = block,
                     style = style,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = blockWidthModifier,
                     bridgeEndpoint = bridgeEndpoint,
                     sessionCwd = sessionCwd,
                     onShowMessage = onShowMessage,
