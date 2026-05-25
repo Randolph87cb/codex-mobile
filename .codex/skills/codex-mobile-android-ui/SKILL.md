@@ -7,7 +7,7 @@ description: Use when redesigning or polishing the Android UI in this repository
 
 ## Overview
 
-This skill guides UI work for `codex-mobile`, a lightweight Android client for the Windows bridge. Use it when updating the look and interaction density of the connection, session list, session detail, or settings screens without turning the app into a generic chat product.
+This skill guides UI work for `codex-mobile`, a lightweight Android client for the Windows bridge. Use it when updating the connection, session list, session detail, or settings screens while preserving the current bridge-driven product flow and repository constraints.
 
 ## Workflow
 
@@ -16,7 +16,10 @@ This skill guides UI work for `codex-mobile`, a lightweight Android client for t
    - Primary flows are connection, session list, session detail, sending input, and reading replies.
    - User-facing copy is Chinese by default.
    - If `android/` changes, run the project Android validation commands.
-2. Inspect the current UI surface before changing code:
+2. Read [references/DESIGN.md](references/DESIGN.md) before changing visual style:
+   - treat it as the source of truth for color, typography, spacing, shape, elevation, and component styling
+   - prefer aligning Compose tokens and component usage to `DESIGN.md` instead of restating visual rules in this skill
+3. Inspect the current UI surface before changing code:
    - `ui/CodexMobileApp.kt`
    - `ui/screen/ConnectionScreen.kt`
    - `ui/screen/SessionListScreen.kt`
@@ -24,27 +27,21 @@ This skill guides UI work for `codex-mobile`, a lightweight Android client for t
    - `ui/screen/SettingsScreen.kt`
    - `ui/theme/`
    - `ui/TestTags.kt`
-3. Decide the scope before editing:
+4. Decide the scope before editing:
    - Visual pass only: theme, spacing, card hierarchy, iconography, button emphasis.
    - Structural pass: rearrange sections inside a screen, but keep the same data flow and navigation contract.
    - Avoid protocol or repository changes unless the task explicitly calls for them.
-4. Start with theme and tokens, then update screens in this order:
+5. Start with theme and tokens from `DESIGN.md`, then update screens in this order:
    - Connection
    - Session list
    - Session detail
    - Settings
-5. Keep secondary actions lighter and more icon-forward, but keep critical actions textual.
-6. After edits, run Android validation and record what changed.
+6. Apply repository-specific UI rules from [references/ui-rules.md](references/ui-rules.md) for action affordances, page priorities, and Compose safety boundaries.
+7. After edits, run Android validation and record what changed.
 
 ## UI Rules
 
 - Treat the product as a control console, not a social chat app.
-- Prefer:
-  - clear section hierarchy
-  - compact status presentation
-  - restrained color accents
-  - rounded cards with light tonal separation
-  - icon-first secondary actions when intent is obvious
 - Avoid:
   - heavy blur, glassmorphism, or complex custom drawing
   - large always-on animations
@@ -79,14 +76,8 @@ This skill guides UI work for `codex-mobile`, a lightweight Android client for t
 
 - Prefer Material 3 components already in Compose before inventing custom primitives.
 - Theme work should usually happen before per-screen polish.
-- Secondary text buttons are good candidates for icon buttons when the content description can carry the meaning:
-  - settings
-  - refresh
-  - attach image
-  - expand/collapse
-  - copy
 - If the app bar and the screen body both expose the same action, simplify one of them.
-- Use [references/ui-rules.md](references/ui-rules.md) for icon substitution and screen-specific direction.
+- Use `DESIGN.md` for visual tokens and [references/ui-rules.md](references/ui-rules.md) for project-specific constraints.
 
 ## Validation
 
@@ -101,7 +92,10 @@ This skill guides UI work for `codex-mobile`, a lightweight Android client for t
 
 ## References
 
+- Read [references/DESIGN.md](references/DESIGN.md) for:
+  - color, typography, spacing, shape, elevation, and component styling
+  - the intended brand tone and density for the UI
 - Read [references/ui-rules.md](references/ui-rules.md) when deciding:
   - which buttons can become icons
   - how to prioritize each screen
-  - which visual moves are safe for this app
+  - which implementation moves are safe for this app

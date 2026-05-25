@@ -45,3 +45,29 @@
 - 建议：
   - 保留 `codex-mobile-android-ui` skill，但把视觉规范主来源切到根目录 `DESIGN.md`。
   - 将 `references/ui-rules.md` 收缩为“仓库特有补充规则”，避免和 `DESIGN.md` 重复维护。
+
+## skill 合并落地
+
+- 时间：2026-05-25
+- 目标：按用户要求把视觉规范放入 skill 目录中作为参考，并删除 skill 内与设计规范重复的视觉描述。
+
+## 实际改动
+
+- 新增：
+  - `.codex/skills/codex-mobile-android-ui/references/DESIGN.md`
+- 修改：
+  - `.codex/skills/codex-mobile-android-ui/SKILL.md`
+  - `.codex/skills/codex-mobile-android-ui/references/ui-rules.md`
+- 具体处理：
+  - 将根目录 `DESIGN.md` 复制到 skill 的 `references/` 目录，作为 skill 内可直接引用的视觉规范文件。
+  - 在 `SKILL.md` 中明确 `references/DESIGN.md` 是颜色、字体、间距、圆角、层级和组件样式的主来源。
+  - 精简 `SKILL.md` 中重复的视觉方向描述，仅保留仓库约束、页面优先级、验证要求和执行边界。
+  - 将 `ui-rules.md` 收缩为仓库特有补充规则，只保留页面顺序、图标替换边界、Compose 安全约束和页面职责提示。
+  - 根目录 `DESIGN.md` 未删除，避免影响用户当前手工维护或后续比对；当前存在一份副本，需要后续自行决定是否只保留 skill 内版本。
+
+## 验证
+
+- 已执行：
+  - `python "C:\Users\Administrator\.codex\skills\.system\skill-creator\scripts\quick_validate.py" ".\.codex\skills\codex-mobile-android-ui"`
+- 结果：
+  - `Skill is valid!`

@@ -1,5 +1,7 @@
 # Codex Mobile Android UI Rules
 
+This file only keeps repository-specific execution rules. Use `references/DESIGN.md` as the visual source of truth.
+
 ## Screen Order
 
 Use this order when touching multiple screens:
@@ -13,15 +15,6 @@ Reason:
 
 - The first three screens are the main product loop.
 - Settings should support that loop, not dominate it.
-
-## Visual Direction
-
-- Background: warm light neutral in light mode, deep slate in dark mode.
-- Primary accent: slate blue.
-- Secondary accent: muted coral, used sparingly.
-- Cards: soft tonal separation instead of heavy shadows.
-- Corners: rounded, but not bubbly.
-- Typography: compact and readable; no oversized social-style chat headers.
 
 ## Safe Icon Replacements
 
