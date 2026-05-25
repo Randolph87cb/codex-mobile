@@ -385,3 +385,22 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装成功。
   - 模拟器截图确认 Codex 徽标和消息气泡均为浅色：
     - `.\.tmp\showcase-detail-bubble-fix-v1.png`
+
+## 会话消息头像与气泡布局调整
+
+- 时间：2026-05-25
+- 目标：按参考图调整会话详情消息布局和配色，头像更大，气泡不与头像重叠，并让消息占满头像之外的剩余宽度。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 改动内容：
+  - `TranscriptBubbleCard` 从原来的外层百分比宽度 Column 改为固定头像槽 + `weight(1f)` 消息内容槽。
+  - 移除消息气泡的 `bubbleWidthFraction` 双重缩放，普通消息气泡改为在内容槽内 `fillMaxWidth()`。
+  - 头像从 24dp 调整为 40dp；Codex 使用深蓝头像和 `>_` 标识，用户使用深红头像和“你”标识。
+  - Codex 气泡改为浅蓝，用户气泡改为浅红，分别配置对应浅色边框。
+  - 折叠消息和消息标签沿用同一套浅色气泡 token，避免深色残留。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装成功。
+  - 模拟器截图确认头像、宽度和配色：
+    - `.\.tmp\showcase-detail-avatar-bubble-v1.png`

@@ -161,8 +161,15 @@ private val PendingAttachmentMetaTextStyle = TextStyle(
     lineHeight = 10.sp,
 )
 private val SessionDetailPanelShape = RoundedCornerShape(16.dp)
-private val UserBubbleContainer = Color(0xFFEAF2FF)
-private val AssistantBubbleContainer = Color(0xFFFFFFFF)
+private val ConversationAvatarSize = 40.dp
+private val ConversationAvatarGap = 10.dp
+private val CodexAvatarContainer = Color(0xFF294761)
+private val CodexBubbleContainer = Color(0xFFEAF1F8)
+private val CodexBubbleBorder = Color(0xFFD5E0EA)
+private val UserAvatarContainer = Color(0xFFD94F4F)
+private val UserBubbleContainer = Color(0xFFFFEEEE)
+private val UserBubbleBorder = Color(0xFFF2C9C9)
+private val AssistantBubbleContainer = CodexBubbleContainer
 private val SystemBubbleContainer = Color(0xFFF5F7FA)
 private val ToolBubbleContainer = Color(0xFFF1F6F3)
 private val TranscriptBubbleBorder = Color(0xFFD9E1EA)
@@ -1874,145 +1881,145 @@ private fun TranscriptBubbleCard(
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxWidth()) {
-        val isUser = bubble.speaker == TranscriptSpeaker.User
-        val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.78f else 0.88f
-        var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
-            mutableStateOf(bubble.prefersExpandedByDefault)
-        }
-        val backgroundColor = when (bubble.speaker) {
-            TranscriptSpeaker.User -> UserBubbleContainer
-            TranscriptSpeaker.Assistant -> AssistantBubbleContainer
-            TranscriptSpeaker.System -> when (bubble.kind) {
-                TranscriptBubbleKind.ToolRequest -> ToolBubbleContainer
-                TranscriptBubbleKind.ToolResult -> ToolBubbleContainer
-                TranscriptBubbleKind.Status,
-                TranscriptBubbleKind.Message,
-                -> SystemBubbleContainer
-            }
-        }
-        val contentColor = when (bubble.speaker) {
-            TranscriptSpeaker.User,
-            TranscriptSpeaker.Assistant,
-            TranscriptSpeaker.System,
-            -> MaterialTheme.colorScheme.onSurface
-        }
-        Column(
-            modifier = Modifier
-                .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
-                .fillMaxWidth(bubbleWidthFraction),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
-        ) {
-            if (isCollapsible) {
-                Card(
-                    shape = RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isUser) 16.dp else 4.dp,
-                        bottomEnd = if (isUser) 4.dp else 16.dp,
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = BorderStroke(1.dp, TranscriptBubbleBorder),
-                    colors = CardDefaults.cardColors(
-                        containerColor = backgroundColor,
-                        contentColor = contentColor,
-                    ),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        TranscriptToggleHeader(
-                            bubble = bubble,
-                            label = bubble.label,
-                            title = bubble.summaryLine,
-                            expanded = expanded,
-                            toggleTag = toggleTag,
-                            copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
-                            onCopy = { onCopyText(bubble.copyText) },
-                            onToggle = { expanded = !expanded },
-                        )
+    val isUser = bubble.speaker == TranscriptSpeaker.User
+    val isCollapsible = !bubble.prefersExpandedByDefault
+    var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
+        mutableStateOf(bubble.prefersExpandedByDefault)
+    }
 
-                        if (expanded) {
-                            TranscriptPartsColumn(
-                                parts = bubble.parts,
-                                sessionCwd = sessionCwd,
-                                bridgeEndpoint = bridgeEndpoint,
-                                bridgeAuthToken = bridgeAuthToken,
-                                onShowMessage = onShowMessage,
-                                onFileDownloadRequest = onFileDownloadRequest,
-                                testTagPrefix = toggleTag,
-                                onCopyCode = onCopyCode,
-                                onOpenImagePreview = onOpenImagePreview,
-                            )
-                        }
-                    }
-                }
-            } else {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(0.dp),
-                ) {
-                    ConversationSpeakerHeader(
-                        bubble = bubble,
-                        isUser = isUser,
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(ConversationAvatarGap),
+        verticalAlignment = Alignment.Top,
+    ) {
+        if (!isUser) {
+            ConversationSpeakerBadge(isUser = false)
+        }
+
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (!isCollapsible) {
+                ConversationSpeakerHeader(
+                    bubble = bubble,
+                    isUser = isUser,
+                )
+            }
+            TranscriptBubbleBodyCard(
+                bubble = bubble,
+                isUser = isUser,
+                isCollapsible = isCollapsible,
+                expanded = expanded,
+                toggleTag = toggleTag,
+                sessionCwd = sessionCwd,
+                bridgeEndpoint = bridgeEndpoint,
+                bridgeAuthToken = bridgeAuthToken,
+                onShowMessage = onShowMessage,
+                onFileDownloadRequest = onFileDownloadRequest,
+                onCopyText = onCopyText,
+                onCopyCode = onCopyCode,
+                onOpenImagePreview = onOpenImagePreview,
+                onToggle = { expanded = !expanded },
+            )
+        }
+
+        if (isUser) {
+            ConversationSpeakerBadge(isUser = true)
+        }
+    }
+}
+
+@Composable
+private fun TranscriptBubbleBodyCard(
+    bubble: TranscriptBubble,
+    isUser: Boolean,
+    isCollapsible: Boolean,
+    expanded: Boolean,
+    toggleTag: String,
+    sessionCwd: String?,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
+    onCopyText: (String) -> Unit,
+    onCopyCode: (String) -> Unit,
+    onOpenImagePreview: (String, String) -> Unit,
+    onToggle: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = transcriptBubbleShape(isUser),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, bubble.conversationBubbleBorder()),
+        colors = CardDefaults.cardColors(
+            containerColor = bubble.conversationBubbleContainer(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    ) {
+        if (isCollapsible) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                TranscriptToggleHeader(
+                    bubble = bubble,
+                    label = bubble.label,
+                    title = bubble.summaryLine,
+                    expanded = expanded,
+                    toggleTag = toggleTag,
+                    copyTag = TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag,
+                    onCopy = { onCopyText(bubble.copyText) },
+                    onToggle = onToggle,
+                )
+
+                if (expanded) {
+                    TranscriptPartsColumn(
+                        parts = bubble.parts,
+                        sessionCwd = sessionCwd,
+                        bridgeEndpoint = bridgeEndpoint,
+                        bridgeAuthToken = bridgeAuthToken,
+                        onShowMessage = onShowMessage,
+                        onFileDownloadRequest = onFileDownloadRequest,
+                        testTagPrefix = toggleTag,
+                        onCopyCode = onCopyCode,
+                        onOpenImagePreview = onOpenImagePreview,
                     )
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth(bubbleWidthFraction)
-                            .padding(
-                                start = if (isUser) 0.dp else 10.dp,
-                                end = if (isUser) 10.dp else 0.dp,
-                            ),
-                        shape = RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp,
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        border = BorderStroke(1.dp, TranscriptBubbleBorder),
-                        colors = CardDefaults.cardColors(
-                            containerColor = backgroundColor,
-                            contentColor = contentColor,
-                        ),
-                    ) {
-                        Box(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        ) {
-                            IconButton(
-                                onClick = { onCopyText(bubble.copyText) },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(28.dp)
-                                    .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.ContentCopy,
-                                    contentDescription = "复制消息",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                                )
-                            }
-                            Column(
-                                modifier = Modifier.padding(end = 30.dp),
-                            ) {
-                                TranscriptPartsColumn(
-                                    parts = bubble.parts,
-                                    sessionCwd = sessionCwd,
-                                    bridgeEndpoint = bridgeEndpoint,
-                                    bridgeAuthToken = bridgeAuthToken,
-                                    onShowMessage = onShowMessage,
-                                    onFileDownloadRequest = onFileDownloadRequest,
-                                    testTagPrefix = toggleTag,
-                                    onCopyCode = onCopyCode,
-                                    onOpenImagePreview = onOpenImagePreview,
-                                )
-                            }
-                        }
-                    }
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                IconButton(
+                    onClick = { onCopyText(bubble.copyText) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(28.dp)
+                        .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ContentCopy,
+                        contentDescription = "复制消息",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    )
+                }
+                Column(
+                    modifier = Modifier.padding(end = 30.dp),
+                ) {
+                    TranscriptPartsColumn(
+                        parts = bubble.parts,
+                        sessionCwd = sessionCwd,
+                        bridgeEndpoint = bridgeEndpoint,
+                        bridgeAuthToken = bridgeAuthToken,
+                        onShowMessage = onShowMessage,
+                        onFileDownloadRequest = onFileDownloadRequest,
+                        testTagPrefix = toggleTag,
+                        onCopyCode = onCopyCode,
+                        onOpenImagePreview = onOpenImagePreview,
+                    )
                 }
             }
         }
@@ -2025,55 +2032,77 @@ private fun ConversationSpeakerHeader(
     isUser: Boolean,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
     ) {
-        if (!isUser) {
-            ConversationSpeakerBadge(isUser = false)
-            Text(
-                text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Text(
-                text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ConversationSpeakerBadge(isUser = true)
+        Text(
+            text = bubble.label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun transcriptBubbleShape(isUser: Boolean): RoundedCornerShape {
+    return RoundedCornerShape(
+        topStart = 16.dp,
+        topEnd = 16.dp,
+        bottomStart = if (isUser) 16.dp else 4.dp,
+        bottomEnd = if (isUser) 4.dp else 16.dp,
+    )
+}
+
+@Composable
+private fun TranscriptBubble.conversationBubbleContainer(): Color {
+    return when (speaker) {
+        TranscriptSpeaker.User -> UserBubbleContainer
+        TranscriptSpeaker.Assistant -> AssistantBubbleContainer
+        TranscriptSpeaker.System -> when (kind) {
+            TranscriptBubbleKind.ToolRequest -> ToolBubbleContainer
+            TranscriptBubbleKind.ToolResult -> ToolBubbleContainer
+            TranscriptBubbleKind.Status,
+            TranscriptBubbleKind.Message,
+            -> SystemBubbleContainer
         }
     }
 }
 
 @Composable
+private fun TranscriptBubble.conversationBubbleBorder(): Color {
+    return when (speaker) {
+        TranscriptSpeaker.User -> UserBubbleBorder
+        TranscriptSpeaker.Assistant -> CodexBubbleBorder
+        TranscriptSpeaker.System -> TranscriptBubbleBorder
+    }
+}
+
+@Composable
 private fun ConversationSpeakerBadge(isUser: Boolean) {
-    val badgeContainerColor = if (isUser) UserBubbleContainer else SystemBubbleContainer
-    val badgeContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val badgeContainerColor = if (isUser) UserAvatarContainer else CodexAvatarContainer
+    val badgeContentColor = Color.White
     Surface(
         shape = CircleShape,
         color = badgeContainerColor,
         contentColor = badgeContentColor,
-        border = BorderStroke(1.dp, TranscriptBubbleBorder),
-        modifier = Modifier.size(24.dp),
+        modifier = Modifier.size(ConversationAvatarSize),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(
-                            color = badgeContentColor.copy(alpha = 0.78f),
-                            shape = CircleShape,
-                        ),
+                Text(
+                    text = "你",
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 15.sp, lineHeight = 18.sp),
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = badgeContentColor,
                 )
             } else {
                 Text(
-                    text = ">",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = ">_",
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 15.sp, lineHeight = 18.sp),
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     color = badgeContentColor,
                 )
             }
@@ -3026,7 +3055,7 @@ private fun TranscriptBubble.headerIcon(): ImageVector {
 @Composable
 private fun TranscriptBubble.headerContainerColor() = when (speaker) {
     TranscriptSpeaker.User -> UserBubbleContainer
-    TranscriptSpeaker.Assistant -> SystemBubbleContainer
+    TranscriptSpeaker.Assistant -> AssistantBubbleContainer
     TranscriptSpeaker.System -> when (kind) {
         TranscriptBubbleKind.ToolRequest -> ToolBubbleContainer
         TranscriptBubbleKind.ToolResult -> ToolBubbleContainer
