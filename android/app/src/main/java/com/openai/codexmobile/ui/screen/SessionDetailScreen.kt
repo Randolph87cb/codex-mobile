@@ -2352,6 +2352,17 @@ private fun ConversationSpeakerHeader(
     bubble: TranscriptBubble,
     isUser: Boolean,
 ) {
+    ConversationSpeakerHeaderText(
+        label = bubble.label,
+        isUser = isUser,
+    )
+}
+
+@Composable
+private fun ConversationSpeakerHeaderText(
+    label: String,
+    isUser: Boolean,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2360,7 +2371,7 @@ private fun ConversationSpeakerHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = bubble.label,
+            text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2497,17 +2508,65 @@ private fun ExecutionProcessCard(
     onCopyCode: (String) -> Unit,
     onOpenImagePreview: (String, String) -> Unit,
 ) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        ConversationSpeakerBadge(isUser = false)
+        Spacer(modifier = Modifier.width(ConversationAvatarGap))
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            ConversationSpeakerHeaderText(
+                label = "Codex",
+                isUser = false,
+            )
+            ExecutionProcessBubbleCard(
+                index = index,
+                group = group,
+                sessionCwd = sessionCwd,
+                bridgeEndpoint = bridgeEndpoint,
+                bridgeAuthToken = bridgeAuthToken,
+                onShowMessage = onShowMessage,
+                onFileDownloadRequest = onFileDownloadRequest,
+                onCopyText = onCopyText,
+                onCopyCode = onCopyCode,
+                onOpenImagePreview = onOpenImagePreview,
+            )
+        }
+        Spacer(modifier = Modifier.width(ConversationAvatarGap))
+        Spacer(modifier = Modifier.size(ConversationAvatarSize))
+    }
+}
+
+@Composable
+private fun ExecutionProcessBubbleCard(
+    index: Int,
+    group: TranscriptDisplayItem.ExecutionGroup,
+    sessionCwd: String?,
+    bridgeEndpoint: String,
+    bridgeAuthToken: String,
+    onShowMessage: (String) -> Unit,
+    onFileDownloadRequest: (TranscriptFileDownloadRequest) -> Unit,
+    onCopyText: (String) -> Unit,
+    onCopyCode: (String) -> Unit,
+    onOpenImagePreview: (String, String) -> Unit,
+) {
     var expanded by rememberSaveable(index, group.summaryLine) { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .widthIn(max = ConversationBubbleMaxWidth),
+        contentAlignment = Alignment.TopStart,
+    ) {
         Card(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxWidth(0.67f),
+            modifier = Modifier.align(Alignment.CenterStart),
             shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, TranscriptBubbleBorder),
+            border = BorderStroke(1.dp, CodexBubbleBorder),
             colors = CardDefaults.cardColors(
-                containerColor = SystemBubbleContainer,
+                containerColor = CodexBubbleContainer,
                 contentColor = MaterialTheme.colorScheme.onSurface,
             ),
         ) {

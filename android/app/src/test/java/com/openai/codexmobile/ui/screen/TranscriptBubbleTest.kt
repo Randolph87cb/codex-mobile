@@ -155,7 +155,7 @@ class TranscriptBubbleTest {
             系统：命令执行
             命令：npm test
 
-            系统：文件编辑
+            系统：文件修改
             文件：app.kt
 
             Codex：执行完成。
@@ -169,8 +169,44 @@ class TranscriptBubbleTest {
         assertTrue(items[2] is TranscriptDisplayItem.BubbleItem)
 
         val group = items[1] as TranscriptDisplayItem.ExecutionGroup
-        assertEquals(listOf("命令执行", "文件编辑"), group.activities.map { it.summaryLine })
-        assertEquals("命令执行 · 文件编辑", group.summaryLine)
+        assertEquals(listOf("命令执行", "文件修改"), group.activities.map { it.summaryLine })
+        assertEquals("命令执行 · 文件修改", group.summaryLine)
+    }
+
+    @Test
+    fun buildTranscriptDisplayItemsSplitsExecutionActivitiesWhenAssistantTextAppearsBetweenThem() {
+        val transcript = """
+            系统：命令执行
+            命令：npm test
+
+            系统：文件修改
+            文件：app.kt
+
+            Codex：我先汇报一下当前进展。
+
+            系统：工具调用 server/list
+            状态：已完成
+
+            系统：网页搜索
+            query: codex mobile
+        """.trimIndent()
+
+        val items = buildTranscriptDisplayItems(transcript)
+
+        assertEquals(3, items.size)
+        assertTrue(items[0] is TranscriptDisplayItem.ExecutionGroup)
+        assertTrue(items[1] is TranscriptDisplayItem.BubbleItem)
+        assertTrue(items[2] is TranscriptDisplayItem.ExecutionGroup)
+
+        val firstGroup = items[0] as TranscriptDisplayItem.ExecutionGroup
+        assertEquals(listOf("命令执行", "文件修改"), firstGroup.activities.map { it.summaryLine })
+
+        val assistantBubble = (items[1] as TranscriptDisplayItem.BubbleItem).bubble
+        assertEquals(TranscriptSpeaker.Assistant, assistantBubble.speaker)
+        assertEquals("我先汇报一下当前进展。", assistantBubble.rawBody)
+
+        val secondGroup = items[2] as TranscriptDisplayItem.ExecutionGroup
+        assertEquals(listOf("工具调用 server/list", "网页搜索"), secondGroup.activities.map { it.summaryLine })
     }
 
     @Test
@@ -181,6 +217,19 @@ class TranscriptBubbleTest {
 
         assertEquals("推理摘要", bubble.title)
         assertTrue(bubble.parts.isEmpty())
+        assertTrue(bubble.belongsToExecutionProcess)
+    }
+
+    @Test
+    fun parseTranscriptBubblesTreatsExecutionTitlePrefixesAsActivities() {
+        val transcript = """
+            系统：动态工具 multi_tool_use.parallel
+            状态：已完成
+        """.trimIndent()
+
+        val bubble = parseTranscriptBubbles(transcript).single()
+
+        assertEquals("动态工具 multi_tool_use.parallel", bubble.title)
         assertTrue(bubble.belongsToExecutionProcess)
     }
 

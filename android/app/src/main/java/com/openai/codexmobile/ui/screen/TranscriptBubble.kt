@@ -45,7 +45,7 @@ private val ExecutionActivityTitles = setOf(
     "计划更新",
     "推理摘要",
     "命令执行",
-    "文件编辑",
+    "文件修改",
     "文件修改进度",
     "工具调用进度",
     "网页搜索",
@@ -54,6 +54,12 @@ private val ExecutionActivityTitles = setOf(
     "进入审查模式",
     "退出审查模式",
     "上下文压缩",
+)
+
+private val ExecutionActivityTitlePrefixes = listOf(
+    "工具调用 ",
+    "动态工具 ",
+    "协作调用 ",
 )
 
 internal sealed interface TranscriptDisplayItem {
@@ -92,7 +98,7 @@ internal val TranscriptBubble.belongsToExecutionProcess: Boolean
             TranscriptBubbleKind.ToolResult,
             -> true
 
-            TranscriptBubbleKind.Status -> title?.let { it in ExecutionActivityTitles } == true
+            TranscriptBubbleKind.Status -> title?.let(::isExecutionActivityTitle) == true
             TranscriptBubbleKind.Message -> false
         }
 
@@ -331,7 +337,7 @@ private fun splitTitleAndParts(body: String): Pair<String?, List<TranscriptPart>
     val lines = normalized.lines()
     if (lines.size <= 1) {
         val singleLine = lines.firstOrNull()?.trim().orEmpty()
-        return if (singleLine in ExecutionActivityTitles) {
+        return if (isExecutionActivityTitle(singleLine)) {
             singleLine to emptyList()
         } else {
             null to parseTranscriptParts(normalized)
@@ -346,6 +352,11 @@ private fun splitTitleAndParts(body: String): Pair<String?, List<TranscriptPart>
         parseTranscriptParts(details)
     }
     return title to parts
+}
+
+private fun isExecutionActivityTitle(title: String): Boolean {
+    return title in ExecutionActivityTitles ||
+        ExecutionActivityTitlePrefixes.any { prefix -> title.startsWith(prefix) }
 }
 
 private fun parseTranscriptParts(body: String): List<TranscriptPart> {
