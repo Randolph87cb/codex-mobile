@@ -1503,7 +1503,7 @@ function findQuotaWindow(
   snapshot: AppServerRateLimitSnapshot | null,
   windowDurationMins: number,
 ): AccountQuotaSnapshot["fiveHours"] {
-  const windows = [snapshot?.primary, snapshot?.secondary];
+  const windows = collectQuotaWindows(snapshot);
   for (const window of windows) {
     if (!window || window.windowDurationMins !== windowDurationMins) {
       continue;
@@ -1517,6 +1517,24 @@ function findQuotaWindow(
   }
 
   return null;
+}
+
+function collectQuotaWindows(snapshot: AppServerRateLimitSnapshot | null): AppServerRateLimitWindow[] {
+  if (!snapshot || !isRecord(snapshot)) {
+    return [];
+  }
+
+  return Object.values(snapshot)
+    .flatMap((value) => toQuotaWindow(value))
+    .filter((window): window is AppServerRateLimitWindow => window != null);
+}
+
+function toQuotaWindow(value: unknown): AppServerRateLimitWindow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return typeof value.windowDurationMins === "number" ? (value as AppServerRateLimitWindow) : null;
 }
 
 function normalizeUsedPercent(value: number | undefined): number {

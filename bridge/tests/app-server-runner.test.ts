@@ -134,6 +134,52 @@ describe("AppServerRunner", () => {
     });
   });
 
+  test("finds quota windows even when the snapshot shape grows beyond primary and secondary", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "account/rateLimits/read") {
+        return {
+          rateLimitsByLimitId: {
+            codex: {
+              limitId: "codex",
+              planType: "prolite",
+              primary: {
+                usedPercent: 3,
+                windowDurationMins: 60,
+                resetsAt: 1779700000,
+              },
+              secondary: {
+                usedPercent: 10,
+                windowDurationMins: 300,
+                resetsAt: 1779709914,
+              },
+              tertiary: {
+                usedPercent: 16,
+                windowDurationMins: 10080,
+                resetsAt: 1780188081,
+              },
+            },
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const quota = await runner.getAccountQuota();
+
+    expect(quota.fiveHours).toMatchObject({
+      usedPercent: 10,
+      windowDurationMins: 300,
+    });
+    expect(quota.oneWeek).toMatchObject({
+      usedPercent: 16,
+      windowDurationMins: 10080,
+    });
+  });
+
   test("uses session approval mode and sandbox mode for thread/start and turn/start", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();

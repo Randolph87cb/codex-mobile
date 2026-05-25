@@ -384,6 +384,7 @@ fun SessionDetailScreen(
                 DetailTopAppBar(
                     title = title ?: detail?.title ?: if (draftSession != null) "草稿线程" else "会话详情",
                     detail = detail,
+                    accountQuota = accountQuota,
                     onBack = onBack,
                     onRefreshSession = onRefreshSession,
                     onOpenEditor = { activeEditor = it },
@@ -412,7 +413,6 @@ fun SessionDetailScreen(
                 onShowQueued = { queuedDialogVisible = true },
                 onShowGoal = { goalManagerVisible = true },
             )
-            AccountQuotaCard(accountQuota = accountQuota)
             DetailDateChip(text = if (draftSession != null) "草稿" else "今天")
             Box(
                 modifier = Modifier
@@ -883,6 +883,7 @@ private fun ConversationHeader(
 private fun DetailTopAppBar(
     title: String,
     detail: SessionDetail?,
+    accountQuota: AccountQuotaUiState,
     onBack: (() -> Unit)?,
     onRefreshSession: () -> Unit,
     onOpenEditor: (SessionConfigEditor) -> Unit,
@@ -920,6 +921,11 @@ private fun DetailTopAppBar(
             }
         },
         actions = {
+            AccountQuotaIndicator(
+                accountQuota = accountQuota,
+                buttonTestTag = TestTags.SessionDetailQuotaButton,
+                menuTestTag = TestTags.SessionDetailQuotaMenu,
+            )
             IconButton(
                 onClick = onRefreshSession,
                 enabled = detail != null,

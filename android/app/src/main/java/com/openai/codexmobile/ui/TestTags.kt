@@ -23,6 +23,8 @@ object TestTags {
     const val SessionListDraftDialogConfirmButton = "session_list_draft_dialog_confirm_button"
     const val SessionListArchiveDialog = "session_list_archive_dialog"
     const val SessionListArchiveDialogConfirmButton = "session_list_archive_dialog_confirm_button"
+    const val SessionListQuotaButton = "session_list_quota_button"
+    const val SessionListQuotaMenu = "session_list_quota_menu"
 
     const val SessionDetailScreen = "session_detail_screen"
     const val SessionDetailTranscript = "session_detail_transcript"
@@ -43,6 +45,8 @@ object TestTags {
     const val SessionDetailStatusButton = "session_detail_status_button"
     const val SessionDetailStatusDetails = "session_detail_status_details"
     const val SessionDetailStatusRefreshButton = "session_detail_status_refresh_button"
+    const val SessionDetailQuotaButton = "session_detail_quota_button"
+    const val SessionDetailQuotaMenu = "session_detail_quota_menu"
     const val SessionDetailGoalCard = "session_detail_goal_card"
     const val SessionDetailGoalStartButton = "session_detail_goal_start_button"
     const val SessionDetailGoalEditButton = "session_detail_goal_edit_button"

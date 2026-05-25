@@ -1271,6 +1271,18 @@ describe("buildBridgeApp", () => {
       action: "session-input",
     });
 
+    const quotaWhileDraining = await app.inject({
+      method: "GET",
+      url: "/api/account/quota",
+    });
+    expect(quotaWhileDraining.statusCode).toBe(200);
+    expect(quotaWhileDraining.json()).toMatchObject({
+      limitId: "codex",
+      fiveHours: {
+        usedPercent: 6,
+      },
+    });
+
     const health = await app.inject({ method: "GET", url: "/health" });
     expect(health.json()).toMatchObject({
       lifecycle: {

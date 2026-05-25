@@ -198,3 +198,57 @@
   1. bridge 接 `account/rateLimits/read`，并对外提供一个稳定的全局额度接口；
   2. Android 建立 `QuotaSnapshot` 状态，并在列表页、详情页共用同一个额度卡组件；
   3. 用 `windowDurationMins` 识别 5 小时和 1 周窗口，缺任一窗口时显示 `暂无数据`。
+
+## 后续调整
+
+- 用户后续确认不想显示“已用百分比”，而是显示“剩余额度”。
+- 用户同时要求把原先占据正文区域的大额度卡缩回到顶栏，改成更轻量的状态提示。
+
+## 二次实现结果
+
+- bridge 侧：
+  - `GET /api/account/quota` 不再因为 bridge 进入 `drain / restarting` 窗口而返回 `503`
+  - 这样 Android 即使遇到 bridge 平滑重启，也还能继续读取额度快照
+  - 配额窗口解析从“只看 `primary / secondary`”升级为“遍历快照中的所有窗口对象，再按 `windowDurationMins` 匹配”
+  - 这避免了 upstream 字段形状扩展时出现“接口成功但窗口为空”的问题
+- Android 侧：
+  - 删除正文区的大 `AccountQuotaCard`
+  - 新增 `AccountQuotaIndicator`
+  - 在线程列表页和会话详情页顶栏都使用同一个双点额度入口
+  - 双点只表达使用量区间，不直接显示数字
+  - 点击展开浮层后显示：
+    - `5 小时` 剩余百分比
+    - `1 周` 剩余百分比
+    - 已用百分比
+    - 重置时间
+  - 失败时不再静默显示“暂无数据”：
+    - 保留上次成功快照
+    - 在浮层底部展示错误原因
+    - 当前已覆盖 `bridge 正在重启，暂时无法刷新额度。`
+
+## 额外修改文件
+
+- Android
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/AccountQuotaIndicator.kt`
+  - `android/app/src/main/java/com/openai/codexmobile/ui/TestTags.kt`
+- 删除
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/AccountQuotaCard.kt`
+
+## 二次验证结果
+
+- bridge
+  - `cd bridge`
+  - `npm run check`
+  - `npm test`
+  - 结果：通过
+- Android
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
+  - 结果：首次失败，原因是 `AccountQuotaIndicator.kt` 误用了 `matchParentSize`；修正后通过
+  - `cd android`
+  - `.\gradlew.bat testDebugUnitTest`
+  - 结果：通过
+
+## 当前状态补充
+
+- 代码修改和验证已经完成。
+- 但 bridge 进程本身在本次线程里一度被用户打断重启流程，所以现场运行实例可能仍停留在 `lifecycle.phase = restarting`，需要单独再执行一次后台重启脚本完成切换。

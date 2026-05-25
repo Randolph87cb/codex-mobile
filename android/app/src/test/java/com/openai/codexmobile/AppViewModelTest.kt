@@ -1605,6 +1605,30 @@ class AppViewModelTest {
 
         assertEquals("暂无日志。", viewModel.uiState.value.diagnosticsLog)
     }
+
+    @Test
+    fun quotaRefreshFailurePreservesLastSnapshotAndExposesFriendlyMessage() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_quota", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.accountQuota.snapshot?.fiveHours)
+
+        bridgeApi.failQuotaRequestsRemaining = 1
+        viewModel.refreshSessionList()
+        advanceUntilIdle()
+
+        val quotaState = viewModel.uiState.value.accountQuota
+        assertNotNull(quotaState.snapshot)
+        assertEquals("bridge 正在重启，暂时无法刷新额度。", quotaState.errorMessage)
+    }
 }
 
 private class FakeBridgeApi(
@@ -1613,6 +1637,7 @@ private class FakeBridgeApi(
     private val approvalDelayMs: Long = 0L,
     private var failUploadsRemaining: Int = 0,
     private val returnSavedPathForUploads: Boolean = false,
+    var failQuotaRequestsRemaining: Int = 0,
 ) : BridgeApi {
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     private var currentDetail: SessionDetail = createdDetail
@@ -1646,6 +1671,10 @@ private class FakeBridgeApi(
     override suspend fun currentConnection(): BridgeConnectionState = BridgeConnectionState.Disconnected
 
     override suspend fun getAccountQuota(): AccountQuotaSnapshot {
+        if (failQuotaRequestsRemaining > 0) {
+            failQuotaRequestsRemaining -= 1
+            throw IllegalStateException("bridge 正在重启，暂时无法刷新额度。")
+        }
         accountQuotaCallCount += 1
         return AccountQuotaSnapshot(
             limitId = "codex",

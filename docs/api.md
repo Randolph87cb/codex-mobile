@@ -5,6 +5,7 @@
 ## 总览
 
 - 公开健康检查：`GET /health`
+- 全局额度：`GET /api/account/quota`
 - 会话列表与详情：`GET /api/sessions`、`GET /api/session/:id`
 - 会话创建、配置、目标与归档：`POST /api/session`、`PATCH /api/session/:id/config`、`GET /api/session/:id/goal`、`PUT /api/session/:id/goal`、`DELETE /api/session/:id/goal`、`POST /api/session/:id/archive`、`POST /api/session/:id/unarchive`
 - 会话输入与审批：`POST /api/session/:id/input`、`POST /api/session/:id/approve`、`POST /api/session/:id/interrupt`
@@ -50,6 +51,70 @@ Android 客户端当前已经支持在设置页填写并携带 Bearer token。
     "tokenAuthEnabled": false,
     "cwdWhitelistEnabled": false
   }
+}
+```
+
+## 全局额度接口
+
+### `GET /api/account/quota`
+
+返回当前账号的全局额度快照。bridge 内部会调用上游 `account/rateLimits/read`，并把结果规范化成 Android 稳定依赖的结构。
+
+当前约定：
+
+- 优先读取主 `codex` 限额桶。
+- 不把 upstream 的 `primary / secondary` 顺序直接暴露给客户端。
+- 使用 `windowDurationMins` 识别窗口：
+  - `300` => `fiveHours`
+  - `10080` => `oneWeek`
+- 这条接口属于只读状态接口，即使 bridge 处于 `drain / restarting` 窗口，也不会像写接口那样返回 `503`。
+
+响应示例：
+
+```json
+{
+  "limitId": "codex",
+  "planType": "prolite",
+  "rateLimitReachedType": null,
+  "fiveHours": {
+    "usedPercent": 10,
+    "windowDurationMins": 300,
+    "resetsAt": "2026-05-25T11:51:54.000Z"
+  },
+  "oneWeek": {
+    "usedPercent": 16,
+    "windowDurationMins": 10080,
+    "resetsAt": "2026-05-31T00:41:21.000Z"
+  },
+  "credits": {
+    "hasCredits": false,
+    "unlimited": false,
+    "balance": "0"
+  }
+}
+```
+
+Android 当前消费方式：
+
+- UI 不直接显示 `usedPercent`，而是转换为“剩余额度”。
+- 线程列表页和会话详情页都只显示 `5 小时 / 1 周` 两个窗口。
+- 顶栏先用两个颜色点表达大致使用量，点击后展开剩余百分比和重置时间。
+- 如果刷新失败，客户端会保留上次成功快照，并额外展示错误提示。
+
+可能返回：
+
+```json
+{
+  "error": "quota-not-supported"
+}
+```
+
+或
+
+```json
+{
+  "error": "account-quota-failed",
+  "message": "..."
 }
 ```
 
@@ -203,6 +268,7 @@ Android 当前会把详情页顶部状态拆成两层来消费：
 
 - 第一行：`bridge 状态 / 同步方式 / 会话状态`
 - 第二行：`排队消息 / 目标状态`
+- 顶栏右侧：全局额度双点指示器，点击展开详情
 
 如果底层 runner 支持目标能力，详情响应还会带上：
 
@@ -524,6 +590,7 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 Android 当前已经实际使用这些接口与行为：
 
 - `GET /health`
+- `GET /api/account/quota`
 - `GET /api/sessions`
 - `GET /api/sessions?archived=true`
 - `POST /api/session`

@@ -113,7 +113,12 @@ class RealBridgeDataProvider(
                 "BridgeApi",
                 "读取全局额度失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
             )
-            throw BridgeRequestException(response.statusCode, response.body)
+            throw IllegalStateException(
+                buildAccountQuotaFailureMessage(
+                    statusCode = response.statusCode,
+                    payload = response.body,
+                ),
+            )
         }
 
         response.body.toAccountQuotaSnapshot()
@@ -865,6 +870,25 @@ internal fun buildUploadImageFailureMessage(
         !message.isNullOrBlank() -> message
         statusCode == 413 -> "图片过大，超过 bridge 上传上限。"
         else -> "图片上传失败（HTTP $statusCode）。"
+    }
+}
+
+internal fun buildAccountQuotaFailureMessage(
+    statusCode: Int,
+    payload: String,
+): String {
+    val parsedBody = payload.takeIf { it.isNotBlank() }?.let {
+        runCatching { JSONObject(it) }.getOrNull()
+    }
+    val errorCode = parsedBody?.optString("error")?.takeIf { it.isNotBlank() }
+    val message = parsedBody?.optString("message")?.takeIf { it.isNotBlank() }
+
+    return when {
+        errorCode == "bridge-restarting" -> "bridge 正在重启，暂时无法刷新额度。"
+        errorCode == "quota-not-supported" -> "当前 bridge 不支持额度读取。"
+        errorCode == "account-quota-failed" && !message.isNullOrBlank() -> message
+        !message.isNullOrBlank() -> message
+        else -> "读取全局额度失败（HTTP $statusCode）。"
     }
 }
 

@@ -229,9 +229,6 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   });
 
   app.get("/api/account/quota", async (_request, reply) => {
-    if (isDraining()) {
-      return reply.status(503).send(buildBridgeRestartingError("account-quota"));
-    }
     if (!historyRunner) {
       return reply.status(501).send({ error: "quota-not-supported" });
     }

@@ -204,6 +204,11 @@ fun SessionListScreen(
                     )
                 },
                 actions = {
+                    AccountQuotaIndicator(
+                        accountQuota = accountQuota,
+                        buttonTestTag = TestTags.SessionListQuotaButton,
+                        menuTestTag = TestTags.SessionListQuotaMenu,
+                    )
                     IconButton(
                         onClick = onOpenSettings,
                         modifier = Modifier
@@ -289,9 +294,6 @@ fun SessionListScreen(
             }
             item {
                 ConnectionSummaryStrip(connectionState = connectionState)
-            }
-            item {
-                AccountQuotaCard(accountQuota = accountQuota)
             }
 
             if (groups.isEmpty()) {

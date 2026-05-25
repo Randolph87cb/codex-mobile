@@ -139,4 +139,14 @@ class RealBridgeDataProviderTest {
 
         assertTrue(message == "当前只支持 JPG、PNG、WEBP、GIF、BMP 图片。")
     }
+
+    @Test
+    fun buildAccountQuotaFailureMessageUsesFriendlyRestartHint() {
+        val message = buildAccountQuotaFailureMessage(
+            statusCode = 503,
+            payload = """{"error":"bridge-restarting","message":"bridge is restarting"}""",
+        )
+
+        assertTrue(message == "bridge 正在重启，暂时无法刷新额度。")
+    }
 }

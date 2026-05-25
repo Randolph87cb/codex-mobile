@@ -104,6 +104,7 @@ data class AccountQuotaUiState(
     val snapshot: AccountQuotaSnapshot? = null,
     val isLoading: Boolean = false,
     val lastUpdatedAt: String? = null,
+    val errorMessage: String? = null,
 )
 
 data class SessionRealtimeUiState(
@@ -1315,7 +1316,10 @@ class AppViewModel(
     private suspend fun refreshAccountQuotaSnapshot() {
         _uiState.update {
             it.copy(
-                accountQuota = it.accountQuota.copy(isLoading = true),
+                accountQuota = it.accountQuota.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                ),
             )
         }
         try {
@@ -1326,6 +1330,7 @@ class AppViewModel(
                         snapshot = quota,
                         isLoading = false,
                         lastUpdatedAt = nowIsoString(),
+                        errorMessage = null,
                     ),
                 )
             }
@@ -1333,7 +1338,10 @@ class AppViewModel(
             appLogger.warn("AppViewModel", "读取全局额度失败：${error.message ?: "unknown"}")
             _uiState.update {
                 it.copy(
-                    accountQuota = it.accountQuota.copy(isLoading = false),
+                    accountQuota = it.accountQuota.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "额度暂时不可用。",
+                    ),
                 )
             }
         }
