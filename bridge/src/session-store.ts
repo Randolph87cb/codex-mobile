@@ -21,6 +21,7 @@ export class SessionStore {
       lastError: null,
       createdAt: now,
       updatedAt: now,
+      lastActivityAt: now,
     });
   }
 
@@ -58,6 +59,12 @@ export class SessionStore {
   }
 
   list(): SessionRecord[] {
-    return [...this.sessions.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return [...this.sessions.values()].sort((a, b) =>
+      resolveSessionActivityTimestamp(b).localeCompare(resolveSessionActivityTimestamp(a)),
+    );
   }
+}
+
+function resolveSessionActivityTimestamp(session: SessionRecord): string {
+  return session.lastActivityAt ?? session.updatedAt;
 }

@@ -1030,6 +1030,65 @@ describe("AppServerRunner", () => {
     expect(archivedViews.every((view) => view.archived)).toBe(true);
   });
 
+  test("sorts active sessions by last activity instead of local refresh time", async () => {
+    const store = new SessionStore();
+    store.attach({
+      id: "thread-1",
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+      status: "idle",
+      threadId: "thread-1",
+      activeTurnId: null,
+      lastError: null,
+      createdAt: "2026-05-19T01:00:00.000Z",
+      updatedAt: "2026-05-19T09:00:00.000Z",
+      lastActivityAt: "2026-05-19T01:30:00.000Z",
+    });
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: any) => {
+      if (method === "thread/list" && params?.archived === false) {
+        return {
+          data: [
+            {
+              id: "thread-1",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: "2026-05-19T02:00:00.000Z",
+              status: { type: "inactive" },
+              turns: [],
+            },
+            {
+              id: "thread-2",
+              cwd: "D:\\workspace\\another",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: "2026-05-19T03:00:00.000Z",
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      if (method === "thread/list" && params?.archived === true) {
+        return { data: [] };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const views = await runner.listSessionViews(false);
+
+    expect(views.map((view) => view.id)).toEqual(["thread-2", "thread-1"]);
+    expect(views[1]?.lastUpdated).toBe("2026-05-19T02:00:00.000Z");
+  });
+
   test("archives attached thread-backed sessions and removes them from local store", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();

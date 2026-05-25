@@ -79,11 +79,12 @@ export function buildSessionViewFromRecord(
   session: SessionRecord,
   pendingApproval: PendingApprovalView | null = null,
 ): SessionView {
+  const lastActivityAt = resolveSessionActivityAt(session);
   return {
     id: session.id,
     title: "新会话",
     subtitle: `${session.model} • ${formatStatusLabel(session.status)} • ${session.cwd}`,
-    lastUpdated: session.updatedAt,
+    lastUpdated: lastActivityAt,
     transcriptPreview: buildLocalTranscriptPreview(session),
     archived: false,
     source: "local",
@@ -115,6 +116,8 @@ export function buildSessionViewFromThread(
   const status = resolveThreadBackedStatus(thread, session, fallbackStatus);
   const createdAt = pickLatestTimestamp(toIsoString(thread.createdAt), session?.createdAt, false);
   const updatedAt = pickLatestTimestamp(toIsoString(thread.updatedAt), session?.updatedAt, true);
+  const lastActivityAt =
+    pickLatestTimestampNullable(deriveThreadLastActivityAt(thread), session?.lastActivityAt ?? null) ?? updatedAt;
   const transcriptPreview = buildThreadTranscriptPreview(thread);
   const model = session?.model ?? normalizeText(thread.modelProvider, "openai") ?? "openai";
   const reasoningEffort = session?.reasoningEffort ?? "medium";
@@ -132,7 +135,7 @@ export function buildSessionViewFromThread(
     id: session?.id ?? thread.id,
     title,
     subtitle: `${model} • ${formatStatusLabel(status)} • ${thread.cwd}`,
-    lastUpdated: updatedAt,
+    lastUpdated: lastActivityAt,
     transcriptPreview,
     archived,
     source: session ? "local" : "history",
@@ -152,6 +155,15 @@ export function buildSessionViewFromThread(
     createdAt,
     updatedAt,
   };
+}
+
+export function deriveThreadLastActivityAt(thread: AppServerThread): string | null {
+  const latestTurnTimestamp = (thread.turns ?? [])
+    .map((turn) => toIsoString(turn.completedAt ?? turn.startedAt ?? null))
+    .filter((timestamp): timestamp is string => timestamp !== null)
+    .sort()
+    .at(-1) ?? null;
+  return pickLatestTimestampNullable(latestTurnTimestamp, toIsoString(thread.updatedAt));
 }
 
 function deriveGoalCapability(threadId: string | null | undefined): GoalCapability {
@@ -338,6 +350,16 @@ function pickLatestTimestamp(
   return left > normalizedRight ? left : normalizedRight;
 }
 
+function pickLatestTimestampNullable(left: string | null, right: string | null): string | null {
+  if (!left) {
+    return right;
+  }
+  if (!right) {
+    return left;
+  }
+  return left > right ? left : right;
+}
+
 function toIsoString(value: number | string | null | undefined): string | null {
   if (typeof value === "number") {
     return new Date(value * 1000).toISOString();
@@ -363,6 +385,10 @@ function resolveThreadBackedStatus(
   }
 
   return session.status;
+}
+
+function resolveSessionActivityAt(session: SessionRecord): string {
+  return session.lastActivityAt ?? session.updatedAt;
 }
 
 function formatStatusLabel(status: SessionStatus): string {

@@ -30,6 +30,7 @@ export interface SessionRecord {
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
+  lastActivityAt?: string;
 }
 
 export interface SessionView {

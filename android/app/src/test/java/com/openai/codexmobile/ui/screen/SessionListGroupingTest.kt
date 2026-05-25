@@ -3,6 +3,8 @@ package com.openai.codexmobile.ui.screen
 import com.openai.codexmobile.model.SessionSummary
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.Instant
+import java.time.ZoneId
 
 class SessionListGroupingTest {
     @Test
@@ -79,6 +81,46 @@ class SessionListGroupingTest {
         assertEquals(
             "gpt-5.5 • 空闲",
             buildCompactSessionSubtitle(session, "D:\\workspace\\codex-mobile"),
+        )
+    }
+
+    @Test
+    fun formatSessionLastUpdatedUsesClockTimeForSameDay() {
+        assertEquals(
+            "17:35",
+            formatSessionLastUpdated(
+                lastUpdated = "2026-05-26T09:35:00Z",
+                now = Instant.parse("2026-05-26T12:00:00Z"),
+                zoneId = ZoneId.of("Asia/Shanghai"),
+            ),
+        )
+    }
+
+    @Test
+    fun formatSessionLastUpdatedUsesDaysAndWeeksForOlderSessions() {
+        assertEquals(
+            "1天前",
+            formatSessionLastUpdated(
+                lastUpdated = "2026-05-25T09:35:00Z",
+                now = Instant.parse("2026-05-26T12:00:00Z"),
+                zoneId = ZoneId.of("Asia/Shanghai"),
+            ),
+        )
+        assertEquals(
+            "2天前",
+            formatSessionLastUpdated(
+                lastUpdated = "2026-05-24T09:35:00Z",
+                now = Instant.parse("2026-05-26T12:00:00Z"),
+                zoneId = ZoneId.of("Asia/Shanghai"),
+            ),
+        )
+        assertEquals(
+            "2周前",
+            formatSessionLastUpdated(
+                lastUpdated = "2026-05-12T09:35:00Z",
+                now = Instant.parse("2026-05-26T12:00:00Z"),
+                zoneId = ZoneId.of("Asia/Shanghai"),
+            ),
         )
     }
 }

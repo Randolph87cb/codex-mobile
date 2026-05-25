@@ -96,6 +96,24 @@ class RealBridgeDataProviderTest {
     }
 
     @Test
+    fun parseSessionSummaryPrefersLastUpdatedFromBridgeView() {
+        val summary = JSONObject(
+            """{"id":"thread-last-activity","title":"最新回复线程","model":"gpt-5.5","status":"idle","cwd":"D:\\workspace\\codex-mobile","lastUpdated":"2026-05-21T10:15:00Z","updatedAt":"2026-05-21T10:30:00Z"}""",
+        ).toSessionSummary()
+
+        assertTrue(summary.lastUpdated == "2026-05-21T10:15:00Z")
+    }
+
+    @Test
+    fun parseSessionDetailPrefersLastUpdatedFromBridgeView() {
+        val detail = JSONObject(
+            """{"id":"thread-detail-last-activity","title":"详情页线程","subtitle":"gpt-5.5 • 自动 • 空闲","lastUpdated":"2026-05-22T09:05:00Z","updatedAt":"2026-05-22T09:10:00Z","cwd":"D:\\workspace\\codex-mobile","model":"gpt-5.5","approvalMode":"auto","reasoningEffort":"medium","serviceTier":"default","sandboxMode":"danger-full-access","status":"idle"}""",
+        ).toSessionDetail()
+
+        assertTrue(detail.lastUpdated == "2026-05-22T09:05:00Z")
+    }
+
+    @Test
     fun parseAccountQuotaSnapshotReadsFiveHourAndOneWeekWindows() {
         val snapshot = JSONObject(
             """{"limitId":"codex","planType":"prolite","fiveHours":{"usedPercent":6,"windowDurationMins":300,"resetsAt":"2026-05-25T11:51:54Z"},"oneWeek":{"usedPercent":16,"windowDurationMins":10080,"resetsAt":"2026-05-31T00:41:21Z"}}""",

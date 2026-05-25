@@ -94,7 +94,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         id = "session-test-001",
         title = "测试会话",
         subtitle = "用于稳定 UI 回放",
-        lastUpdated = "刚刚更新",
+        lastUpdated = "2026-05-26T09:45:00Z",
         cwd = "D:\\workspace\\codex-mobile",
         model = "gpt-5.5",
         approvalMode = "auto",

@@ -33,6 +33,7 @@ export class MockRunner implements BridgeRunner {
       lastError: null,
       createdAt: now,
       updatedAt: now,
+      lastActivityAt: now,
     });
   }
 
@@ -57,7 +58,7 @@ export class MockRunner implements BridgeRunner {
     }
     const summary = buildInputSummary(input);
 
-    this.store.update(sessionId, { status: "running" });
+    this.store.update(sessionId, { status: "running", lastActivityAt: new Date().toISOString() });
     this.emit({
       type: "run.status",
       sessionId,
@@ -82,7 +83,7 @@ export class MockRunner implements BridgeRunner {
     }
 
     await delay(120);
-    this.store.update(sessionId, { status: "idle" });
+    this.store.update(sessionId, { status: "idle", lastActivityAt: new Date().toISOString() });
     this.emit({
       type: "assistant.done",
       sessionId,

@@ -974,13 +974,15 @@ internal fun JSONObject.toSessionSummary(): SessionSummary {
     val model = optString("model").ifBlank { "未知模型" }
     val status = optString("status").ifBlank { "unknown" }
     val cwd = optString("cwd").ifBlank { "未提供工作目录" }
-    val updatedAt = optString("updatedAt").ifBlank { optString("createdAt") }
+    val lastUpdated = optString("lastUpdated")
+        .ifBlank { optString("updatedAt") }
+        .ifBlank { optString("createdAt") }
 
     return SessionSummary(
         id = id,
         title = title,
         subtitle = "$model • ${localizedStatus(status)} • $cwd",
-        lastUpdated = updatedAt.ifBlank { "未知更新时间" },
+        lastUpdated = lastUpdated.ifBlank { "未知更新时间" },
         archived = optBoolean("archived", false),
         cwd = cwd,
         model = model,
@@ -1009,14 +1011,16 @@ internal fun JSONObject.toSessionDetail(): SessionDetail {
     val threadId = optString("threadId").ifBlank { "尚未分配" }
     val activeTurnId = optString("activeTurnId").ifBlank { "空闲" }
     val lastError = optString("lastError").ifBlank { "无" }
-    val updatedAt = optString("updatedAt").ifBlank { optString("createdAt") }
+    val lastUpdated = optString("lastUpdated")
+        .ifBlank { optString("updatedAt") }
+        .ifBlank { optString("createdAt") }
     val transcriptPreview = optString("transcriptPreview")
 
     return SessionDetail(
         id = id,
         title = title,
         subtitle = "$model • ${localizedApprovalMode(approvalMode)} • ${localizedStatus(status)}",
-        lastUpdated = updatedAt.ifBlank { "未知更新时间" },
+        lastUpdated = lastUpdated.ifBlank { "未知更新时间" },
         transcriptPreview = transcriptPreview.ifBlank {
             buildString {
                 appendLine("工作目录：$cwd")

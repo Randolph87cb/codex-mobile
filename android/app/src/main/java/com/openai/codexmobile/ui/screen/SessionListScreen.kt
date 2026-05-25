@@ -69,6 +69,11 @@ import com.openai.codexmobile.AccountQuotaUiState
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionSummary
 import com.openai.codexmobile.ui.TestTags
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 data class SessionDirectoryGroup(
     val cwd: String,
@@ -679,7 +684,7 @@ private fun SessionItemCard(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        text = session.lastUpdated,
+                        text = formatSessionLastUpdated(session.lastUpdated),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         maxLines = 1,
@@ -774,6 +779,35 @@ private fun sessionIcon(session: SessionSummary): ImageVector {
         "cloud" in text || "bridge" in text || "infra" in text -> Icons.Filled.Cloud
         "code" in text || "repo" in text || "workspace" in text -> Icons.Filled.Code
         else -> Icons.Filled.Terminal
+    }
+}
+
+private val sessionSameDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)
+private val sessionMonthDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA)
+private val sessionYearMonthDayFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)
+
+internal fun formatSessionLastUpdated(
+    lastUpdated: String,
+    now: Instant = Instant.now(),
+    zoneId: ZoneId = ZoneId.systemDefault(),
+): String {
+    if (lastUpdated.isBlank()) {
+        return "未知时间"
+    }
+
+    val timestamp = runCatching { Instant.parse(lastUpdated) }.getOrNull() ?: return lastUpdated
+    val currentDate = now.atZone(zoneId).toLocalDate()
+    val updatedAt = timestamp.atZone(zoneId)
+    val updatedDate = updatedAt.toLocalDate()
+    val dayDiff = ChronoUnit.DAYS.between(updatedDate, currentDate)
+
+    return when {
+        dayDiff <= 0L -> updatedAt.format(sessionSameDayFormatter)
+        dayDiff < 7L -> "${dayDiff}天前"
+        dayDiff < 28L -> "${dayDiff / 7}周前"
+        updatedDate.year == currentDate.year -> updatedDate.format(sessionMonthDayFormatter)
+        else -> updatedDate.format(sessionYearMonthDayFormatter)
     }
 }
 

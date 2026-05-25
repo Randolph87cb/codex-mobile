@@ -292,4 +292,48 @@ describe("session view mapping", () => {
     expect(view.subtitle).toContain("空闲");
     expect(view.sandboxMode).toBe("danger-full-access");
   });
+
+  test("uses last activity time instead of local refresh time for thread-backed sessions", () => {
+    const view = buildSessionViewFromThread(
+      {
+        id: "thread-3",
+        cwd: "D:\\workspace\\codex-mobile",
+        modelProvider: "openai",
+        preview: "最后回复时间",
+        createdAt: "2026-05-19T03:00:00.000Z",
+        updatedAt: "2026-05-19T03:10:00.000Z",
+        status: {
+          type: "inactive",
+        },
+        turns: [
+          {
+            id: "turn-3",
+            status: "completed",
+            startedAt: 1_747_633_000,
+            completedAt: 1_747_633_060,
+            items: [],
+          },
+        ],
+      },
+      {
+        id: "thread-3",
+        cwd: "D:\\workspace\\codex-mobile",
+        model: "gpt-5.5",
+        approvalMode: "manual",
+        reasoningEffort: "medium",
+        serviceTier: "default",
+        sandboxMode: "workspace-write",
+        status: "idle",
+        threadId: "thread-3",
+        activeTurnId: null,
+        lastError: null,
+        createdAt: "2026-05-19T03:00:00.000Z",
+        updatedAt: "2026-05-19T03:20:00.000Z",
+        lastActivityAt: "2026-05-19T03:08:00.000Z",
+      },
+    );
+
+    expect(view.updatedAt).toBe("2026-05-19T03:20:00.000Z");
+    expect(view.lastUpdated).toBe("2026-05-19T03:10:00.000Z");
+  });
 });

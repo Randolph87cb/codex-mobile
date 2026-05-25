@@ -3,6 +3,7 @@ import type { BridgeEventListener, HistoryCapableBridgeRunner } from "./bridge-r
 import {
   buildSessionViewFromRecord,
   buildSessionViewFromThread,
+  deriveThreadLastActivityAt,
   formatThreadItemAsTranscriptBlock,
   mapThreadStatus,
   type AppServerThread,
@@ -200,6 +201,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
           : typeof result.thread.updatedAt === "string" && result.thread.updatedAt.trim()
             ? result.thread.updatedAt
             : new Date().toISOString(),
+      lastActivityAt: resolveThreadActivityTimestamp(result.thread),
     });
   }
 
@@ -213,7 +215,11 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       throw new BusySessionError(session.status);
     }
 
-    this.store.update(sessionId, { status: "running", lastError: null });
+    this.store.update(sessionId, {
+      status: "running",
+      lastError: null,
+      lastActivityAt: new Date().toISOString(),
+    });
     this.emit(sessionId, {
       type: "run.status",
       sessionId,
@@ -351,7 +357,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     });
 
     if (archived) {
-      return views.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+      return views.sort((left, right) => right.lastUpdated.localeCompare(left.lastUpdated));
     }
 
     const knownThreadIds = new Set(threads.map((thread) => thread.id));
@@ -363,7 +369,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       views.push(buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id)));
     }
 
-    return views.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    return views.sort((left, right) => right.lastUpdated.localeCompare(left.lastUpdated));
   }
 
   async getSessionView(threadId: string): Promise<SessionView | null> {
@@ -736,6 +742,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     this.store.update(sessionId, {
       activeTurnId: payload.turn.id,
       status: "running",
+      lastActivityAt: new Date().toISOString(),
     });
   }
 
@@ -761,6 +768,9 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         itemId: payload.itemId,
       },
     });
+    this.store.update(sessionId, {
+      lastActivityAt: new Date().toISOString(),
+    });
   }
 
   private handleTurnCompleted(params: unknown): void {
@@ -784,6 +794,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       activeTurnId: null,
       status,
       lastError: payload.turn.status === "failed" ? JSON.stringify(payload.turn.error) : null,
+      lastActivityAt: new Date().toISOString(),
     });
 
     this.emit(sessionId, {
@@ -1156,6 +1167,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
           : typeof resumed.thread.updatedAt === "string" && resumed.thread.updatedAt.trim()
             ? resumed.thread.updatedAt
             : new Date().toISOString(),
+      lastActivityAt: resolveThreadActivityTimestamp(resumed.thread),
     });
   }
 
@@ -1187,6 +1199,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
           activeTurnId ??
           (status === "running" || status === "awaiting_approval" ? session.activeTurnId : null),
         lastError: status === "error" ? lastError ?? session.lastError : lastError,
+        lastActivityAt: deriveThreadLastActivityAt(thread) ?? session.lastActivityAt,
       }) ?? session
     );
   }
@@ -1294,6 +1307,9 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   }
 
   private emitActivity(sessionId: string, activity: ActivityPayload): void {
+    this.store.update(sessionId, {
+      lastActivityAt: new Date().toISOString(),
+    });
     this.emit(sessionId, {
       type: "activity",
       sessionId,
@@ -1440,6 +1456,10 @@ function mapSessionGoal(goal: AppServerGoal): SessionGoal {
     createdAt: toGoalIsoString(goal.createdAt),
     updatedAt: toGoalIsoString(goal.updatedAt),
   };
+}
+
+function resolveThreadActivityTimestamp(thread: AppServerThread): string {
+  return deriveThreadLastActivityAt(thread) ?? new Date().toISOString();
 }
 
 function mapAccountQuotaSnapshot(response: AppServerAccountRateLimitsResponse): AccountQuotaSnapshot {
