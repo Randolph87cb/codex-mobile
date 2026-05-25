@@ -144,3 +144,15 @@
   - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`
   - 结果：通过
 
+## 文档同步
+
+- 已按用户确认同步更新：
+  - `README.md`
+  - `docs/architecture.md`
+  - `docs/api.md`
+- 文档新增说明重点：
+  - 执行过程现在作为 Codex 回复的一部分展示，而不是独立系统卡片
+  - 只有连续执行过程才合并
+  - 中间遇到 `Codex：...` 文字回复时，会切断前一段执行过程并开始新的执行过程分组
+- 本轮仅更新文档，未额外执行构建或测试；沿用上一轮已通过的 Android 单测与 debug 构建结果
+

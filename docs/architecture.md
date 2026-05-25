@@ -64,6 +64,8 @@ codex.exe app-server
 5. bridge 转发到 `codex.exe app-server`
 6. Android 接收 `assistant.delta`、`activity`、`tool.request` 等事件
 7. Android 将历史 transcript 与结构化实时活动合并显示，其中非对话类过程默认进入“执行过程”
+8. 执行过程按连续片段分组：只有相邻连续的过程项会合并；一旦中间插入 Codex 文字回复，就结束前一段并开始新的执行过程分组
+9. 执行过程分组在 UI 上归属于 Codex 回复本身，而不是作为独立系统卡片悬浮在消息流中
 
 ### 图片输入
 
@@ -129,7 +131,7 @@ codex.exe app-server
 - 历史 transcript 渲染
 - 实时流状态同步
 - 结构化实时执行活动聚合
-- 操作过程合并显示
+- 操作过程按连续片段合并显示，并挂在 Codex 回复布局内
 - 审批请求展示与响应
 - bridge 后台守护和登录自启动脚本
 
