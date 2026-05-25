@@ -47,7 +47,7 @@ data class UploadImageAttachmentRequest(
     val preparationMode: String = "original",
 )
 
-internal fun UploadImageAttachmentRequest.toDiagnosticsSummary(): String {
+fun UploadImageAttachmentRequest.toDiagnosticsSummary(): String {
     val sourceBytes = sourceByteLength ?: contentBytes.size
     val dimensions = if (imageWidth != null && imageHeight != null) {
         "${imageWidth}x${imageHeight}"

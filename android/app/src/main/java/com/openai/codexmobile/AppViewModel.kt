@@ -179,6 +179,7 @@ class AppViewModel(
     private var pendingReconnectSessionId: String? = null
     private var sessionStreamReconnectAttempt: Int = 0
     private var bridgeRestartExpectedSessionId: String? = null
+    private var pendingRealtimeRecoverySnapshotSessionId: String? = null
     private var isAppInForeground: Boolean = true
     private val queuedInputsBySession = mutableMapOf<String, ArrayDeque<String>>()
     private val flushingQueuedSessions = mutableSetOf<String>()
@@ -713,6 +714,11 @@ class AppViewModel(
         if (!uiState.value.sessionRealtimeState.isActive) {
             return
         }
+        if (uiState.value.connectionState is BridgeConnectionState.Connected) {
+            viewModelScope.launch {
+                refreshSessionSnapshot(selectedSessionId)
+            }
+        }
         if (
             activeStreamSessionId == selectedSessionId &&
             sessionStreamJob?.isActive == true &&
@@ -722,6 +728,7 @@ class AppViewModel(
         }
 
         appLogger.info("AppViewModel", "应用回到前台，准备检查实时流：sessionId=$selectedSessionId")
+        pendingRealtimeRecoverySnapshotSessionId = selectedSessionId
         sessionStreamReconnectAttempt = 0
         scheduleSessionStreamReconnect(
             sessionId = selectedSessionId,
@@ -1454,6 +1461,7 @@ class AppViewModel(
             resetRealtimeState = false,
             resetReconnectState = false,
             clearBridgeRestartState = false,
+            clearRealtimeRecoverySnapshotState = false,
         )
         activeStreamSessionId = sessionId
         sessionStreamJob = viewModelScope.launch {
@@ -1467,6 +1475,7 @@ class AppViewModel(
                 if (activeStreamSessionId == sessionId) {
                     appLogger.error("AppViewModel", "实时流监听失败：sessionId=$sessionId", error)
                     val bridgeRestartExpected = bridgeRestartExpectedSessionId == sessionId
+                    pendingRealtimeRecoverySnapshotSessionId = sessionId
                     val reconnectScheduled = scheduleSessionStreamReconnect(
                         sessionId = sessionId,
                         reason = error.message ?: if (bridgeRestartExpected) "bridge 正在重启。" else "实时流连接失败。",
@@ -1529,6 +1538,7 @@ class AppViewModel(
         resetRealtimeState: Boolean = true,
         resetReconnectState: Boolean = true,
         clearBridgeRestartState: Boolean = true,
+        clearRealtimeRecoverySnapshotState: Boolean = true,
     ) {
         activeStreamSessionId?.let { appLogger.info("AppViewModel", "停止实时流监听：sessionId=$it") }
         sessionStreamJob?.cancel()
@@ -1537,6 +1547,9 @@ class AppViewModel(
         activeAssistantTurnId = null
         if (clearBridgeRestartState) {
             bridgeRestartExpectedSessionId = null
+        }
+        if (clearRealtimeRecoverySnapshotState) {
+            pendingRealtimeRecoverySnapshotSessionId = null
         }
         cancelPendingSessionStreamReconnect(resetAttempt = resetReconnectState)
         if (resetRealtimeState) {
@@ -1579,6 +1592,7 @@ class AppViewModel(
                     "实时流关闭：sessionId=$sessionId, reason=${event.reason ?: "none"}",
                 )
                 val bridgeRestartExpected = bridgeRestartExpectedSessionId == sessionId
+                pendingRealtimeRecoverySnapshotSessionId = sessionId
                 val reconnectScheduled = scheduleSessionStreamReconnect(
                     sessionId = sessionId,
                     reason = event.reason ?: if (bridgeRestartExpected) "bridge 正在重启。" else "实时流连接已关闭。",
@@ -1629,7 +1643,7 @@ class AppViewModel(
             }
 
             is SessionStreamEvent.SessionStarted -> {
-                val previousRealtimeState = uiState.value.sessionRealtimeState
+                val shouldCatchUpSnapshot = pendingRealtimeRecoverySnapshotSessionId == sessionId
                 appLogger.info(
                     "AppViewModel",
                     "会话实时流就绪：sessionId=$sessionId, status=${event.status}, threadId=${event.threadId ?: "none"}",
@@ -1664,8 +1678,11 @@ class AppViewModel(
                 }
                 syncVisibleSessionSummary(nextDetail)
                 maybeAutoApprovePending(sessionId)
-                if (shouldRefreshSessionSnapshotAfterRealtimeRecovery(previousRealtimeState)) {
-                    refreshSessionSnapshot(sessionId)
+                if (shouldCatchUpSnapshot) {
+                    val refreshed = refreshSessionSnapshot(sessionId)
+                    if (refreshed != null) {
+                        pendingRealtimeRecoverySnapshotSessionId = null
+                    }
                 }
             }
 
@@ -2713,14 +2730,6 @@ class AppViewModel(
             return false
         }
         return detail.status == "running" || detail.status == "awaiting_approval"
-    }
-
-    private fun shouldRefreshSessionSnapshotAfterRealtimeRecovery(
-        previousRealtimeState: SessionRealtimeUiState,
-    ): Boolean {
-        return !previousRealtimeState.isConnected &&
-            previousRealtimeState.connectionText != "正在连接实时流" &&
-            previousRealtimeState.connectionText != "正在加载会话"
     }
 
     private fun enqueueQueuedInput(sessionId: String, text: String) {

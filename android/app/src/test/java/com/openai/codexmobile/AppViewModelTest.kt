@@ -972,6 +972,14 @@ class AppViewModelTest {
         runCurrent()
 
         bridgeApi.emit(
+            SessionStreamEvent.StreamOpened(
+                sessionId = detail.id,
+                timestamp = "2026-05-25T14:10:02.000Z",
+            ),
+        )
+        runCurrent()
+
+        bridgeApi.emit(
             SessionStreamEvent.SessionStarted(
                 sessionId = detail.id,
                 status = "running",
@@ -993,6 +1001,44 @@ class AppViewModelTest {
         assertEquals(refreshed.transcriptPreview, viewModel.uiState.value.selectedSession?.transcriptPreview)
         assertEquals("进行中", viewModel.uiState.value.sessionRealtimeState.statusText)
         assertNull(viewModel.uiState.value.sessionRealtimeState.fallbackNotice)
+    }
+
+    @Test
+    fun foregroundedDetailRefreshesSnapshotEvenWhenRealtimeAlreadyConnected() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_foreground_refresh", status = "running")
+        val refreshed = detail.copy(
+            status = "idle",
+            transcriptPreview = "工作目录：${detail.cwd}\n\nCodex：前台恢复时补回来的最新状态",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(
+                detail.id to detail,
+                "${detail.id}#refresh" to refreshed,
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+        viewModel.openSessionDetail(detail.id)
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.StreamOpened(
+                sessionId = detail.id,
+                timestamp = "2026-05-25T14:20:00.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onAppForegrounded()
+        advanceUntilIdle()
+
+        assertEquals(refreshed.transcriptPreview, viewModel.uiState.value.selectedSession?.transcriptPreview)
+        assertEquals("idle", viewModel.uiState.value.selectedSession?.status)
+        assertEquals("空闲", viewModel.uiState.value.sessionRealtimeState.statusText)
     }
 
     @Test
