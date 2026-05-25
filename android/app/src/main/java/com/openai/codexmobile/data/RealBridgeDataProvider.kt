@@ -1,6 +1,9 @@
 package com.openai.codexmobile.data
 
 import com.openai.codexmobile.diagnostics.AppLogger
+import com.openai.codexmobile.model.AccountQuotaCreditsSnapshot
+import com.openai.codexmobile.model.AccountQuotaSnapshot
+import com.openai.codexmobile.model.AccountQuotaWindowSnapshot
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionDetail
@@ -97,6 +100,24 @@ class RealBridgeDataProvider(
     }
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
+
+    override suspend fun getAccountQuota(): AccountQuotaSnapshot = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "读取全局额度快照。")
+        val response = request(
+            method = "GET",
+            url = "${requireBaseUrl()}/api/account/quota",
+            summary = "get account quota",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "读取全局额度失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        response.body.toAccountQuotaSnapshot()
+    }
 
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail = withContext(Dispatchers.IO) {
         appLogger.info(
@@ -1012,6 +1033,21 @@ private fun JSONObject.toSessionGoalClearResult(): SessionGoalClearResult {
     )
 }
 
+internal fun String.toAccountQuotaSnapshot(): AccountQuotaSnapshot {
+    return JSONObject(this).toAccountQuotaSnapshot()
+}
+
+internal fun JSONObject.toAccountQuotaSnapshot(): AccountQuotaSnapshot {
+    return AccountQuotaSnapshot(
+        limitId = optString("limitId").takeIf { it.isNotBlank() },
+        planType = optString("planType").takeIf { it.isNotBlank() },
+        rateLimitReachedType = optString("rateLimitReachedType").takeIf { it.isNotBlank() },
+        fiveHours = parseAccountQuotaWindow(opt("fiveHours")),
+        oneWeek = parseAccountQuotaWindow(opt("oneWeek")),
+        credits = parseAccountQuotaCredits(opt("credits")),
+    )
+}
+
 private fun parsePendingApprovalSnapshot(value: Any?): PendingApprovalSnapshot? {
     val json = value as? JSONObject ?: return null
     return PendingApprovalSnapshot(
@@ -1021,6 +1057,28 @@ private fun parsePendingApprovalSnapshot(value: Any?): PendingApprovalSnapshot? 
     ).takeIf {
         it.requestId != null || it.method != null || it.paramsSummary != null
     }
+}
+
+private fun parseAccountQuotaWindow(value: Any?): AccountQuotaWindowSnapshot? {
+    val json = value as? JSONObject ?: return null
+    val windowDurationMins = json.optInt("windowDurationMins", -1)
+    if (windowDurationMins <= 0) {
+        return null
+    }
+    return AccountQuotaWindowSnapshot(
+        usedPercent = json.optInt("usedPercent", 0).coerceIn(0, 100),
+        windowDurationMins = windowDurationMins,
+        resetsAt = json.optString("resetsAt").takeIf { it.isNotBlank() },
+    )
+}
+
+private fun parseAccountQuotaCredits(value: Any?): AccountQuotaCreditsSnapshot? {
+    val json = value as? JSONObject ?: return null
+    return AccountQuotaCreditsSnapshot(
+        hasCredits = json.optBoolean("hasCredits", false),
+        unlimited = json.optBoolean("unlimited", false),
+        balance = json.optString("balance").takeIf { it.isNotBlank() },
+    )
 }
 
 private fun parseSessionGoalSnapshot(value: Any?): SessionGoalSnapshot? {

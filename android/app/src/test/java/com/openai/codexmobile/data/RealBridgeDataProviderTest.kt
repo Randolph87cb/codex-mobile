@@ -79,6 +79,20 @@ class RealBridgeDataProviderTest {
     }
 
     @Test
+    fun parseAccountQuotaSnapshotReadsFiveHourAndOneWeekWindows() {
+        val snapshot = JSONObject(
+            """{"limitId":"codex","planType":"prolite","fiveHours":{"usedPercent":6,"windowDurationMins":300,"resetsAt":"2026-05-25T11:51:54Z"},"oneWeek":{"usedPercent":16,"windowDurationMins":10080,"resetsAt":"2026-05-31T00:41:21Z"}}""",
+        ).toAccountQuotaSnapshot()
+
+        assertTrue(snapshot.limitId == "codex")
+        assertTrue(snapshot.planType == "prolite")
+        assertTrue(snapshot.fiveHours?.usedPercent == 6)
+        assertTrue(snapshot.fiveHours?.windowDurationMins == 300)
+        assertTrue(snapshot.oneWeek?.usedPercent == 16)
+        assertTrue(snapshot.oneWeek?.windowDurationMins == 10080)
+    }
+
+    @Test
     fun parseUploadedImageAttachmentResponsePrefersSavedPath() {
         val uploaded = parseUploadedImageAttachmentResponse(
             payload = """{"id":"att-1","displayName":"screen.png","mimeType":"image/png","stagedPath":"D:\\bridge\\staged\\screen.png","savedPath":"D:\\bridge\\saved\\screen.png"}""",

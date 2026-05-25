@@ -9,6 +9,7 @@ import {
 } from "./session-view.js";
 import { SessionStore } from "./session-store.js";
 import type {
+  AccountQuotaSnapshot,
   ApprovalDecision,
   GoalCapability,
   JsonRpcRequestId,
@@ -85,6 +86,32 @@ interface AppServerGoal {
   timeUsedSeconds?: number;
   createdAt?: number | string | null;
   updatedAt?: number | string | null;
+}
+
+interface AppServerRateLimitWindow {
+  usedPercent?: number;
+  windowDurationMins?: number | null;
+  resetsAt?: number | null;
+}
+
+interface AppServerCreditsSnapshot {
+  hasCredits?: boolean;
+  unlimited?: boolean;
+  balance?: string | null;
+}
+
+interface AppServerRateLimitSnapshot {
+  limitId?: string | null;
+  primary?: AppServerRateLimitWindow | null;
+  secondary?: AppServerRateLimitWindow | null;
+  credits?: AppServerCreditsSnapshot | null;
+  planType?: string | null;
+  rateLimitReachedType?: string | null;
+}
+
+interface AppServerAccountRateLimitsResponse {
+  rateLimits?: AppServerRateLimitSnapshot | null;
+  rateLimitsByLimitId?: Record<string, AppServerRateLimitSnapshot | undefined> | null;
 }
 
 class ApprovalError extends Error {
@@ -371,6 +398,11 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
 
     const thread = await this.tryReadThread(sessionId);
     return thread ? this.decorateSessionViewWithGoal(buildSessionViewFromThread(thread)) : null;
+  }
+
+  async getAccountQuota(): Promise<AccountQuotaSnapshot> {
+    const result = await this.client.request<AppServerAccountRateLimitsResponse>("account/rateLimits/read", undefined);
+    return mapAccountQuotaSnapshot(result);
   }
 
   async getSessionGoal(sessionId: string): Promise<SessionGoalState> {
@@ -1447,6 +1479,60 @@ function mapSessionGoal(goal: AppServerGoal): SessionGoal {
     createdAt: toGoalIsoString(goal.createdAt),
     updatedAt: toGoalIsoString(goal.updatedAt),
   };
+}
+
+function mapAccountQuotaSnapshot(response: AppServerAccountRateLimitsResponse): AccountQuotaSnapshot {
+  const selected = response.rateLimitsByLimitId?.codex ?? response.rateLimits ?? null;
+  return {
+    limitId: selected?.limitId ?? null,
+    planType: selected?.planType ?? null,
+    rateLimitReachedType: selected?.rateLimitReachedType ?? null,
+    fiveHours: findQuotaWindow(selected, 300),
+    oneWeek: findQuotaWindow(selected, 10_080),
+    credits: selected?.credits
+      ? {
+          hasCredits: selected.credits.hasCredits ?? false,
+          unlimited: selected.credits.unlimited ?? false,
+          balance: selected.credits.balance ?? null,
+        }
+      : null,
+  };
+}
+
+function findQuotaWindow(
+  snapshot: AppServerRateLimitSnapshot | null,
+  windowDurationMins: number,
+): AccountQuotaSnapshot["fiveHours"] {
+  const windows = [snapshot?.primary, snapshot?.secondary];
+  for (const window of windows) {
+    if (!window || window.windowDurationMins !== windowDurationMins) {
+      continue;
+    }
+
+    return {
+      usedPercent: normalizeUsedPercent(window.usedPercent),
+      windowDurationMins,
+      resetsAt: toQuotaResetIsoString(window.resetsAt),
+    };
+  }
+
+  return null;
+}
+
+function normalizeUsedPercent(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function toQuotaResetIsoString(value: number | null | undefined): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return new Date(value * 1000).toISOString();
 }
 
 function toGoalIsoString(value: number | string | null | undefined): string {

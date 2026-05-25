@@ -228,6 +228,21 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
     };
   });
 
+  app.get("/api/account/quota", async (_request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("account-quota"));
+    }
+    if (!historyRunner) {
+      return reply.status(501).send({ error: "quota-not-supported" });
+    }
+
+    try {
+      return await historyRunner.getAccountQuota();
+    } catch (error) {
+      return sendAccountQuotaError(reply, error);
+    }
+  });
+
   app.post("/api/attachment/image", async (request, reply) => {
     if (isDraining()) {
       return reply.status(503).send(buildBridgeRestartingError("attachment-upload"));
@@ -1071,6 +1086,18 @@ function sendGoalError(reply: FastifyReply, error: unknown) {
 
   return reply.status(502).send({
     error: "session-goal-failed",
+    message,
+  });
+}
+
+function sendAccountQuotaError(reply: FastifyReply, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/method not found|unsupported|not supported|unknown method/i.test(message)) {
+    return reply.status(501).send({ error: "quota-not-supported" });
+  }
+
+  return reply.status(502).send({
+    error: "account-quota-failed",
     message,
   });
 }

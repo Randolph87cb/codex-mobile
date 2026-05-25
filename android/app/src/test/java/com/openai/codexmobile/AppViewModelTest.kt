@@ -18,6 +18,8 @@ import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.diagnostics.AppLogger
+import com.openai.codexmobile.model.AccountQuotaSnapshot
+import com.openai.codexmobile.model.AccountQuotaWindowSnapshot
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionDetail
@@ -646,6 +648,25 @@ class AppViewModelTest {
         assertEquals("running", viewModel.uiState.value.sessions.single().status)
         assertTrue(viewModel.uiState.value.sessions.single().subtitle.contains("进行中"))
         assertEquals(false, repository.listArchivedFlags.last())
+    }
+
+    @Test
+    fun connectRefreshesGlobalAccountQuota() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_quota", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.connect()
+        advanceUntilIdle()
+
+        assertEquals(1, bridgeApi.accountQuotaCallCount)
+        assertEquals(6, viewModel.uiState.value.accountQuota.snapshot?.fiveHours?.usedPercent)
+        assertEquals(16, viewModel.uiState.value.accountQuota.snapshot?.oneWeek?.usedPercent)
+        assertEquals(false, viewModel.uiState.value.accountQuota.isLoading)
     }
 
     @Test
@@ -1597,6 +1618,8 @@ private class FakeBridgeApi(
     private var currentDetail: SessionDetail = createdDetail
     var observeSessionEventsCallCount: Int = 0
         private set
+    var accountQuotaCallCount: Int = 0
+        private set
     val sentInputs = mutableListOf<String>()
     val sendInputRequests = mutableListOf<SendInputRequest>()
     val uploadedImageRequests = mutableListOf<UploadImageAttachmentRequest>()
@@ -1621,6 +1644,24 @@ private class FakeBridgeApi(
     override suspend fun disconnect() = Unit
 
     override suspend fun currentConnection(): BridgeConnectionState = BridgeConnectionState.Disconnected
+
+    override suspend fun getAccountQuota(): AccountQuotaSnapshot {
+        accountQuotaCallCount += 1
+        return AccountQuotaSnapshot(
+            limitId = "codex",
+            planType = "prolite",
+            fiveHours = AccountQuotaWindowSnapshot(
+                usedPercent = 6,
+                windowDurationMins = 300,
+                resetsAt = "2026-05-25T11:51:54Z",
+            ),
+            oneWeek = AccountQuotaWindowSnapshot(
+                usedPercent = 16,
+                windowDurationMins = 10080,
+                resetsAt = "2026-05-31T00:41:21Z",
+            ),
+        )
+    }
 
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail {
         lastCreateSessionRequest = request

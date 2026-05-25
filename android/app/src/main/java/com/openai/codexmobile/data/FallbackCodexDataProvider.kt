@@ -1,6 +1,7 @@
 package com.openai.codexmobile.data
 
 import com.openai.codexmobile.model.BridgeConnectionState
+import com.openai.codexmobile.model.AccountQuotaSnapshot
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionSummary
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +44,10 @@ class FallbackCodexDataProvider(
     }
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
+
+    override suspend fun getAccountQuota(): AccountQuotaSnapshot {
+        return requireActiveProvider().getAccountQuota()
+    }
 
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail {
         return requireActiveProvider().createSession(request)

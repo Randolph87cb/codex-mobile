@@ -67,6 +67,73 @@ function createSessionStore(): SessionStore {
 }
 
 describe("AppServerRunner", () => {
+  test("reads account quota and maps 5-hour and 1-week windows by duration", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "account/rateLimits/read") {
+        return {
+          rateLimits: {
+            limitId: "fallback",
+            primary: {
+              usedPercent: 99,
+              windowDurationMins: 15,
+              resetsAt: 1716080900,
+            },
+          },
+          rateLimitsByLimitId: {
+            codex: {
+              limitId: "codex",
+              planType: "prolite",
+              rateLimitReachedType: null,
+              credits: {
+                hasCredits: false,
+                unlimited: false,
+                balance: "0",
+              },
+              primary: {
+                usedPercent: 6,
+                windowDurationMins: 300,
+                resetsAt: 1779709914,
+              },
+              secondary: {
+                usedPercent: 16,
+                windowDurationMins: 10080,
+                resetsAt: 1780188081,
+              },
+            },
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const quota = await runner.getAccountQuota();
+
+    expect(client.request).toHaveBeenCalledWith("account/rateLimits/read", undefined);
+    expect(quota).toMatchObject({
+      limitId: "codex",
+      planType: "prolite",
+      fiveHours: {
+        usedPercent: 6,
+        windowDurationMins: 300,
+        resetsAt: "2026-05-25T11:51:54.000Z",
+      },
+      oneWeek: {
+        usedPercent: 16,
+        windowDurationMins: 10080,
+        resetsAt: "2026-05-31T00:41:21.000Z",
+      },
+      credits: {
+        hasCredits: false,
+        unlimited: false,
+        balance: "0",
+      },
+    });
+  });
+
   test("uses session approval mode and sandbox mode for thread/start and turn/start", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();

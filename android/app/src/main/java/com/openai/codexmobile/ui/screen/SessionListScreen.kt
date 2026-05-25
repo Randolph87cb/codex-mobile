@@ -65,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openai.codexmobile.AccountQuotaUiState
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionSummary
 import com.openai.codexmobile.ui.TestTags
@@ -95,6 +96,7 @@ fun SessionListScreen(
     sessions: List<SessionSummary>,
     showArchivedSessions: Boolean,
     connectionState: BridgeConnectionState,
+    accountQuota: AccountQuotaUiState,
     currentCwd: String,
     isLoading: Boolean,
     onOpenSession: (String) -> Unit,
@@ -287,6 +289,9 @@ fun SessionListScreen(
             }
             item {
                 ConnectionSummaryStrip(connectionState = connectionState)
+            }
+            item {
+                AccountQuotaCard(accountQuota = accountQuota)
             }
 
             if (groups.isEmpty()) {

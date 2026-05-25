@@ -21,6 +21,7 @@ import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.data.toDiagnosticsSummary
 import com.openai.codexmobile.diagnostics.AppLogger
+import com.openai.codexmobile.model.AccountQuotaSnapshot
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.PendingApprovalSnapshot
 import com.openai.codexmobile.model.SessionActivityEntry
@@ -73,6 +74,7 @@ data class AppUiState(
     val isLoading: Boolean = false,
     val message: String? = null,
     val settingsItems: List<Pair<String, String>>,
+    val accountQuota: AccountQuotaUiState = AccountQuotaUiState(),
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
     val pendingImageAttachments: List<PendingImageAttachmentUiState> = emptyList(),
     val queuedInputs: List<String> = emptyList(),
@@ -96,6 +98,12 @@ data class DraftSessionUiState(
     val reasoningEffort: String,
     val serviceTier: String,
     val sandboxMode: String,
+)
+
+data class AccountQuotaUiState(
+    val snapshot: AccountQuotaSnapshot? = null,
+    val isLoading: Boolean = false,
+    val lastUpdatedAt: String? = null,
 )
 
 data class SessionRealtimeUiState(
@@ -500,7 +508,15 @@ class AppViewModel(
 
         viewModelScope.launch {
             stopSessionStream()
-            _uiState.update { it.copy(isLoading = true, message = null, selectedSession = null, selectedDraftSession = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    message = null,
+                    selectedSession = null,
+                    selectedDraftSession = null,
+                    accountQuota = it.accountQuota.copy(isLoading = true),
+                )
+            }
             try {
                 appLogger.info("AppViewModel", "开始连接桥接服务：$endpoint")
                 val connectionState = bridgeApi.connect(endpoint)
@@ -522,6 +538,7 @@ class AppViewModel(
                         message = connectedMessage(connectionState),
                     ).withSettingsItems()
                 }
+                refreshAccountQuotaSnapshot()
                 refreshDiagnosticsLog()
             } catch (error: Exception) {
                 appLogger.error("AppViewModel", "连接桥接服务失败：$endpoint", error)
@@ -532,6 +549,7 @@ class AppViewModel(
                         sessions = emptyList(),
                         selectedSession = null,
                         selectedDraftSession = null,
+                        accountQuota = AccountQuotaUiState(),
                         message = error.message ?: "连接桥接服务失败。",
                     ).withSettingsItems()
                 }
@@ -563,6 +581,7 @@ class AppViewModel(
             }
             try {
                 val sessions = loadManagedSessionSummaries(showArchived)
+                refreshAccountQuotaSnapshot()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -600,6 +619,7 @@ class AppViewModel(
             try {
                 sessionRepository.archiveSession(sessionId)
                 val sessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
+                refreshAccountQuotaSnapshot()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -635,6 +655,7 @@ class AppViewModel(
             try {
                 sessionRepository.unarchiveSession(sessionId)
                 val sessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
+                refreshAccountQuotaSnapshot()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -670,6 +691,7 @@ class AppViewModel(
                     selectedSession = null,
                     selectedDraftSession = null,
                     pendingImageAttachments = emptyList(),
+                    accountQuota = AccountQuotaUiState(),
                     message = "已断开连接。",
                     queuedInputs = emptyList(),
                 ).withSettingsItems()
@@ -843,6 +865,7 @@ class AppViewModel(
                     ),
                 )
             }
+            refreshAccountQuotaSnapshot()
             syncVisibleSessionSummary(uiState.value.selectedSession?.takeIf { it.id == sessionId })
 
             startSessionStream(sessionId)
@@ -1108,12 +1131,14 @@ class AppViewModel(
         val sessionId = uiState.value.selectedSession?.id ?: return
         viewModelScope.launch {
             refreshSessionSnapshot(sessionId)
+            refreshAccountQuotaSnapshot()
         }
     }
 
     fun refreshSessionList() {
         viewModelScope.launch {
             refreshSessions()
+            refreshAccountQuotaSnapshot()
         }
     }
 
@@ -1280,6 +1305,36 @@ class AppViewModel(
             val connectionState = bridgeApi.currentConnection()
             _uiState.update {
                 it.copy(connectionState = connectionState).withSettingsItems()
+            }
+            if (connectionState is BridgeConnectionState.Connected) {
+                refreshAccountQuotaSnapshot()
+            }
+        }
+    }
+
+    private suspend fun refreshAccountQuotaSnapshot() {
+        _uiState.update {
+            it.copy(
+                accountQuota = it.accountQuota.copy(isLoading = true),
+            )
+        }
+        try {
+            val quota = bridgeApi.getAccountQuota()
+            _uiState.update {
+                it.copy(
+                    accountQuota = AccountQuotaUiState(
+                        snapshot = quota,
+                        isLoading = false,
+                        lastUpdatedAt = nowIsoString(),
+                    ),
+                )
+            }
+        } catch (error: Exception) {
+            appLogger.warn("AppViewModel", "读取全局额度失败：${error.message ?: "unknown"}")
+            _uiState.update {
+                it.copy(
+                    accountQuota = it.accountQuota.copy(isLoading = false),
+                )
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.openai.codexmobile.data
 
 import com.openai.codexmobile.model.BridgeConnectionState
+import com.openai.codexmobile.model.AccountQuotaSnapshot
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionGoalSnapshot
 import kotlinx.coroutines.flow.Flow
@@ -103,6 +104,7 @@ interface BridgeApi {
     suspend fun connect(endpoint: String): BridgeConnectionState
     suspend fun disconnect()
     suspend fun currentConnection(): BridgeConnectionState
+    suspend fun getAccountQuota(): AccountQuotaSnapshot
     suspend fun createSession(request: CreateSessionRequest = CreateSessionRequest()): SessionDetail
     suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail
     suspend fun getSessionGoal(sessionId: String): SessionGoalResponse

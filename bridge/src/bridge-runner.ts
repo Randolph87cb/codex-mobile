@@ -1,4 +1,5 @@
 import type {
+  AccountQuotaSnapshot,
   BridgeEvent,
   ResolvedSessionInput,
   SessionApprovalInput,
@@ -24,6 +25,7 @@ export interface BridgeRunner {
 export interface HistoryCapableBridgeRunner extends BridgeRunner {
   listSessionViews(archived?: boolean): Promise<SessionView[]>;
   getSessionView(sessionId: string): Promise<SessionView | null>;
+  getAccountQuota(): Promise<AccountQuotaSnapshot>;
   getSessionGoal(sessionId: string): Promise<SessionGoalState>;
   updateSessionGoal(sessionId: string, input: SessionGoalUpdateInput): Promise<SessionGoalState>;
   clearSessionGoal(sessionId: string): Promise<{ capability: SessionGoalState["capability"]; cleared: boolean }>;
@@ -36,6 +38,7 @@ export function isHistoryCapableRunner(runner: BridgeRunner): runner is HistoryC
   return (
     "listSessionViews" in runner &&
     "getSessionView" in runner &&
+    "getAccountQuota" in runner &&
     "getSessionGoal" in runner &&
     "updateSessionGoal" in runner &&
     "clearSessionGoal" in runner &&

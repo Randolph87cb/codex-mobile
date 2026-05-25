@@ -72,6 +72,27 @@ export interface SessionGoalState {
   goal: SessionGoal | null;
 }
 
+export interface AccountQuotaWindow {
+  usedPercent: number;
+  windowDurationMins: number;
+  resetsAt: string | null;
+}
+
+export interface AccountQuotaCredits {
+  hasCredits: boolean;
+  unlimited: boolean;
+  balance: string | null;
+}
+
+export interface AccountQuotaSnapshot {
+  limitId: string | null;
+  planType: string | null;
+  rateLimitReachedType: string | null;
+  fiveHours: AccountQuotaWindow | null;
+  oneWeek: AccountQuotaWindow | null;
+  credits: AccountQuotaCredits | null;
+}
+
 export interface SessionGoalUpdateInput {
   objective?: string;
   status?: string;

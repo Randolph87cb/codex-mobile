@@ -19,6 +19,9 @@ import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
 import com.openai.codexmobile.diagnostics.FileAppLogger
+import com.openai.codexmobile.model.AccountQuotaCreditsSnapshot
+import com.openai.codexmobile.model.AccountQuotaSnapshot
+import com.openai.codexmobile.model.AccountQuotaWindowSnapshot
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionGoalSnapshot
@@ -150,6 +153,28 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
     }
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
+
+    override suspend fun getAccountQuota(): AccountQuotaSnapshot {
+        return AccountQuotaSnapshot(
+            limitId = "codex",
+            planType = "prolite",
+            fiveHours = AccountQuotaWindowSnapshot(
+                usedPercent = 6,
+                windowDurationMins = 300,
+                resetsAt = "2026-05-25T11:51:54Z",
+            ),
+            oneWeek = AccountQuotaWindowSnapshot(
+                usedPercent = 16,
+                windowDurationMins = 10080,
+                resetsAt = "2026-05-31T00:41:21Z",
+            ),
+            credits = AccountQuotaCreditsSnapshot(
+                hasCredits = false,
+                unlimited = false,
+                balance = "0",
+            ),
+        )
+    }
 
     override suspend fun createSession(request: CreateSessionRequest): SessionDetail = detail
 

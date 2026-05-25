@@ -161,6 +161,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     sessions = uiState.sessions,
                     showArchivedSessions = uiState.showArchivedSessions,
                     connectionState = uiState.connectionState,
+                    accountQuota = uiState.accountQuota,
                     currentCwd = uiState.cwdInput,
                     isLoading = uiState.isLoading,
                     onOpenSession = { sessionId ->
@@ -225,6 +226,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     sessionDetail = uiState.selectedSession,
                     draftSession = null,
                     connectionState = uiState.connectionState,
+                    accountQuota = uiState.accountQuota,
                     sessionRealtimeState = uiState.sessionRealtimeState,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,

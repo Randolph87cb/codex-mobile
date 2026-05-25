@@ -110,6 +110,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.openai.codexmobile.AccountQuotaUiState
 import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingImageAttachmentUiState
 import com.openai.codexmobile.PendingImageUploadState
@@ -191,6 +192,7 @@ fun SessionDetailScreen(
     sessionDetail: SessionDetail?,
     draftSession: DraftSessionUiState?,
     connectionState: BridgeConnectionState,
+    accountQuota: AccountQuotaUiState,
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     draftMessage: String,
@@ -410,6 +412,7 @@ fun SessionDetailScreen(
                 onShowQueued = { queuedDialogVisible = true },
                 onShowGoal = { goalManagerVisible = true },
             )
+            AccountQuotaCard(accountQuota = accountQuota)
             DetailDateChip(text = if (draftSession != null) "草稿" else "今天")
             Box(
                 modifier = Modifier

@@ -6,6 +6,7 @@ import type { HistoryCapableBridgeRunner } from "../src/bridge-runner.js";
 import { buildBridgeApp } from "../src/app.js";
 import { SessionStore } from "../src/session-store.js";
 import type {
+  AccountQuotaSnapshot,
   BridgeSecurityConfig,
   ResolvedSessionInput,
   SessionApprovalInput,
@@ -30,6 +31,26 @@ class TestRunner implements HistoryCapableBridgeRunner {
   readonly interrupt = vi.fn(async () => undefined);
   readonly archiveSession = vi.fn(async (_sessionId: string) => undefined);
   readonly unarchiveSession = vi.fn(async (_sessionId: string) => undefined);
+  readonly getAccountQuota = vi.fn(async (): Promise<AccountQuotaSnapshot> => ({
+    limitId: "codex",
+    planType: "prolite",
+    rateLimitReachedType: null,
+    fiveHours: {
+      usedPercent: 6,
+      windowDurationMins: 300,
+      resetsAt: "2026-05-25T11:51:54.000Z",
+    },
+    oneWeek: {
+      usedPercent: 16,
+      windowDurationMins: 10080,
+      resetsAt: "2026-05-31T00:41:21.000Z",
+    },
+    credits: {
+      hasCredits: false,
+      unlimited: false,
+      balance: "0",
+    },
+  }));
   readonly getSessionGoal = vi.fn(async (_sessionId: string): Promise<SessionGoalState> => ({
     capability: "supported",
     goal: {
@@ -456,6 +477,34 @@ describe("buildBridgeApp", () => {
     expect(runner.submitInput).toHaveBeenCalledWith("thread-history", {
       text: "你是谁",
       attachments: [],
+    });
+
+    await app.close();
+  });
+
+  test("returns normalized account quota for app-server runner", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/account/quota",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(runner.getAccountQuota).toHaveBeenCalledTimes(1);
+    expect(response.json()).toMatchObject({
+      limitId: "codex",
+      planType: "prolite",
+      fiveHours: {
+        usedPercent: 6,
+        windowDurationMins: 300,
+      },
+      oneWeek: {
+        usedPercent: 16,
+        windowDurationMins: 10080,
+      },
     });
 
     await app.close();

@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
 import com.openai.codexmobile.data.SavedBridgeConnection
+import com.openai.codexmobile.model.AccountQuotaSnapshot
+import com.openai.codexmobile.model.AccountQuotaWindowSnapshot
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionSummary
 import com.openai.codexmobile.ui.screen.ConnectionScreen
@@ -57,6 +59,14 @@ private fun SessionsShowcase() {
             endpoint = "ws://10.0.0.12:8080",
             service = "Codex Bridge",
             runnerMode = "LAN",
+        ),
+        accountQuota = AccountQuotaUiState(
+            snapshot = AccountQuotaSnapshot(
+                limitId = "codex",
+                planType = "prolite",
+                fiveHours = AccountQuotaWindowSnapshot(usedPercent = 6, windowDurationMins = 300),
+                oneWeek = AccountQuotaWindowSnapshot(usedPercent = 16, windowDurationMins = 10080),
+            ),
         ),
         currentCwd = "D:\\workspace\\codex-mobile",
         isLoading = false,

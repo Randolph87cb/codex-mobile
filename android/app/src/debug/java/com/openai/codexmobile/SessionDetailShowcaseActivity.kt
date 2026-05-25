@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.openai.codexmobile.model.AccountQuotaSnapshot
+import com.openai.codexmobile.model.AccountQuotaWindowSnapshot
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.model.SessionGoalSnapshot
@@ -76,6 +78,14 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
                     ),
                     draftSession = null,
                     connectionState = BridgeConnectionState.Connected(endpoint = "http://10.0.2.2:8787"),
+                    accountQuota = AccountQuotaUiState(
+                        snapshot = AccountQuotaSnapshot(
+                            limitId = "codex",
+                            planType = "prolite",
+                            fiveHours = AccountQuotaWindowSnapshot(usedPercent = 6, windowDurationMins = 300),
+                            oneWeek = AccountQuotaWindowSnapshot(usedPercent = 16, windowDurationMins = 10080),
+                        ),
+                    ),
                     sessionRealtimeState = SessionRealtimeUiState(
                         isConnected = true,
                         connectionText = "Bridge 已连接",
