@@ -44,3 +44,13 @@
 - `powershell -ExecutionPolicy Bypass -File .\\scripts\\build-android-debug.ps1` 通过。
 - `cd android; .\\gradlew.bat testDebugUnitTest` 通过。
 - 单测过程中发现 `TranscriptMarkdownTest` 仍使用旧函数签名，已同步修复后重跑通过。
+
+# 后续文档更新
+- 用户要求只更新两份 UI 文档，不扩散到 README。
+- 已更新：
+  - `docs/session-detail-ui-notes.md`
+  - `docs/android-ui-collaboration.md`
+- 文档补充内容：
+  - transcript 颜色入口改为 `ui/theme/TranscriptColors.kt`
+  - 浅色 / 深色 token 说明
+  - 后续协作时不要再在 `SessionDetailScreen.kt` 里写死 transcript 颜色
