@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
@@ -38,13 +39,19 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MarkChatUnread
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Tune
@@ -55,6 +62,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -64,9 +72,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -157,7 +168,6 @@ private val SessionDetailPanelShape = RoundedCornerShape(16.dp)
 
 @Composable
 fun SessionDetailScreen(
-    paddingValues: PaddingValues,
     sessionDetail: SessionDetail?,
     draftSession: DraftSessionUiState?,
     sessionRealtimeState: SessionRealtimeUiState,
@@ -186,6 +196,9 @@ fun SessionDetailScreen(
     onShowMessage: (String) -> Unit,
     transcriptScrollState: ScrollState? = null,
     autoScrollTranscript: Boolean = true,
+    title: String? = null,
+    onBack: (() -> Unit)? = null,
+    showTopBar: Boolean = true,
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -194,9 +207,10 @@ fun SessionDetailScreen(
         sessionDetail ?: draftSession?.toDraftDetail()
     }
     val currentTranscriptScrollState = transcriptScrollState ?: rememberScrollState()
-    var statusExpanded by rememberSaveable { mutableStateOf(false) }
     var activeEditor by rememberSaveable { mutableStateOf<SessionConfigEditor?>(null) }
     var goalEditorVisible by rememberSaveable { mutableStateOf(false) }
+    var goalManagerVisible by rememberSaveable { mutableStateOf(false) }
+    var queuedDialogVisible by rememberSaveable { mutableStateOf(false) }
     var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
     var pendingFileDownloadRequest by remember { mutableStateOf<TranscriptFileDownloadRequest?>(null) }
@@ -248,6 +262,27 @@ fun SessionDetailScreen(
                 onUpdateGoal(objective, tokenBudget)
                 goalEditorVisible = false
             },
+        )
+    }
+    if (goalManagerVisible) {
+        GoalManagerDialog(
+            detail = detail,
+            isDraft = draftSession != null,
+            isLoading = isLoading,
+            onDismiss = { goalManagerVisible = false },
+            onEditGoal = {
+                goalManagerVisible = false
+                goalEditorVisible = true
+            },
+            onPauseGoal = onPauseGoal,
+            onResumeGoal = onResumeGoal,
+            onClearGoal = onClearGoal,
+        )
+    }
+    if (queuedDialogVisible) {
+        QueuedInputsDialog(
+            messages = queuedInputs,
+            onDismiss = { queuedDialogVisible = false },
         )
     }
 
@@ -315,162 +350,229 @@ fun SessionDetailScreen(
         )
     }
 
-    Column(
+    Scaffold(
         modifier = Modifier
             .testTag(TestTags.SessionDetailScreen)
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        StatusStrip(
-            detail = detail,
-            sessionRealtimeState = sessionRealtimeState,
-            queuedInputs = queuedInputs,
-            isDraft = draftSession != null,
-            expanded = statusExpanded,
-            onToggleExpanded = { statusExpanded = !statusExpanded },
-            onOpenEditor = { activeEditor = it },
-            onRefreshSession = onRefreshSession,
-        )
-        GoalCard(
-            detail = detail,
-            isDraft = draftSession != null,
-            isLoading = isLoading,
-            onEditGoal = { goalEditorVisible = true },
-            onPauseGoal = onPauseGoal,
-            onResumeGoal = onResumeGoal,
-            onClearGoal = onClearGoal,
-        )
-        sessionRealtimeState.pendingApproval?.let { approval ->
-            ApprovalActionCard(
-                approval = approval,
-                onApprovalDecision = onApprovalDecision,
-            )
-        }
-        if (queuedInputs.isNotEmpty()) {
-            QueuedInputCard(messages = queuedInputs)
-        }
-        Box(
-            modifier = Modifier
-                .testTag(TestTags.SessionDetailTranscript)
-                .fillMaxWidth()
-                .weight(1f),
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 2.dp)
-                    .testTag(TestTags.SessionDetailTranscriptScroll)
-                    .verticalScroll(currentTranscriptScrollState),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                TranscriptBubbleList(
-                    transcript = detail?.transcriptPreview.orEmpty(),
-                    liveActivities = sessionRealtimeState.liveExecutionActivities,
-                    sessionCwd = detail?.cwd,
-                    bridgeEndpoint = bridgeEndpoint,
-                    bridgeAuthToken = bridgeAuthToken,
-                    onShowMessage = onShowMessage,
-                    onFileDownloadRequest = { request ->
-                        pendingFileDownloadRequest = request
-                    },
-                    onCopyText = { copyToClipboard(it, "内容已复制到剪贴板。") },
-                    onCopyCode = { copyToClipboard(it, "代码已复制到剪贴板。") },
-                    onOpenImagePreview = { title, source ->
-                        imagePreviewState = ImagePreviewState(
-                            title = title,
-                            source = source,
-                        )
-                    },
+            .fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            if (showTopBar) {
+                DetailTopAppBar(
+                    title = title ?: detail?.title ?: if (draftSession != null) "草稿线程" else "会话详情",
+                    detail = detail,
+                    onBack = onBack,
+                    onRefreshSession = onRefreshSession,
+                    onOpenEditor = { activeEditor = it },
                 )
             }
-        }
-        if (pendingImageAttachments.isNotEmpty()) {
-            PendingImageAttachmentTray(
-                attachments = pendingImageAttachments,
-                bridgeEndpoint = bridgeEndpoint,
-                bridgeAuthToken = bridgeAuthToken,
-                onOpenImagePreview = { attachment ->
-                    imagePreviewState = ImagePreviewState(
-                        title = attachment.displayName,
-                        source = attachment.previewSource,
-                    )
-                },
-                onRemoveAttachment = onRemovePendingImageAttachment,
-                onRetryAttachment = onRetryPendingImageAttachment,
-            )
-        }
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
+        },
+    ) { detailPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(detailPadding)
+                .background(MaterialTheme.colorScheme.background),
         ) {
-            Row(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StatusStrip(
+                detail = detail,
+                sessionRealtimeState = sessionRealtimeState,
+                queuedInputs = queuedInputs,
+                isDraft = draftSession != null,
+                onShowQueued = { queuedDialogVisible = true },
+                onShowGoal = { goalManagerVisible = true },
+            )
+            DetailDateChip(text = if (draftSession != null) "草稿" else "今天")
+            Box(
                 modifier = Modifier
+                    .testTag(TestTags.SessionDetailTranscript)
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .weight(1f),
             ) {
-                FilledTonalIconButton(
-                    onClick = onPickImage,
-                    enabled = !isLoading && detail != null,
+                Column(
                     modifier = Modifier
-                        .size(42.dp)
-                        .testTag(TestTags.SessionDetailAttachImageButton),
+                        .padding(horizontal = 2.dp)
+                        .testTag(TestTags.SessionDetailTranscriptScroll)
+                        .verticalScroll(currentTranscriptScrollState),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Image,
-                        contentDescription = "添加图片",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                OutlinedTextField(
-                    value = draftMessage,
-                    onValueChange = onDraftMessageChange,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 52.dp)
-                        .testTag(TestTags.SessionDetailDraftField),
-                    placeholder = {
-                        Text(
-                            if (draftSession != null) {
-                                "首条消息发送后才真正创建线程"
-                            } else {
-                                "发送给 Codex"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    },
-                    shape = RoundedCornerShape(20.dp),
-                    maxLines = 3,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                )
-                Button(
-                    onClick = onSend,
-                    enabled = !isLoading &&
-                        detail != null &&
-                        (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty()) &&
-                        !hasPendingUploadBlockers,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .testTag(TestTags.SessionDetailSendButton),
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(0.dp),
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = if (draftSession != null) "开始" else "发送",
-                            modifier = Modifier.size(20.dp),
+                    sessionRealtimeState.pendingApproval?.let { approval ->
+                        ApprovalActionCard(
+                            approval = approval,
+                            onApprovalDecision = onApprovalDecision,
                         )
                     }
+                    TranscriptBubbleList(
+                        transcript = detail?.transcriptPreview.orEmpty(),
+                        liveActivities = sessionRealtimeState.liveExecutionActivities,
+                        sessionCwd = detail?.cwd,
+                        bridgeEndpoint = bridgeEndpoint,
+                        bridgeAuthToken = bridgeAuthToken,
+                        onShowMessage = onShowMessage,
+                        onFileDownloadRequest = { request ->
+                            pendingFileDownloadRequest = request
+                        },
+                        onCopyText = { copyToClipboard(it, "内容已复制到剪贴板。") },
+                        onCopyCode = { copyToClipboard(it, "代码已复制到剪贴板。") },
+                        onOpenImagePreview = { title, source ->
+                            imagePreviewState = ImagePreviewState(
+                                title = title,
+                                source = source,
+                            )
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(if (pendingImageAttachments.isNotEmpty()) 190.dp else 104.dp))
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (pendingImageAttachments.isNotEmpty()) {
+                PendingImageAttachmentTray(
+                    attachments = pendingImageAttachments,
+                    bridgeEndpoint = bridgeEndpoint,
+                    bridgeAuthToken = bridgeAuthToken,
+                    onOpenImagePreview = { attachment ->
+                        imagePreviewState = ImagePreviewState(
+                            title = attachment.displayName,
+                            source = attachment.previewSource,
+                        )
+                    },
+                    onRemoveAttachment = onRemovePendingImageAttachment,
+                    onRetryAttachment = onRetryPendingImageAttachment,
+                )
+            }
+            DetailInputDock(
+                draftMessage = draftMessage,
+                isDraft = draftSession != null,
+                isLoading = isLoading,
+                canUseInput = detail != null,
+                hasPendingUploadBlockers = hasPendingUploadBlockers,
+                hasPendingImages = pendingImageAttachments.isNotEmpty(),
+                onDraftMessageChange = onDraftMessageChange,
+                onPickImage = onPickImage,
+                onSend = onSend,
+            )
+        }
+    }
+    }
+}
+
+@Composable
+private fun DetailDateChip(text: String) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        ) {
+            Text(
+                text = text,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailInputDock(
+    draftMessage: String,
+    isDraft: Boolean,
+    isLoading: Boolean,
+    canUseInput: Boolean,
+    hasPendingUploadBlockers: Boolean,
+    hasPendingImages: Boolean,
+    onDraftMessageChange: (String) -> Unit,
+    onPickImage: () -> Unit,
+    onSend: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 4.dp,
+        shadowElevation = 3.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 7.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilledTonalIconButton(
+                onClick = onPickImage,
+                enabled = !isLoading && canUseInput,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag(TestTags.SessionDetailAttachImageButton),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Image,
+                    contentDescription = "添加图片",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            OutlinedTextField(
+                value = draftMessage,
+                onValueChange = onDraftMessageChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .testTag(TestTags.SessionDetailDraftField),
+                placeholder = {
+                    Text(
+                        if (isDraft) {
+                            "首条消息发送后才真正创建线程"
+                        } else {
+                            "输入指令..."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                shape = RoundedCornerShape(22.dp),
+                maxLines = 3,
+                textStyle = MaterialTheme.typography.bodyMedium,
+            )
+            Button(
+                onClick = onSend,
+                enabled = !isLoading &&
+                    canUseInput &&
+                    (draftMessage.isNotBlank() || hasPendingImages) &&
+                    !hasPendingUploadBlockers,
+                modifier = Modifier
+                    .size(46.dp)
+                    .testTag(TestTags.SessionDetailSendButton),
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = if (isDraft) "开始" else "发送",
+                        modifier = Modifier.size(19.dp),
+                    )
                 }
             }
         }
@@ -678,7 +780,7 @@ private fun ConversationHeader(
     detail: SessionDetail?,
     sessionRealtimeState: SessionRealtimeUiState,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
             text = detail?.title ?: "等待会话",
             style = MaterialTheme.typography.titleMedium,
@@ -716,148 +818,369 @@ private fun ConversationHeader(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailTopAppBar(
+    title: String,
+    detail: SessionDetail?,
+    onBack: (() -> Unit)?,
+    onRefreshSession: () -> Unit,
+    onOpenEditor: (SessionConfigEditor) -> Unit,
+) {
+    var settingsExpanded by rememberSaveable { mutableStateOf(false) }
+
+    TopAppBar(
+        expandedHeight = 54.dp,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onBackground,
+            navigationIconContentColor = MaterialTheme.colorScheme.primary,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        navigationIcon = {
+            if (onBack != null) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = onRefreshSession,
+                enabled = detail != null,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "刷新",
+                    modifier = Modifier.size(19.dp),
+                )
+            }
+            Box {
+                IconButton(
+                    onClick = { settingsExpanded = true },
+                    enabled = detail != null,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag(TestTags.SessionDetailStatusButton),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "模型设置",
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+                DropdownMenu(
+                    expanded = settingsExpanded,
+                    onDismissRequest = { settingsExpanded = false },
+                    modifier = Modifier
+                        .width(330.dp)
+                        .testTag(TestTags.SessionDetailStatusDetails),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "模型设置",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        )
+                        SessionConfigRow(
+                            detail = detail,
+                            onOpenEditor = {
+                                settingsExpanded = false
+                                onOpenEditor(it)
+                            },
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
 @Composable
 private fun StatusStrip(
     detail: SessionDetail?,
     sessionRealtimeState: SessionRealtimeUiState,
     queuedInputs: List<String>,
     isDraft: Boolean,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
-    onOpenEditor: (SessionConfigEditor) -> Unit,
-    onRefreshSession: () -> Unit,
+    onShowQueued: () -> Unit,
+    onShowGoal: () -> Unit,
 ) {
-    val statusIcon = when {
-        isDraft -> Icons.Filled.Work
-        detail?.status == "running" -> Icons.Filled.Bolt
-        detail?.status == "awaiting_approval" -> Icons.Filled.HourglassTop
-        detail?.status == "error" -> Icons.Filled.Error
-        else -> Icons.Filled.CheckCircle
-    }
     val connectionIcon = if (sessionRealtimeState.isConnected) {
-        Icons.Filled.CloudDone
+        Icons.Filled.Sensors
     } else {
         Icons.Filled.CloudOff
     }
-    val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.CheckCircle else Icons.Filled.Schedule
+    val queueIcon = if (queuedInputs.isEmpty()) Icons.Filled.MarkChatUnread else Icons.Filled.MarkChatUnread
+    val connectionStatusText = when {
+        isDraft -> "未创建"
+        sessionRealtimeState.isConnected -> "实时流"
+        else -> "快照"
+    }
+    val queueStatusText = if (queuedInputs.isEmpty()) "无排队" else "${queuedInputs.size} 条"
+    val goalStatusText = when {
+        isDraft -> "待开始"
+        detail?.goalCapability == "unsupported" -> "不支持"
+        detail?.goal == null -> "未设置"
+        else -> localizedGoalStatus(detail.goal.status)
+    }
 
     Surface(
-        shape = SessionDetailPanelShape,
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-        tonalElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        tonalElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailStatusStrip),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(
+            SessionStatusMetric(
+                label = "连接状态",
+                value = connectionStatusText,
+                icon = connectionIcon,
+                iconTint = if (sessionRealtimeState.isConnected) Color(0xFF16A34A) else MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f),
+            )
+            StatusMetricDivider()
+            SessionStatusMetric(
+                label = "排队消息",
+                value = queueStatusText,
+                icon = queueIcon,
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(TestTags.SessionDetailStatusButton)
-                    .clickable { onToggleExpanded() },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-                SessionStatusMetric(
-                    label = "会话",
-                    icon = statusIcon,
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetricDivider()
-                SessionStatusMetric(
-                    label = "连接",
-                    icon = connectionIcon,
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetricDivider()
-                SessionStatusMetric(
-                    label = "排队",
-                    icon = queueIcon,
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetricDivider()
-                SessionStatusMetric(
-                    label = "审批",
-                    icon = if (sessionRealtimeState.pendingApproval != null) {
-                        Icons.Filled.HourglassTop
-                    } else {
-                        Icons.Filled.CheckCircle
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "收起状态详情" else "展开状态详情",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            if (expanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(TestTags.SessionDetailStatusDetails),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .weight(1f)
+                    .clickable { onShowQueued() },
+            )
+            StatusMetricDivider()
+            SessionStatusMetric(
+                label = "目标状态",
+                value = goalStatusText,
+                icon = Icons.Filled.PendingActions,
+                iconTint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onShowGoal() },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GoalManagerDialog(
+    detail: SessionDetail?,
+    isDraft: Boolean,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onEditGoal: () -> Unit,
+    onPauseGoal: () -> Unit,
+    onResumeGoal: () -> Unit,
+    onClearGoal: () -> Unit,
+) {
+    val goalStatusText = when {
+        isDraft -> "待开始"
+        detail?.goalCapability == "unsupported" -> "不支持"
+        detail?.goal == null -> "未设置"
+        else -> localizedGoalStatus(detail.goal.status)
+    }
+    val objectiveText = when {
+        detail == null -> "等待会话元数据。"
+        isDraft -> "先发送首条消息创建真实线程，再管理目标。"
+        detail.goalCapability == "unsupported" -> "当前 host 暂不支持目标模式。"
+        detail.goal == null -> "还没有目标。可以给当前线程设置一个持续目标。"
+        else -> detail.goal.objective
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("管理目标", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
-                    OutlinedCard(
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "连接：${sessionRealtimeState.connectionText}",
-                                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                                )
-                                if (!isDraft) {
-                                    TextButton(
-                                        onClick = onRefreshSession,
-                                        modifier = Modifier.testTag(TestTags.SessionDetailStatusRefreshButton),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                                    ) {
-                                        Text(
-                                            text = "刷新",
-                                            style = MaterialTheme.typography.labelMedium,
-                                        )
-                                    }
-                                }
-                            }
-                            Text(
-                                text = "状态：${sessionRealtimeState.statusText}",
-                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                            )
-                            Text(
-                                text = "最近事件：${sessionRealtimeState.lastEventText ?: "等待实时事件。"}",
-                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                            )
-                        }
+                    TranscriptLabelChip(
+                        text = goalStatusText,
+                        icon = Icons.Filled.PendingActions,
+                        containerColor = if (detail?.goal == null) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                        contentColor = if (detail?.goal == null) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                    )
+                    detail?.goal?.tokenBudget?.let { budget ->
+                        GoalMetricChip(text = "预算 $budget")
                     }
-                    sessionRealtimeState.fallbackNotice?.let { notice ->
-                        Text(
-                            text = notice,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                    detail?.goal?.let { goal ->
+                        GoalMetricChip(text = formatTokenUsage(goal.tokensUsed))
                     }
-                    SessionConfigRow(
-                        detail = detail,
-                        onOpenEditor = onOpenEditor,
+                }
+                OutlinedCard(
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                ) {
+                    Text(
+                        text = objectiveText,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                     )
                 }
+                if (!isDraft && detail?.goalCapability != "unsupported") {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = onEditGoal,
+                            enabled = !isLoading && detail != null,
+                            modifier = Modifier.testTag(
+                                if (detail?.goal == null) {
+                                    TestTags.SessionDetailGoalStartButton
+                                } else {
+                                    TestTags.SessionDetailGoalEditButton
+                                },
+                            ),
+                        ) {
+                            Icon(imageVector = Icons.Filled.Flag, contentDescription = null)
+                            Text(
+                                text = if (detail?.goal == null) "开始目标" else "编辑目标",
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                        detail?.goal?.let { goal ->
+                            val paused = goal.status == "paused"
+                            OutlinedButton(
+                                onClick = if (paused) onResumeGoal else onPauseGoal,
+                                enabled = !isLoading,
+                                modifier = Modifier.testTag(
+                                    if (paused) {
+                                        TestTags.SessionDetailGoalResumeButton
+                                    } else {
+                                        TestTags.SessionDetailGoalPauseButton
+                                    },
+                                ),
+                            ) {
+                                Icon(
+                                    imageVector = if (paused) Icons.Filled.Bolt else Icons.Filled.StopCircle,
+                                    contentDescription = null,
+                                )
+                                Text(
+                                    text = if (paused) "恢复" else "暂停",
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = onClearGoal,
+                                enabled = !isLoading,
+                                modifier = Modifier.testTag(TestTags.SessionDetailGoalClearButton),
+                            ) {
+                                Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
+                                Text(text = "清除", modifier = Modifier.padding(start = 8.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("完成")
+            }
+        },
+    )
+}
+
+@Composable
+private fun QueuedInputsDialog(
+    messages: List<String>,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("排队消息", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.testTag(TestTags.SessionDetailQueuedInputsCard),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (messages.isEmpty()) {
+                    Text(
+                        text = "当前没有排队消息。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    messages.forEachIndexed { index, message ->
+                        QueuedItemBlock(index = index, text = message)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("确定")
+            }
+        },
+    )
+}
+
+@Composable
+private fun QueuedItemBlock(
+    index: Int,
+    text: String,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "${index + 1}. $text",
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 19.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = {}) { Text("编辑") }
+                TextButton(onClick = {}) { Text("引导") }
+                TextButton(onClick = {}) { Text("删除", color = MaterialTheme.colorScheme.error) }
             }
         }
     }
@@ -1067,28 +1390,47 @@ private fun GoalMetricChip(
 @Composable
 private fun SessionStatusMetric(
     label: String,
+    value: String,
     icon: ImageVector,
+    iconTint: Color,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Row(
         modifier = modifier
-            .defaultMinSize(minHeight = 28.dp)
-            .padding(horizontal = 2.dp, vertical = 0.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .defaultMinSize(minHeight = 34.dp)
+            .padding(horizontal = 4.dp, vertical = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp, lineHeight = 12.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
-            maxLines = 1,
-        )
+        Surface(
+            modifier = Modifier.size(28.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    tint = iconTint,
+                )
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                maxLines = 1,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, lineHeight = 12.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -1112,70 +1454,91 @@ private fun SessionConfigRow(
         return
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.SessionDetailConfigRow),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.Model) },
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.SessionDetailConfigModelButton),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Filled.Tune,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
+            SessionConfigButton(
                 text = detail.model,
-                modifier = Modifier.padding(start = 6.dp),
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
+                icon = Icons.Filled.Tune,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigModelButton),
+                onClick = { onOpenEditor(SessionConfigEditor.Model) },
             )
-        }
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.ReasoningEffort) },
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.SessionDetailConfigReasoningButton),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Bolt,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
+            SessionConfigButton(
                 text = "推理 ${localizedReasoning(detail.reasoningEffort)}",
-                modifier = Modifier.padding(start = 6.dp),
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
+                icon = Icons.Filled.Bolt,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigReasoningButton),
+                onClick = { onOpenEditor(SessionConfigEditor.ReasoningEffort) },
             )
-        }
-        OutlinedButton(
-            onClick = { onOpenEditor(SessionConfigEditor.ServiceTier) },
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.SessionDetailConfigServiceTierButton),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Speed,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
+            SessionConfigButton(
                 text = "速度 ${localizedService(detail.serviceTier)}",
-                modifier = Modifier.padding(start = 6.dp),
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
+                icon = Icons.Filled.Speed,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigServiceTierButton),
+                onClick = { onOpenEditor(SessionConfigEditor.ServiceTier) },
             )
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SessionConfigButton(
+                text = detail.cwd.ifBlank { "未配置目录" },
+                icon = Icons.Filled.Folder,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigCwdButton),
+                onClick = { onOpenEditor(SessionConfigEditor.Cwd) },
+            )
+            SessionConfigButton(
+                text = "权限 ${localizedSandbox(detail.sandboxMode)}",
+                icon = Icons.Filled.Security,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.SessionDetailConfigSandboxButton),
+                onClick = { onOpenEditor(SessionConfigEditor.SandboxMode) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionConfigButton(
+    text: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+        )
+        Text(
+            text = text,
+            modifier = Modifier.padding(start = 6.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }
 
@@ -1512,7 +1875,7 @@ private fun TranscriptBubbleCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         val isUser = bubble.speaker == TranscriptSpeaker.User
         val isCollapsible = !bubble.prefersExpandedByDefault
-        val bubbleWidthFraction = if (isUser) 0.74f else 0.80f
+        val bubbleWidthFraction = if (isUser) 0.78f else 0.88f
         var expanded by rememberSaveable(toggleTag, bubble.summaryLine, bubble.prefersExpandedByDefault) {
             mutableStateOf(bubble.prefersExpandedByDefault)
         }
@@ -1547,19 +1910,20 @@ private fun TranscriptBubbleCard(
             if (isCollapsible) {
                 Card(
                     shape = RoundedCornerShape(
-                        topStart = 12.dp,
-                        topEnd = 12.dp,
-                        bottomStart = if (isUser) 12.dp else 6.dp,
-                        bottomEnd = if (isUser) 6.dp else 12.dp,
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (isUser) 16.dp else 4.dp,
+                        bottomEnd = if (isUser) 4.dp else 16.dp,
                     ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = backgroundColor,
                         contentColor = contentColor,
                     ),
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
-                        verticalArrangement = Arrangement.spacedBy(1.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         TranscriptToggleHeader(
                             bubble = bubble,
@@ -1605,35 +1969,36 @@ private fun TranscriptBubbleCard(
                                 end = if (isUser) 10.dp else 0.dp,
                             ),
                         shape = RoundedCornerShape(
-                            topStart = 11.dp,
-                            topEnd = 11.dp,
-                            bottomStart = if (isUser) 11.dp else 5.dp,
-                            bottomEnd = if (isUser) 5.dp else 11.dp,
+                            topStart = 16.dp,
+                            topEnd = 16.dp,
+                            bottomStart = if (isUser) 16.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 16.dp,
                         ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = backgroundColor,
                             contentColor = contentColor,
                         ),
                     ) {
                         Box(
-                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         ) {
                             IconButton(
                                 onClick = { onCopyText(bubble.copyText) },
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(11.dp)
+                                    .size(28.dp)
                                     .testTag(TestTags.SessionDetailTranscriptBubbleCopyPrefix + toggleTag),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.ContentCopy,
                                     contentDescription = "复制消息",
-                                    modifier = Modifier.size(5.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                                 )
                             }
                             Column(
-                                modifier = Modifier.padding(end = 10.dp),
+                                modifier = Modifier.padding(end = 30.dp),
                             ) {
                                 TranscriptPartsColumn(
                                     parts = bubble.parts,
@@ -1661,21 +2026,23 @@ private fun ConversationSpeakerHeader(
     isUser: Boolean,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 0.dp),
+        modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
     ) {
         if (!isUser) {
             ConversationSpeakerBadge(isUser = false)
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text(
                 text = bubble.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ConversationSpeakerBadge(isUser = true)
@@ -1689,13 +2056,13 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
         shape = CircleShape,
         color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(13.dp),
+        modifier = Modifier.size(24.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (isUser) {
                 Box(
                     modifier = Modifier
-                        .size(3.dp)
+                        .size(6.dp)
                         .background(
                             color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
                             shape = CircleShape,
@@ -1704,7 +2071,7 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
             } else {
                 Text(
                     text = ">",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             }

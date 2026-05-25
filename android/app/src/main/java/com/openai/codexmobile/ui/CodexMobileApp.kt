@@ -2,31 +2,15 @@ package com.openai.codexmobile.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -34,13 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -49,6 +30,7 @@ import com.openai.codexmobile.AppViewModel
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.ui.screen.ConnectionScreen
 import com.openai.codexmobile.ui.screen.SessionDetailScreen
+import com.openai.codexmobile.ui.screen.SessionDraftScreen
 import com.openai.codexmobile.ui.screen.SessionListScreen
 import com.openai.codexmobile.ui.screen.SettingsScreen
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +45,6 @@ private object Routes {
     const val Settings = "settings"
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CodexMobileApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
@@ -75,6 +56,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val navigateToSessionsAfterConnect = remember { mutableStateOf(false) }
     val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isEmpty()) {
             return@rememberLauncherForActivityResult
@@ -100,8 +82,12 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
         uiState.message?.let { snackbarHostState.showSnackbar(it) }
     }
 
-    LaunchedEffect(uiState.connectionState, currentRoute) {
-        if (uiState.connectionState is BridgeConnectionState.Connected && currentRoute == Routes.Connection) {
+    LaunchedEffect(uiState.connectionState, currentRoute, navigateToSessionsAfterConnect.value) {
+        if (navigateToSessionsAfterConnect.value &&
+            uiState.connectionState is BridgeConnectionState.Connected &&
+            currentRoute == Routes.Connection
+        ) {
+            navigateToSessionsAfterConnect.value = false
             navController.navigate(Routes.Sessions) {
                 popUpTo(Routes.Connection) {
                     inclusive = false
@@ -141,38 +127,32 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            AppTopBar(
-                currentRoute = currentRoute,
-                navController = navController,
-                selectedSessionTitle = uiState.selectedSession?.title,
-                sessionConnected = uiState.sessionRealtimeState.isConnected,
-            )
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-    ) { paddingValues ->
+    Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = Routes.Connection,
         ) {
             composable(Routes.Connection) {
                 ConnectionScreen(
-                    paddingValues = paddingValues,
                     currentConnectionName = uiState.selectedConnection?.name.orEmpty(),
                     endpoint = uiState.endpointInput,
                     connectionState = uiState.connectionState,
                     isLoading = uiState.isLoading,
                     onEndpointChange = appViewModel::updateEndpointInput,
-                    onConnect = appViewModel::connect,
+                    onConnect = {
+                        navigateToSessionsAfterConnect.value = true
+                        appViewModel.connect()
+                    },
                     onOpenSettings = { navController.navigate(Routes.Settings) },
+                    onOpenSessions = {
+                        navController.navigate(Routes.Sessions) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
             composable(Routes.Sessions) {
                 SessionListScreen(
-                    paddingValues = paddingValues,
                     sessions = uiState.sessions,
                     showArchivedSessions = uiState.showArchivedSessions,
                     connectionState = uiState.connectionState,
@@ -188,9 +168,10 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         appViewModel.startDraftSession(cwd)
                         navController.navigate(Routes.DraftSession)
                     },
-                    onDisconnect = {
-                        appViewModel.disconnect()
-                        navController.popBackStack(Routes.Connection, inclusive = false)
+                    onNavigateToConnect = {
+                        navController.navigate(Routes.Connection) {
+                            launchSingleTop = true
+                        }
                     },
                     onOpenSettings = { navController.navigate(Routes.Settings) },
                 )
@@ -203,37 +184,25 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         }
                     }
                 }
-                SessionDetailScreen(
-                    paddingValues = paddingValues,
-                    sessionDetail = null,
+                SessionDraftScreen(
                     draftSession = uiState.selectedDraftSession,
-                    sessionRealtimeState = uiState.sessionRealtimeState,
-                    queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
                     pendingImageAttachments = uiState.pendingImageAttachments,
-                    bridgeEndpoint = uiState.endpointInput,
-                    bridgeAuthToken = uiState.authTokenInput,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onPickImage = { imagePickerLauncher.launch("image/*") },
                     onRemovePendingImageAttachment = appViewModel::removePendingImageAttachment,
                     onRetryPendingImageAttachment = appViewModel::retryPendingImageAttachment,
                     onSend = appViewModel::sendInput,
-                    onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
                     onUpdateModel = appViewModel::updateSelectedSessionModel,
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
                     onUpdateSandboxMode = appViewModel::updateSelectedSessionSandboxMode,
-                    onUpdateGoal = appViewModel::updateSelectedSessionGoal,
-                    onPauseGoal = appViewModel::pauseSelectedSessionGoal,
-                    onResumeGoal = appViewModel::resumeSelectedSessionGoal,
-                    onClearGoal = appViewModel::clearSelectedSessionGoal,
-                    onRefreshSession = appViewModel::refreshSelectedSession,
-                    onShowMessage = { message ->
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(message)
-                        }
+                    onOpenSettings = { navController.navigate(Routes.Settings) },
+                    onBack = {
+                        appViewModel.discardDraftSession()
+                        navController.popBackStack()
                     },
                 )
             }
@@ -248,7 +217,6 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     }
                 }
                 SessionDetailScreen(
-                    paddingValues = paddingValues,
                     sessionDetail = uiState.selectedSession,
                     draftSession = null,
                     sessionRealtimeState = uiState.sessionRealtimeState,
@@ -279,6 +247,8 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                             snackbarHostState.showSnackbar(message)
                         }
                     },
+                    title = uiState.selectedSession?.title ?: "会话详情",
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(Routes.Settings) {
@@ -286,7 +256,6 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     appViewModel.refreshDiagnosticsLog()
                 }
                 SettingsScreen(
-                    paddingValues = paddingValues,
                     items = uiState.settingsItems,
                     selectedConnectionName = uiState.selectedConnection?.name.orEmpty(),
                     savedConnections = uiState.savedConnections,
@@ -321,128 +290,22 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         }
                     },
                     onBack = { navController.popBackStack() },
+                    onNavigateToConnect = {
+                        navController.navigate(Routes.Connection) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToSessions = {
+                        navController.navigate(Routes.Sessions) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AppTopBar(
-    currentRoute: String?,
-    navController: NavHostController,
-    selectedSessionTitle: String?,
-    sessionConnected: Boolean,
-) {
-    if (currentRoute == Routes.Connection || currentRoute == Routes.Sessions) {
-        return
-    }
-    val isSessionDetailRoute = currentRoute == Routes.DraftSession ||
-        currentRoute == Routes.SessionDetail ||
-        currentRoute?.startsWith("session/") == true
-    val title = when (currentRoute) {
-        Routes.DraftSession -> "草稿线程"
-        Routes.Settings -> "设置"
-        else -> "Codex 移动端"
-    }
-    val resolvedTitle = if (currentRoute?.startsWith("session/") == true) {
-        selectedSessionTitle ?: "会话详情"
-    } else {
-        title
-    }
-    val sessionStatusText = if (sessionConnected) "在线" else "快照"
-    val sessionStatusDotColor = if (sessionConnected) {
-        MaterialTheme.colorScheme.tertiary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    TopAppBar(
-        expandedHeight = 54.dp,
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
-            titleContentColor = MaterialTheme.colorScheme.onBackground,
-            navigationIconContentColor = MaterialTheme.colorScheme.primary,
-        ),
-        title = {
-            if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
-                Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = resolvedTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                    )
-                    Row(
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.foundation.Canvas(
-                            modifier = Modifier
-                                .size(8.dp),
-                        ) {
-                            drawCircle(
-                                color = sessionStatusDotColor,
-                                radius = size.minDimension / 2,
-                            )
-                        }
-                        Text(
-                            text = sessionStatusText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            } else {
-                Text(text = resolvedTitle)
-            }
-        },
-        navigationIcon = {
-            if (isSessionDetailRoute || currentRoute == Routes.Settings) {
-                IconButton(
-                    onClick = { navController.popBackStack() },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-        },
-        actions = {
-            if (isSessionDetailRoute && currentRoute != Routes.DraftSession) {
-                IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Filled.Refresh,
-                        contentDescription = "刷新",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Filled.OpenInFull,
-                        contentDescription = "展开",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Filled.ContentCopy,
-                        contentDescription = "复制",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "更多",
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        },
-    )
 }

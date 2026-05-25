@@ -11,22 +11,16 @@ import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -73,83 +67,78 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
 
         setContent {
             CodexMobileTheme(darkTheme = false) {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = MaterialTheme.colorScheme.background,
-                    topBar = { ShowcaseTopBar() },
-                ) { paddingValues ->
-                    SessionDetailScreen(
-                        paddingValues = paddingValues,
-                        sessionDetail = sessionDetail(
-                            portraitImage = portraitImage,
-                            squareImage = squareImage,
-                            landscapeImage = landscapeImage,
-                        ),
-                        draftSession = null,
-                        sessionRealtimeState = SessionRealtimeUiState(
-                            isConnected = true,
-                            connectionText = "Bridge 已连接",
-                            statusText = "正在处理支付回调日志",
-                            lastEventText = "最近一条事件：已完成图片上传预检查。",
-                        ),
-                        queuedInputs = emptyList(),
-                        draftMessage = "",
-                        pendingImageAttachments = if (showPending) {
-                            listOf(
-                                PendingImageAttachmentUiState(
-                                    localId = "pending-portrait",
-                                    displayName = "girl-portrait.png",
-                                    mimeType = "image/png",
-                                    previewSource = portraitImage,
-                                    uploadState = PendingImageUploadState.Uploaded,
-                                    stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\girl-portrait.png",
-                                ),
-                                PendingImageAttachmentUiState(
-                                    localId = "pending-square",
-                                    displayName = "avatar-square.png",
-                                    mimeType = "image/png",
-                                    previewSource = squareImage,
-                                    uploadState = PendingImageUploadState.Uploaded,
-                                    stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\avatar-square.png",
-                                ),
-                                PendingImageAttachmentUiState(
-                                    localId = "pending-landscape",
-                                    displayName = "wide-banner.png",
-                                    mimeType = "image/png",
-                                    previewSource = landscapeImage,
-                                    uploadState = PendingImageUploadState.Failed,
-                                    uploadError = "上传失败，请重试。",
-                                ),
-                                PendingImageAttachmentUiState(
-                                    localId = "pending-dark",
-                                    displayName = "dark-portrait.png",
-                                    mimeType = "image/png",
-                                    previewSource = darkPortraitImage,
-                                    uploadState = PendingImageUploadState.Uploading,
-                                ),
-                            )
-                        } else {
-                            emptyList()
-                        },
-                        bridgeEndpoint = "",
-                        bridgeAuthToken = "",
-                        isLoading = false,
-                        onDraftMessageChange = {},
-                        onPickImage = {},
-                        onRemovePendingImageAttachment = {},
-                        onRetryPendingImageAttachment = {},
-                        onSend = {},
-                        onApprovalDecision = {},
-                        onUpdateCwd = {},
-                        onUpdateModel = {},
-                        onUpdateReasoningEffort = {},
-                        onUpdateServiceTier = {},
-                        onUpdateSandboxMode = {},
-                        onRefreshSession = {},
-                        onShowMessage = {},
-                        autoScrollTranscript = false,
-                    )
-                }
+                SessionDetailScreen(
+                    sessionDetail = sessionDetail(
+                        portraitImage = portraitImage,
+                        squareImage = squareImage,
+                        landscapeImage = landscapeImage,
+                    ),
+                    draftSession = null,
+                    sessionRealtimeState = SessionRealtimeUiState(
+                        isConnected = true,
+                        connectionText = "Bridge 已连接",
+                        statusText = "正在处理支付回调日志",
+                        lastEventText = "最近一条事件：已完成图片上传预检查。",
+                    ),
+                    queuedInputs = emptyList(),
+                    draftMessage = "",
+                    pendingImageAttachments = if (showPending) {
+                        listOf(
+                            PendingImageAttachmentUiState(
+                                localId = "pending-portrait",
+                                displayName = "girl-portrait.png",
+                                mimeType = "image/png",
+                                previewSource = portraitImage,
+                                uploadState = PendingImageUploadState.Uploaded,
+                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\girl-portrait.png",
+                            ),
+                            PendingImageAttachmentUiState(
+                                localId = "pending-square",
+                                displayName = "avatar-square.png",
+                                mimeType = "image/png",
+                                previewSource = squareImage,
+                                uploadState = PendingImageUploadState.Uploaded,
+                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\avatar-square.png",
+                            ),
+                            PendingImageAttachmentUiState(
+                                localId = "pending-landscape",
+                                displayName = "wide-banner.png",
+                                mimeType = "image/png",
+                                previewSource = landscapeImage,
+                                uploadState = PendingImageUploadState.Failed,
+                                uploadError = "上传失败，请重试。",
+                            ),
+                            PendingImageAttachmentUiState(
+                                localId = "pending-dark",
+                                displayName = "dark-portrait.png",
+                                mimeType = "image/png",
+                                previewSource = darkPortraitImage,
+                                uploadState = PendingImageUploadState.Uploading,
+                            ),
+                        )
+                    } else {
+                        emptyList()
+                    },
+                    bridgeEndpoint = "",
+                    bridgeAuthToken = "",
+                    isLoading = false,
+                    onDraftMessageChange = {},
+                    onPickImage = {},
+                    onRemovePendingImageAttachment = {},
+                    onRetryPendingImageAttachment = {},
+                    onSend = {},
+                    onApprovalDecision = {},
+                    onUpdateCwd = {},
+                    onUpdateModel = {},
+                    onUpdateReasoningEffort = {},
+                    onUpdateServiceTier = {},
+                    onUpdateSandboxMode = {},
+                    onRefreshSession = {},
+                    onShowMessage = {},
+                    autoScrollTranscript = false,
+                    title = "支付系统改造",
+                    onBack = { finish() },
+                )
             }
         }
     }
@@ -268,27 +257,6 @@ private fun ShowcaseTopBar() {
             }
         },
         actions = {
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = "刷新",
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    imageVector = Icons.Filled.OpenInFull,
-                    contentDescription = "展开",
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    imageVector = Icons.Filled.ContentCopy,
-                    contentDescription = "复制",
-                    modifier = Modifier.size(18.dp),
-                )
-            }
             IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
