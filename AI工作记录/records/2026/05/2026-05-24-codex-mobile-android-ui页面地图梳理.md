@@ -366,3 +366,22 @@
   - 模拟器截图复核通过：
     - `.\.tmp\showcase-detail-light-bubbles-v3.png`
     - `.\.tmp\showcase-settings-font-size-v4.png`
+
+## Codex 消息残留深蓝修复
+
+- 时间：2026-05-25
+- 目标：修复实机仍能看到 Codex 消息区域为深蓝的问题。
+- 原因：
+  - 原工作目录仍在 `ui-detail-ai-studio-merge` 分支，里面的详情页仍使用 `primaryContainer` 作为 Codex 消息气泡背景；从该目录重新安装会继续看到深蓝。
+  - `main` 上虽然已把正文气泡改为浅色，但 Codex 头像徽标仍使用 `primary`，执行过程折叠标题在 `bubble == null` 时仍 fallback 到 `primaryContainer`，视觉上仍像深蓝消息块。
+- 改动文件：
+  - `android/app/src/main/java/com/openai/codexmobile/ui/screen/SessionDetailScreen.kt`
+- 改动内容：
+  - `ConversationSpeakerBadge` 改为浅色容器、深色内容和细边框，不再用 `primary` 深蓝。
+  - `TranscriptToggleHeader` 在没有 `bubble` 的执行过程标题中改用 `SystemBubbleContainer` 和 `onSurfaceVariant`，不再 fallback 到 `primaryContainer`。
+- 验证：
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1` 通过。
+  - `cd android; .\gradlew.bat testDebugUnitTest` 通过。
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-android-debug-emulator.ps1` 安装成功。
+  - 模拟器截图确认 Codex 徽标和消息气泡均为浅色：
+    - `.\.tmp\showcase-detail-bubble-fix-v1.png`

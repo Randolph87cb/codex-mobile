@@ -2051,10 +2051,13 @@ private fun ConversationSpeakerHeader(
 
 @Composable
 private fun ConversationSpeakerBadge(isUser: Boolean) {
+    val badgeContainerColor = if (isUser) UserBubbleContainer else SystemBubbleContainer
+    val badgeContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         shape = CircleShape,
-        color = if (isUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
-        contentColor = if (isUser) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
+        color = badgeContainerColor,
+        contentColor = badgeContentColor,
+        border = BorderStroke(1.dp, TranscriptBubbleBorder),
         modifier = Modifier.size(24.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -2063,7 +2066,7 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
                     modifier = Modifier
                         .size(6.dp)
                         .background(
-                            color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f),
+                            color = badgeContentColor.copy(alpha = 0.78f),
                             shape = CircleShape,
                         ),
                 )
@@ -2071,7 +2074,7 @@ private fun ConversationSpeakerBadge(isUser: Boolean) {
                 Text(
                     text = ">",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = badgeContentColor,
                 )
             }
         }
@@ -2280,9 +2283,9 @@ private fun TranscriptToggleHeader(
                 text = label,
                 icon = bubble?.headerIcon(),
                 containerColor = bubble?.headerContainerColor()
-                    ?: MaterialTheme.colorScheme.primaryContainer,
+                    ?: SystemBubbleContainer,
                 contentColor = bubble?.headerContentColor()
-                    ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 compact = true,
                 plain = true,
             )
