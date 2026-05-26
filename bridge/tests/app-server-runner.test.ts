@@ -681,6 +681,63 @@ describe("AppServerRunner", () => {
     expect(view?.pendingApproval?.paramsSummary).toContain("Copy-Item");
   });
 
+  test("renames thread title through app-server and returns refreshed view", async () => {
+    const store = createSessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: unknown) => {
+      if (method === "thread/name/set") {
+        expect(params).toEqual({
+          threadId: "thread-1",
+          name: "添加线程改名功能",
+        });
+        return {};
+      }
+
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            name: "添加线程改名功能",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const view = await runner.renameSessionTitle("thread-1", "添加线程改名功能");
+
+    expect(client.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/name/set",
+      {
+        threadId: "thread-1",
+        name: "添加线程改名功能",
+      },
+    );
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
+      "thread/read",
+      {
+        threadId: "thread-1",
+        includeTurns: true,
+      },
+    );
+    expect(view).toMatchObject({
+      id: "thread-1",
+      title: "添加线程改名功能",
+      status: "idle",
+      threadId: "thread-1",
+    });
+  });
+
   test("treats stale waitingOnApproval thread status as running when no pending approval remains", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
@@ -219,6 +220,7 @@ fun SessionDetailScreen(
     onInterrupt: () -> Unit = {},
     onApprovalDecision: (ApprovalDecision) -> Unit,
     onUpdateCwd: (String) -> Unit,
+    onRenameSessionTitle: (String) -> Unit = {},
     onUpdateModel: (String) -> Unit,
     onUpdateReasoningEffort: (String) -> Unit,
     onUpdateServiceTier: (String) -> Unit,
@@ -247,6 +249,7 @@ fun SessionDetailScreen(
     var goalEditorVisible by rememberSaveable { mutableStateOf(false) }
     var goalManagerVisible by rememberSaveable { mutableStateOf(false) }
     var queuedDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var renameDialogVisible by rememberSaveable { mutableStateOf(false) }
     var previousTranscriptScrollMax by remember { mutableIntStateOf(0) }
     var imagePreviewState by remember { mutableStateOf<ImagePreviewState?>(null) }
     var pendingFileDownloadRequest by remember { mutableStateOf<TranscriptFileDownloadRequest?>(null) }
@@ -329,6 +332,16 @@ fun SessionDetailScreen(
             onDismiss = { queuedDialogVisible = false },
         )
     }
+    if (renameDialogVisible && sessionDetail != null && draftSession == null) {
+        RenameSessionDialog(
+            currentTitle = sessionDetail.title,
+            onDismiss = { renameDialogVisible = false },
+            onConfirm = { nextTitle ->
+                onRenameSessionTitle(nextTitle)
+                renameDialogVisible = false
+            },
+        )
+    }
 
     imagePreviewState?.let { preview ->
         ImagePreviewDialog(
@@ -404,8 +417,10 @@ fun SessionDetailScreen(
                 DetailTopAppBar(
                     title = title ?: detail?.title ?: if (draftSession != null) "草稿线程" else "会话详情",
                     detail = detail,
+                    canRename = sessionDetail != null && draftSession == null,
                     accountQuota = accountQuota,
                     onBack = onBack,
+                    onRenameSession = { renameDialogVisible = true },
                     onRefreshSession = onRefreshSession,
                     onOpenEditor = { activeEditor = it },
                 )
@@ -932,8 +947,10 @@ private fun ConversationHeader(
 private fun DetailTopAppBar(
     title: String,
     detail: SessionDetail?,
+    canRename: Boolean,
     accountQuota: AccountQuotaUiState,
     onBack: (() -> Unit)?,
+    onRenameSession: () -> Unit,
     onRefreshSession: () -> Unit,
     onOpenEditor: (SessionConfigEditor) -> Unit,
 ) {
@@ -948,12 +965,33 @@ private fun DetailTopAppBar(
             actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
         title = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (canRename) {
+                    FilledTonalIconButton(
+                        onClick = onRenameSession,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag(TestTags.SessionDetailRenameButton),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "修改线程名称",
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                }
+            }
         },
         navigationIcon = {
             if (onBack != null) {
@@ -1025,6 +1063,58 @@ private fun DetailTopAppBar(
                         )
                     }
                 }
+            }
+        },
+    )
+}
+
+@Composable
+private fun RenameSessionDialog(
+    currentTitle: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var value by rememberSaveable(currentTitle) { mutableStateOf(currentTitle) }
+    val trimmedValue = value.trim()
+    val canConfirm = trimmedValue.isNotEmpty() && trimmedValue != currentTitle.trim()
+
+    AlertDialog(
+        modifier = Modifier.testTag(TestTags.SessionDetailRenameDialog),
+        onDismissRequest = onDismiss,
+        title = { Text("修改线程名称") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "仅修改展示名称，不影响当前线程 ID 和上下文。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text("线程名称") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.SessionDetailRenameField),
+                    supportingText = {
+                        Text("修改后会同步更新当前详情页和线程列表。")
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(trimmedValue) },
+                enabled = canConfirm,
+                modifier = Modifier.testTag(TestTags.SessionDetailRenameConfirmButton),
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
         },
     )

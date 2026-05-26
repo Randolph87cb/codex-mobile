@@ -14,10 +14,11 @@ import kotlinx.coroutines.flow.emptyFlow
 class FakeCodexDataProvider : CodexDataProvider {
     private var connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected
     private var sessionGoal: SessionGoalSnapshot? = null
+    private val sessionDetailsById = mutableMapOf<String, SessionDetail>()
 
     override fun updateAuthToken(token: String) = Unit
 
-    private val sessions = listOf(
+    private val sessions = mutableListOf(
         SessionSummary(
             id = "session-001",
             title = "Compose 骨架初始化",
@@ -37,6 +38,27 @@ class FakeCodexDataProvider : CodexDataProvider {
             status = "idle",
         ),
     )
+
+    init {
+        sessions.forEach { session ->
+            sessionDetailsById[session.id] = SessionDetail(
+                id = session.id,
+                title = session.title,
+                subtitle = session.subtitle,
+                lastUpdated = session.lastUpdated,
+                transcriptPreview = "这里是占位详情页，后续会替换成真实会话内容和工具输出。",
+                cwd = session.cwd,
+                model = session.model,
+                approvalMode = session.approvalMode,
+                reasoningEffort = session.reasoningEffort,
+                serviceTier = session.serviceTier,
+                sandboxMode = session.sandboxMode,
+                status = session.status,
+                goal = sessionGoal,
+                goalCapability = "supported",
+            )
+        }
+    }
 
     override suspend fun connect(endpoint: String): BridgeConnectionState {
         delay(300)
@@ -105,7 +127,21 @@ class FakeCodexDataProvider : CodexDataProvider {
             reasoningEffort = update.reasoningEffort ?: detail.reasoningEffort,
             serviceTier = update.serviceTier ?: detail.serviceTier,
             sandboxMode = update.sandboxMode ?: detail.sandboxMode,
-        )
+        ).also { updated ->
+            sessionDetailsById[sessionId] = updated
+        }
+    }
+
+    override suspend fun renameSessionTitle(sessionId: String, title: String): SessionDetail {
+        delay(80)
+        val detail = getSessionDetail(sessionId) ?: error("session not found")
+        val updated = detail.copy(title = title.trim())
+        sessionDetailsById[sessionId] = updated
+        val index = sessions.indexOfFirst { it.id == sessionId }
+        if (index >= 0) {
+            sessions[index] = sessions[index].copy(title = updated.title)
+        }
+        return updated
     }
 
     override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse {
@@ -187,23 +223,7 @@ class FakeCodexDataProvider : CodexDataProvider {
 
     override suspend fun getSessionDetail(sessionId: String): SessionDetail? {
         delay(150)
-        val session = sessions.firstOrNull { it.id == sessionId } ?: return null
-        return SessionDetail(
-            id = session.id,
-            title = session.title,
-            subtitle = session.subtitle,
-            lastUpdated = session.lastUpdated,
-            transcriptPreview = "这里是占位详情页，后续会替换成真实会话内容和工具输出。",
-            cwd = session.cwd,
-            model = session.model,
-            approvalMode = session.approvalMode,
-            reasoningEffort = session.reasoningEffort,
-            serviceTier = session.serviceTier,
-            sandboxMode = session.sandboxMode,
-            status = session.status,
-            goal = sessionGoal,
-            goalCapability = "supported",
-        )
+        return sessionDetailsById[sessionId]?.copy(goal = sessionGoal, goalCapability = "supported")
     }
 
     override suspend fun archiveSession(sessionId: String) {

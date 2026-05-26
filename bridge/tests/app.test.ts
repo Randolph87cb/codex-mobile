@@ -18,6 +18,7 @@ import type {
 
 class TestRunner implements HistoryCapableBridgeRunner {
   readonly mode = "mock" as const;
+  private historyTitle = "历史会话";
   readonly createSession = vi.fn(async (input) => this.store.attach({
     id: "thread-test",
     cwd: input.cwd,
@@ -43,6 +44,34 @@ class TestRunner implements HistoryCapableBridgeRunner {
   readonly interrupt = vi.fn(async () => undefined);
   readonly archiveSession = vi.fn(async (_sessionId: string) => undefined);
   readonly unarchiveSession = vi.fn(async (_sessionId: string) => undefined);
+  readonly renameSessionTitle = vi.fn(async (sessionId: string, title: string): Promise<SessionView> => {
+    if (sessionId !== "thread-history") {
+      throw new Error("session-not-renamable");
+    }
+
+    this.historyTitle = title;
+    return {
+      id: "thread-history",
+      title: this.historyTitle,
+      subtitle: "openai • 空闲 • D:\\workspace\\history",
+      lastUpdated: "2026-05-19T01:00:00.000Z",
+      transcriptPreview: "你：之前说过什么？\n\nCodex：这里是历史回复。",
+      archived: false,
+      source: "history",
+      cwd: "D:\\workspace\\history",
+      model: "openai",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+      status: "idle",
+      threadId: "thread-history",
+      activeTurnId: null,
+      lastError: null,
+      createdAt: "2026-05-19T01:00:00.000Z",
+      updatedAt: "2026-05-19T01:00:00.000Z",
+    };
+  });
   readonly getAccountQuota = vi.fn(async (): Promise<AccountQuotaSnapshot> => ({
     limitId: "codex",
     planType: "prolite",
@@ -102,7 +131,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
     return [
       {
         id: archived ? "thread-archived" : "thread-history",
-        title: archived ? "已归档会话" : "历史会话",
+        title: archived ? "已归档会话" : this.historyTitle,
         subtitle: archived ? "openai • 空闲 • D:\\workspace\\archived" : "openai • 空闲 • D:\\workspace\\history",
         lastUpdated: "2026-05-19T01:00:00.000Z",
         transcriptPreview: "你：之前说过什么？\n\nCodex：这里是历史回复。",
@@ -131,7 +160,7 @@ class TestRunner implements HistoryCapableBridgeRunner {
 
     return {
       id: "thread-history",
-      title: "历史会话",
+      title: this.historyTitle,
       subtitle: "openai • 空闲 • D:\\workspace\\history",
       lastUpdated: "2026-05-19T01:00:00.000Z",
       transcriptPreview: "你：之前说过什么？\n\nCodex：这里是历史回复。",
@@ -444,6 +473,20 @@ describe("buildBridgeApp", () => {
         requestId: "req-history",
         method: "item/permissions/requestApproval",
       },
+    });
+
+    const renamed = await app.inject({
+      method: "PATCH",
+      url: "/api/session/thread-history/title",
+      payload: {
+        title: "添加线程改名功能",
+      },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(runner.renameSessionTitle).toHaveBeenCalledWith("thread-history", "添加线程改名功能");
+    expect(renamed.json()).toMatchObject({
+      id: "thread-history",
+      title: "添加线程改名功能",
     });
 
     const goal = await app.inject({ method: "GET", url: "/api/session/thread-history/goal" });

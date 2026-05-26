@@ -199,6 +199,28 @@ class AppViewModelTest {
     }
 
     @Test
+    fun renameSessionTitleUpdatesSelectedSessionAndVisibleList() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_rename", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_rename")
+        advanceUntilIdle()
+
+        viewModel.renameSelectedSessionTitle("添加线程改名功能")
+        advanceUntilIdle()
+
+        assertEquals(listOf("添加线程改名功能"), bridgeApi.sessionTitleUpdates)
+        assertEquals("添加线程改名功能", viewModel.uiState.value.selectedSession?.title)
+        assertEquals("添加线程改名功能", viewModel.uiState.value.sessions.single().title)
+        assertEquals("已更新线程名称。", viewModel.uiState.value.message)
+    }
+
+    @Test
     fun goalActionsUpdateSelectedSessionAndCallBridge() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_goal", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
@@ -1760,6 +1782,7 @@ private class FakeBridgeApi(
     val uploadedImageRequests = mutableListOf<UploadImageAttachmentRequest>()
     val approvalCalls = mutableListOf<ApprovalCall>()
     val sessionConfigUpdates = mutableListOf<SessionConfigUpdate>()
+    val sessionTitleUpdates = mutableListOf<String>()
     val sessionGoalUpdates = mutableListOf<SessionGoalUpdateRequest>()
     val clearedSessionGoals = mutableListOf<String>()
     val interruptedSessionIds = mutableListOf<String>()
@@ -1828,6 +1851,12 @@ private class FakeBridgeApi(
             serviceTier = update.serviceTier ?: currentDetail.serviceTier,
             sandboxMode = update.sandboxMode ?: currentDetail.sandboxMode,
         )
+        return currentDetail
+    }
+
+    override suspend fun renameSessionTitle(sessionId: String, title: String): SessionDetail {
+        sessionTitleUpdates += title
+        currentDetail = currentDetail.copy(title = title.trim())
         return currentDetail
     }
 

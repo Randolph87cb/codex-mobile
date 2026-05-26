@@ -90,7 +90,7 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
         createdAt = "2026-05-22T09:00:00Z",
         updatedAt = "2026-05-22T09:03:00Z",
     )
-    private val session = SessionSummary(
+    private var session = SessionSummary(
         id = "session-test-001",
         title = "测试会话",
         subtitle = "用于稳定 UI 回放",
@@ -190,6 +190,13 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
             serviceTier = update.serviceTier ?: detail.serviceTier,
             sandboxMode = update.sandboxMode ?: detail.sandboxMode,
         )
+        return detail
+    }
+
+    override suspend fun renameSessionTitle(sessionId: String, title: String): SessionDetail {
+        val normalizedTitle = title.trim()
+        session = session.copy(title = normalizedTitle)
+        detail = detail.copy(title = normalizedTitle)
         return detail
     }
 

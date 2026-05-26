@@ -31,6 +31,10 @@ const updateSessionConfigSchema = z.object({
   sandboxMode: z.enum(["read-only", "workspace-write", "danger-full-access"]).optional(),
 });
 
+const updateSessionTitleSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+});
+
 const updateSessionGoalSchema = z.object({
   objective: z.string().trim().min(1).max(2_000).optional(),
   status: z.string().trim().min(1).max(64).optional(),
@@ -424,6 +428,46 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       }),
     );
     return updated ?? session;
+  });
+
+  app.patch("/api/session/:id/title", async (request, reply) => {
+    if (isDraining()) {
+      return reply.status(503).send(buildBridgeRestartingError("session-title-update"));
+    }
+    if (!historyRunner) {
+      return reply.status(501).send({ error: "rename-not-supported" });
+    }
+
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    const body = updateSessionTitleSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: body.error.flatten(),
+      });
+    }
+
+    const session = await resolveSessionRecord(params.id, store, historyRunner);
+    if (!session) {
+      return reply.status(404).send({ error: "session-not-found" });
+    }
+
+    try {
+      return await historyRunner.renameSessionTitle(session.id, body.data.title);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "session-title-required") {
+        return reply.status(400).send({ error: message });
+      }
+      if (message === "session-not-renamable") {
+        return reply.status(409).send({ error: message });
+      }
+
+      return reply.status(502).send({
+        error: "session-title-update-failed",
+        message,
+      });
+    }
   });
 
   app.get("/api/session/:id", async (request, reply) => {

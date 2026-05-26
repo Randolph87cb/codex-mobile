@@ -60,6 +60,10 @@ class FallbackCodexDataProvider(
         return requireActiveProvider().updateSessionConfig(sessionId, update)
     }
 
+    override suspend fun renameSessionTitle(sessionId: String, title: String): SessionDetail {
+        return requireActiveProvider().renameSessionTitle(sessionId, title)
+    }
+
     override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse {
         return requireActiveProvider().getSessionGoal(sessionId)
     }

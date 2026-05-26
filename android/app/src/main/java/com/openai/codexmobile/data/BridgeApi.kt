@@ -107,6 +107,7 @@ interface BridgeApi {
     suspend fun getAccountQuota(): AccountQuotaSnapshot
     suspend fun createSession(request: CreateSessionRequest = CreateSessionRequest()): SessionDetail
     suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail
+    suspend fun renameSessionTitle(sessionId: String, title: String): SessionDetail
     suspend fun getSessionGoal(sessionId: String): SessionGoalResponse
     suspend fun updateSessionGoal(sessionId: String, request: SessionGoalUpdateRequest): SessionGoalResponse
     suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult

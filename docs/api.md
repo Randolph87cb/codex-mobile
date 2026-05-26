@@ -7,7 +7,7 @@
 - 公开健康检查：`GET /health`
 - 全局额度：`GET /api/account/quota`
 - 会话列表与详情：`GET /api/sessions`、`GET /api/session/:id`
-- 会话创建、配置、目标与归档：`POST /api/session`、`PATCH /api/session/:id/config`、`GET /api/session/:id/goal`、`PUT /api/session/:id/goal`、`DELETE /api/session/:id/goal`、`POST /api/session/:id/archive`、`POST /api/session/:id/unarchive`
+- 会话创建、改名、配置、目标与归档：`POST /api/session`、`PATCH /api/session/:id/title`、`PATCH /api/session/:id/config`、`GET /api/session/:id/goal`、`PUT /api/session/:id/goal`、`DELETE /api/session/:id/goal`、`POST /api/session/:id/archive`、`POST /api/session/:id/unarchive`
 - 会话输入与审批：`POST /api/session/:id/input`、`POST /api/session/:id/approve`、`POST /api/session/:id/interrupt`
 - 图片上传与访问：
   - `POST /api/attachment/image`
@@ -233,6 +233,24 @@ Android 当前消费方式：
 ### `PATCH /api/session/:id/config`
 
 更新会话配置。所有字段均可选，但至少需要提交一个有效字段。
+
+### `PATCH /api/session/:id/title`
+
+修改线程展示名称。bridge 会把这条请求映射到上游 `thread/name/set`，并返回刷新后的会话详情视图。
+
+请求体：
+
+```json
+{
+  "title": "添加线程改名功能"
+}
+```
+
+当前约定：
+
+- `title` 必填，bridge 会先做 `trim()`；
+- 只有真实线程支持改名，草稿线程不支持；
+- 成功后返回的就是最新详情视图，Android 可直接用来刷新详情页和线程列表。
 
 ### `POST /api/session/:id/archive`
 

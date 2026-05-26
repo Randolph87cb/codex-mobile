@@ -1141,6 +1141,59 @@ class AppViewModel(
         )
     }
 
+    fun renameSelectedSessionTitle(value: String) {
+        val detail = uiState.value.selectedSession ?: return
+        val normalized = value.trim()
+        if (normalized.isBlank()) {
+            _uiState.update { it.copy(message = "线程名称不能为空。") }
+            return
+        }
+        if (normalized == detail.title.trim()) {
+            _uiState.update { it.copy(message = "线程名称没有变化。") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { state ->
+                val renamed = state.selectedSession?.takeIf { it.id == detail.id }?.copy(title = normalized)
+                state.copy(
+                    isLoading = true,
+                    message = null,
+                    selectedSession = renamed,
+                    sessions = overlaySessionSummary(state.sessions, renamed),
+                )
+            }
+
+            try {
+                val renamed = bridgeApi.renameSessionTitle(detail.id, normalized)
+                _uiState.update { state ->
+                    if (state.selectedSession?.id != detail.id) {
+                        state.copy(isLoading = false)
+                    } else {
+                        val merged = mergeSessionDetail(state.selectedSession, renamed)
+                        state.copy(
+                            isLoading = false,
+                            message = "已更新线程名称。",
+                            selectedSession = merged,
+                            sessions = overlaySessionSummary(state.sessions, merged),
+                        )
+                    }
+                }
+                refreshSessions()
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "修改线程名称失败：sessionId=${detail.id}", error)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "修改线程名称失败。",
+                    )
+                }
+                refreshSessionSnapshot(detail.id)
+                refreshDiagnosticsLog()
+            }
+        }
+    }
+
     fun refreshSelectedSession() {
         val sessionId = uiState.value.selectedSession?.id ?: return
         viewModelScope.launch {

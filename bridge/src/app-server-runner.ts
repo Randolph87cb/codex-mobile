@@ -398,6 +398,38 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     return thread ? this.decorateSessionViewWithGoal(buildSessionViewFromThread(thread)) : null;
   }
 
+  async renameSessionTitle(sessionId: string, title: string): Promise<SessionView> {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      throw new Error("session-title-required");
+    }
+
+    const threadId = await this.resolveArchivableThreadId(sessionId);
+    if (!threadId) {
+      throw new Error("session-not-renamable");
+    }
+
+    await this.client.request("thread/name/set", {
+      threadId,
+      name: normalizedTitle,
+    });
+
+    const thread = await this.tryReadThread(threadId);
+    if (!thread) {
+      throw new Error("session-rename-refresh-failed");
+    }
+
+    const attachedSession = this.store.get(sessionId) ?? this.store.findByThreadId(threadId) ?? undefined;
+    if (!attachedSession) {
+      return this.decorateSessionViewWithGoal(buildSessionViewFromThread(thread));
+    }
+
+    const synced = this.applyThreadSnapshot(attachedSession, thread);
+    return this.decorateSessionViewWithGoal(
+      buildSessionViewFromThread(thread, synced, this.getPendingApprovalView(synced.id)),
+    );
+  }
+
   async getAccountQuota(): Promise<AccountQuotaSnapshot> {
     const result = await this.client.request<AppServerAccountRateLimitsResponse>("account/rateLimits/read", undefined);
     return mapAccountQuotaSnapshot(result);

@@ -26,6 +26,7 @@ export interface BridgeRunner {
 export interface HistoryCapableBridgeRunner extends BridgeRunner {
   listSessionViews(archived?: boolean): Promise<SessionView[]>;
   getSessionView(sessionId: string): Promise<SessionView | null>;
+  renameSessionTitle(sessionId: string, title: string): Promise<SessionView>;
   getAccountQuota(): Promise<AccountQuotaSnapshot>;
   getSessionGoal(sessionId: string): Promise<SessionGoalState>;
   updateSessionGoal(sessionId: string, input: SessionGoalUpdateInput): Promise<SessionGoalState>;
@@ -39,6 +40,7 @@ export function isHistoryCapableRunner(runner: BridgeRunner): runner is HistoryC
   return (
     "listSessionViews" in runner &&
     "getSessionView" in runner &&
+    "renameSessionTitle" in runner &&
     "getAccountQuota" in runner &&
     "getSessionGoal" in runner &&
     "updateSessionGoal" in runner &&

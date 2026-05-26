@@ -183,6 +183,29 @@ class RealBridgeDataProvider(
         response.body.toSessionDetail()
     }
 
+    override suspend fun renameSessionTitle(sessionId: String, title: String): SessionDetail = withContext(Dispatchers.IO) {
+        val normalizedTitle = title.trim()
+        require(normalizedTitle.isNotEmpty()) { "线程名称不能为空。" }
+        appLogger.info("BridgeApi", "修改线程名称：sessionId=$sessionId, title=$normalizedTitle")
+        val payload = JSONObject()
+            .put("title", normalizedTitle)
+        val response = request(
+            method = "PATCH",
+            url = "${requireBaseUrl()}/api/session/$sessionId/title",
+            body = payload.toString(),
+            summary = "rename session title, sessionId=$sessionId",
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "修改线程名称失败，sessionId=$sessionId, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw BridgeRequestException(response.statusCode, response.body)
+        }
+
+        response.body.toSessionDetail()
+    }
+
     override suspend fun getSessionGoal(sessionId: String): SessionGoalResponse = withContext(Dispatchers.IO) {
         appLogger.info("BridgeApi", "读取会话目标：sessionId=$sessionId")
         val response = request(

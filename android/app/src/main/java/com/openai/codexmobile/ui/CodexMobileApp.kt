@@ -242,6 +242,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onInterrupt = appViewModel::interruptSelectedSession,
                     onApprovalDecision = appViewModel::submitApproval,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
+                    onRenameSessionTitle = appViewModel::renameSelectedSessionTitle,
                     onUpdateModel = appViewModel::updateSelectedSessionModel,
                     onUpdateReasoningEffort = appViewModel::updateSelectedSessionReasoningEffort,
                     onUpdateServiceTier = appViewModel::updateSelectedSessionServiceTier,
