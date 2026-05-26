@@ -1,5 +1,10 @@
 package com.openai.codexmobile.data
 
+import com.openai.codexmobile.diagnostics.AppLogger
+import kotlinx.coroutines.test.runTest
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -7,6 +12,37 @@ import org.junit.Test
 import org.json.JSONObject
 
 class RealBridgeDataProviderTest {
+    @Test
+    fun interruptSessionPostsEmptyJsonBody() = runTest {
+        val server = MockWebServer().apply {
+            enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "application/json; charset=utf-8")
+                    .setBody("""{"ok":true,"service":"codex-mobile-bridge","runnerMode":"app-server"}"""),
+            )
+            enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "application/json; charset=utf-8")
+                    .setBody("""{"ok":true}"""),
+            )
+            start()
+        }
+
+        try {
+            val provider = RealBridgeDataProvider(NoopAppLogger())
+            provider.connect(server.url("/").toString().removeSuffix("/"))
+            provider.interruptSession("sess-interrupt")
+
+            server.takeRequest()
+            val interruptRequest = server.takeRequest()
+            assertEquals("/api/session/sess-interrupt/interrupt", interruptRequest.path)
+            assertEquals("application/json; charset=utf-8", interruptRequest.getHeader("Content-Type"))
+            assertEquals("{}", interruptRequest.body.readUtf8())
+        } finally {
+            server.shutdown()
+        }
+    }
+
     @Test
     fun shouldSuppressStreamFailureOnlyForClientInitiatedShutdown() {
         assertTrue(shouldSuppressStreamFailure("Socket closed", closedByClient = true))
@@ -184,4 +220,20 @@ class RealBridgeDataProviderTest {
 
         assertTrue(message == "bridge 正在重启，暂时无法刷新额度。")
     }
+}
+
+private class NoopAppLogger : AppLogger {
+    override fun debug(tag: String, message: String) = Unit
+
+    override fun info(tag: String, message: String) = Unit
+
+    override fun warn(tag: String, message: String) = Unit
+
+    override fun error(tag: String, message: String, throwable: Throwable?) = Unit
+
+    override fun readRecentLogs(maxChars: Int): String = ""
+
+    override fun clear() = Unit
+
+    override fun installCrashHandler() = Unit
 }

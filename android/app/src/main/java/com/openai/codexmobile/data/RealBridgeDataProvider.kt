@@ -351,6 +351,7 @@ class RealBridgeDataProvider(
         val response = request(
             method = "POST",
             url = "${requireBaseUrl()}/api/session/$sessionId/interrupt",
+            body = JSONObject().toString(),
             summary = "interrupt session, sessionId=$sessionId",
         )
         if (response.statusCode !in 200..299) {
