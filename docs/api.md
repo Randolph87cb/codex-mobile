@@ -441,6 +441,23 @@ Android 当前会把详情页顶部状态拆成两层来消费：
 
 中断当前运行。成功时返回 `200`。
 
+请求体：
+
+```json
+{}
+```
+
+请求约定：
+
+- 当前没有业务字段，但客户端仍应显式发送空 JSON body `{}`
+- `Content-Type` 应为 `application/json; charset=utf-8`
+- 不要把这条接口当成“完全无 body 的空 POST”
+
+兼容性说明：
+
+- 2026-05-26 的 Android 真机联调中，空 `POST` 在进入 bridge 路由前就被 Fastify `content-type-parser` 拒绝，返回 `415 Unsupported Media Type`
+- 因此移动端、脚本端和后续新增客户端都统一按“显式空 JSON”调用，避免不同 HTTP 实现对空 body `POST` 的默认行为不一致
+
 Android 当前把它作为独立的“终止当前轮”动作使用，和发送按钮分离：
 
 - 运行中继续点击发送，纯文本会进入客户端排队

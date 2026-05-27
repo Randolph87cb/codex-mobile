@@ -25,6 +25,10 @@ http://192.168.31.66:8787
   - `POST /api/session/:id/interrupt`
   - `GET /api/session/:id/ws`
 
+- `POST /api/session/:id/interrupt` 当前约定必须显式发送空 JSON body `{}`
+  - `Content-Type` 使用 `application/json; charset=utf-8`
+  - 不要发送“完全无 body 的空 POST”；2026-05-26 真机联调里，这种请求会被 bridge 的 Fastify 层直接拒绝为 `415 Unsupported Media Type`
+
 ## 当前缺口
 
 - 详情页还没有接 WebSocket 流式输出
