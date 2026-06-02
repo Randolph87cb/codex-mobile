@@ -133,14 +133,23 @@ export class MockRunner implements BridgeRunner {
 function buildInputSummary(input: ResolvedSessionInput): string {
   const text = input.text.trim();
   const imageCount = input.attachments.filter((attachment) => attachment.kind === "image").length;
-  if (imageCount === 0) {
+  const videoCount = input.attachments.filter((attachment) => attachment.kind === "video").length;
+  if (imageCount === 0 && videoCount === 0) {
     return text || "空输入";
   }
 
-  const imageSummary = `附带 ${imageCount} 张图片`;
+  const parts: string[] = [];
+  if (imageCount > 0) {
+    parts.push(`附带 ${imageCount} 张图片`);
+  }
+  if (videoCount > 0) {
+    parts.push(`附带 ${videoCount} 个视频文件`);
+  }
+  const attachmentSummary = parts.join("，");
+
   if (!text) {
-    return imageSummary;
+    return attachmentSummary;
   }
 
-  return `${text}（${imageSummary}）`;
+  return `${text}（${attachmentSummary}）`;
 }

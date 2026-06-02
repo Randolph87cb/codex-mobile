@@ -30,6 +30,7 @@ object TestTags {
     const val SessionDetailTranscript = "session_detail_transcript"
     const val SessionDetailDraftField = "session_detail_draft_field"
     const val SessionDetailAttachImageButton = "session_detail_attach_image_button"
+    const val SessionDetailAttachVideoButton = "session_detail_attach_video_button"
     const val SessionDetailPendingImageTray = "session_detail_pending_image_tray"
     const val SessionDetailPendingImageCard = "session_detail_pending_image_card"
     const val SessionDetailPendingImageRow = "session_detail_pending_image_row"

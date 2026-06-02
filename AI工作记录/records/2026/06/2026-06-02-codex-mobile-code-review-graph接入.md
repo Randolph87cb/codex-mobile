@@ -216,3 +216,22 @@
 - 后续如果继续做第二阶段重构，优先级仍然是：
   - Android `AppViewModel`
   - Android `RealBridgeDataProvider`
+
+## 2026-06-02 补充：视频附件功能补提交
+
+- 背景：
+  - bridge 重构提交完成后，仓库里仍残留一组未提交的“视频附件第一阶段实现”改动。
+  - 已确认这组改动与本次 bridge 模块化重构不同，属于独立功能面。
+- 归属文件：
+  - Android：`AppViewModel`、`BridgeApi`、`RealBridgeDataProvider`、`CodexMobileApp`、`SessionDraftScreen`、`SessionDetailScreen`、`VideoAttachmentPreparer`、debug showcase / replay / tests
+  - bridge：`attachment-store`、`types`、`app-server-runner`、`mock-runner`、对应测试
+  - 文档：`README.md`、`docs/api.md`
+  - 记录：`AI工作记录/records/2026/05/2026-05-31-codex-mobile-视频上传方案评估.md`
+- 排除项：
+  - `AI工作记录/records/2026/05/2026-05-23-codex-mobile-安装包路径定位.md` 不属于视频功能，未纳入本次提交
+  - `spritesheet.webp` 与 `spritesheet (1).webp` 未纳入本次提交
+- 验证：
+  - `cd bridge && npm run check`：通过
+  - `cd bridge && npm test`：通过
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\build-android-debug.ps1`：通过
+  - `cd android && .\gradlew.bat testDebugUnitTest`：通过

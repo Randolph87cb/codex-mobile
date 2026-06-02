@@ -123,15 +123,27 @@ export interface ResolvedSessionInput {
 
 export interface ResolvedSessionInputAttachment {
   id: string;
-  kind: "image";
+  kind: "image" | "video";
   path: string;
   displayName: string;
   mimeType: string;
+  savedPath?: string;
 }
 
 export interface UploadedImageAttachment {
   id: string;
   kind: "image";
+  displayName: string;
+  mimeType: string;
+  path: string;
+  savedPath?: string;
+  savedRelativePath?: string;
+  createdAt: string;
+}
+
+export interface UploadedVideoAttachment {
+  id: string;
+  kind: "video";
   displayName: string;
   mimeType: string;
   path: string;

@@ -83,6 +83,10 @@ class FallbackCodexDataProvider(
         return requireActiveProvider().uploadImageAttachment(request)
     }
 
+    override suspend fun uploadVideoAttachment(request: UploadVideoAttachmentRequest): UploadedVideoAttachment {
+        return requireActiveProvider().uploadVideoAttachment(request)
+    }
+
     override suspend fun sendInput(sessionId: String, request: SendInputRequest) {
         requireActiveProvider().sendInput(sessionId, request)
     }

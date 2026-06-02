@@ -192,6 +192,16 @@ class FakeCodexDataProvider : CodexDataProvider {
         )
     }
 
+    override suspend fun uploadVideoAttachment(request: UploadVideoAttachmentRequest): UploadedVideoAttachment {
+        delay(80)
+        return UploadedVideoAttachment(
+            id = "fake-video-attachment",
+            displayName = request.displayName,
+            mimeType = request.mimeType,
+            stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\fake-video-attachment.mp4",
+        )
+    }
+
     override suspend fun sendInput(sessionId: String, request: SendInputRequest) {
         delay(100)
     }

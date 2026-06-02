@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.MarkChatUnread
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
@@ -122,6 +123,8 @@ import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingImageAttachmentUiState
 import com.openai.codexmobile.PendingImageUploadState
 import com.openai.codexmobile.PendingApprovalUiState
+import com.openai.codexmobile.PendingVideoAttachmentUiState
+import com.openai.codexmobile.PendingVideoUploadState
 import com.openai.codexmobile.SessionRealtimeUiState
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.model.BridgeConnectionState
@@ -209,13 +212,17 @@ fun SessionDetailScreen(
     queuedInputs: List<String>,
     draftMessage: String,
     pendingImageAttachments: List<PendingImageAttachmentUiState>,
+    pendingVideoAttachments: List<PendingVideoAttachmentUiState>,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
     onRemovePendingImageAttachment: (String) -> Unit,
     onRetryPendingImageAttachment: (String) -> Unit,
+    onRemovePendingVideoAttachment: (String) -> Unit,
+    onRetryPendingVideoAttachment: (String) -> Unit,
     onSend: () -> Unit,
     onInterrupt: () -> Unit = {},
     onApprovalDecision: (ApprovalDecision) -> Unit,
@@ -259,6 +266,8 @@ fun SessionDetailScreen(
     var contentBoundsInRoot by remember { mutableStateOf<Rect?>(null) }
     val hasPendingUploadBlockers = pendingImageAttachments.any {
         it.uploadState == PendingImageUploadState.Uploading || it.uploadState == PendingImageUploadState.Failed
+    } || pendingVideoAttachments.any {
+        it.uploadState == PendingVideoUploadState.Uploading || it.uploadState == PendingVideoUploadState.Failed
     }
     val copyToClipboard: (String, String) -> Unit = remember(clipboardManager, onShowMessage) {
         { content, successMessage ->
@@ -516,7 +525,16 @@ fun SessionDetailScreen(
                             )
                         },
                     )
-                    Spacer(modifier = Modifier.height(if (pendingImageAttachments.isNotEmpty()) 190.dp else 104.dp))
+                    val pendingTrayCount = listOf(
+                        pendingImageAttachments.isNotEmpty(),
+                        pendingVideoAttachments.isNotEmpty(),
+                    ).count { it }
+                    val bottomInset = when (pendingTrayCount) {
+                        0 -> 104.dp
+                        1 -> 190.dp
+                        else -> 276.dp
+                    }
+                    Spacer(modifier = Modifier.height(bottomInset))
                 }
             }
         }
@@ -544,6 +562,13 @@ fun SessionDetailScreen(
                     onRetryAttachment = onRetryPendingImageAttachment,
                 )
             }
+            if (pendingVideoAttachments.isNotEmpty()) {
+                PendingVideoAttachmentTray(
+                    attachments = pendingVideoAttachments,
+                    onRemoveAttachment = onRemovePendingVideoAttachment,
+                    onRetryAttachment = onRetryPendingVideoAttachment,
+                )
+            }
             DetailInputDock(
                 draftMessage = draftMessage,
                 isDraft = draftSession != null,
@@ -552,9 +577,10 @@ fun SessionDetailScreen(
                 showInterruptButton = draftSession == null && shouldShowInterruptButton(detail, sessionRealtimeState),
                 isInterrupting = sessionRealtimeState.isInterrupting,
                 hasPendingUploadBlockers = hasPendingUploadBlockers,
-                hasPendingImages = pendingImageAttachments.isNotEmpty(),
+                hasPendingAttachments = pendingImageAttachments.isNotEmpty() || pendingVideoAttachments.isNotEmpty(),
                 onDraftMessageChange = onDraftMessageChange,
                 onPickImage = onPickImage,
+                onPickVideo = onPickVideo,
                 onSend = onSend,
                 onInterrupt = onInterrupt,
             )
@@ -592,15 +618,16 @@ private fun DetailInputDock(
     showInterruptButton: Boolean,
     isInterrupting: Boolean,
     hasPendingUploadBlockers: Boolean,
-    hasPendingImages: Boolean,
+    hasPendingAttachments: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
     onSend: () -> Unit,
     onInterrupt: () -> Unit,
 ) {
     val sendEnabled = !isLoading &&
         canUseInput &&
-        (draftMessage.isNotBlank() || hasPendingImages) &&
+        (draftMessage.isNotBlank() || hasPendingAttachments) &&
         !hasPendingUploadBlockers
     Surface(
         shape = RoundedCornerShape(28.dp),
@@ -626,6 +653,19 @@ private fun DetailInputDock(
                 Icon(
                     imageVector = Icons.Filled.Image,
                     contentDescription = "添加图片",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            FilledTonalIconButton(
+                onClick = onPickVideo,
+                enabled = !isLoading && canUseInput,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag(TestTags.SessionDetailAttachVideoButton),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "添加视频",
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -699,6 +739,149 @@ private fun DetailInputDock(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PendingVideoAttachmentTray(
+    attachments: List<PendingVideoAttachmentUiState>,
+    onRemoveAttachment: (String) -> Unit,
+    onRetryAttachment: (String) -> Unit,
+) {
+    val uploadingCount = attachments.count { it.uploadState == PendingVideoUploadState.Uploading }
+    val failedCount = attachments.count { it.uploadState == PendingVideoUploadState.Failed }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.padding(8.dp).size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = "已附加视频（${attachments.size}）",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = when {
+                            failedCount > 0 -> "$failedCount 个失败，可直接重试或移除。"
+                            uploadingCount > 0 -> "$uploadingCount 个上传中，发送前会等待全部完成。"
+                            else -> "视频会作为文件链接发送到会话。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                attachments.forEach { attachment ->
+                    PendingVideoAttachmentRow(
+                        attachment = attachment,
+                        onRemove = onRemoveAttachment,
+                        onRetry = onRetryAttachment,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PendingVideoAttachmentRow(
+    attachment: PendingVideoAttachmentUiState,
+    onRemove: (String) -> Unit,
+    onRetry: (String) -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
+    ) {
+        Row(
+            modifier = Modifier
+                .widthIn(min = 156.dp, max = 220.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (attachment.uploadState == PendingVideoUploadState.Failed) {
+                    Icons.Filled.Error
+                } else {
+                    Icons.Filled.PlayArrow
+                },
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = if (attachment.uploadState == PendingVideoUploadState.Failed) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = attachment.displayName,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                    text = when (attachment.uploadState) {
+                        PendingVideoUploadState.Uploading -> "上传中"
+                        PendingVideoUploadState.Uploaded -> "已就绪"
+                        PendingVideoUploadState.Failed -> attachment.uploadError ?: "上传失败"
+                    },
+                    style = MaterialTheme.typography.labelSmall.merge(PendingAttachmentMetaTextStyle),
+                    color = if (attachment.uploadState == PendingVideoUploadState.Failed) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = if (attachment.uploadState == PendingVideoUploadState.Failed) "重试" else "移除",
+                style = MaterialTheme.typography.labelSmall.merge(PendingAttachmentMetaTextStyle),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    if (attachment.uploadState == PendingVideoUploadState.Failed) {
+                        onRetry(attachment.localId)
+                    } else {
+                        onRemove(attachment.localId)
+                    }
+                },
+            )
         }
     }
 }

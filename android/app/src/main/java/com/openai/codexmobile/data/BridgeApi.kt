@@ -72,7 +72,41 @@ fun UploadImageAttachmentRequest.toDiagnosticsSummary(): String {
     }
 }
 
+data class UploadVideoAttachmentRequest(
+    val displayName: String,
+    val mimeType: String,
+    val contentFilePath: String,
+    val sessionId: String? = null,
+    val sourceByteLength: Long? = null,
+)
+
+fun UploadVideoAttachmentRequest.toDiagnosticsSummary(): String {
+    return buildString {
+        append("displayName=")
+        append(displayName)
+        append(", mimeType=")
+        append(mimeType)
+        append(", sourceBytes=")
+        append(sourceByteLength ?: "unknown")
+        append(", contentFilePath=")
+        append(contentFilePath)
+        append(", sessionId=")
+        append(sessionId ?: "none")
+    }
+}
+
 data class UploadedImageAttachment(
+    val id: String,
+    val displayName: String,
+    val mimeType: String,
+    val stagedPath: String,
+    val savedPath: String? = null,
+) {
+    val attachmentPath: String
+        get() = savedPath ?: stagedPath
+}
+
+data class UploadedVideoAttachment(
     val id: String,
     val displayName: String,
     val mimeType: String,
@@ -112,6 +146,7 @@ interface BridgeApi {
     suspend fun updateSessionGoal(sessionId: String, request: SessionGoalUpdateRequest): SessionGoalResponse
     suspend fun clearSessionGoal(sessionId: String): SessionGoalClearResult
     suspend fun uploadImageAttachment(request: UploadImageAttachmentRequest): UploadedImageAttachment
+    suspend fun uploadVideoAttachment(request: UploadVideoAttachmentRequest): UploadedVideoAttachment
     suspend fun sendInput(sessionId: String, request: SendInputRequest)
     suspend fun interruptSession(sessionId: String)
     suspend fun approveSession(

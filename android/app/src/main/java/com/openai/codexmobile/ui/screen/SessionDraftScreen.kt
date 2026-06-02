@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Work
@@ -60,6 +61,8 @@ import androidx.compose.ui.unit.sp
 import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingImageAttachmentUiState
 import com.openai.codexmobile.PendingImageUploadState
+import com.openai.codexmobile.PendingVideoAttachmentUiState
+import com.openai.codexmobile.PendingVideoUploadState
 import com.openai.codexmobile.ui.TestTags
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -68,11 +71,15 @@ fun SessionDraftScreen(
     draftSession: DraftSessionUiState?,
     draftMessage: String,
     pendingImageAttachments: List<PendingImageAttachmentUiState>,
+    pendingVideoAttachments: List<PendingVideoAttachmentUiState>,
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
     onRemovePendingImageAttachment: (String) -> Unit,
     onRetryPendingImageAttachment: (String) -> Unit,
+    onRemovePendingVideoAttachment: (String) -> Unit,
+    onRetryPendingVideoAttachment: (String) -> Unit,
     onSend: () -> Unit,
     onUpdateCwd: (String) -> Unit,
     onUpdateModel: (String) -> Unit,
@@ -84,11 +91,13 @@ fun SessionDraftScreen(
 ) {
     val hasPendingUploadBlockers = pendingImageAttachments.any {
         it.uploadState == PendingImageUploadState.Uploading || it.uploadState == PendingImageUploadState.Failed
+    } || pendingVideoAttachments.any {
+        it.uploadState == PendingVideoUploadState.Uploading || it.uploadState == PendingVideoUploadState.Failed
     }
     val canStart = draftSession != null &&
         !isLoading &&
         !hasPendingUploadBlockers &&
-        (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty())
+        (draftMessage.isNotBlank() || pendingImageAttachments.isNotEmpty() || pendingVideoAttachments.isNotEmpty())
 
     Scaffold(
         modifier = Modifier
@@ -159,10 +168,14 @@ fun SessionDraftScreen(
             DraftPromptCard(
                 draftMessage = draftMessage,
                 pendingImageAttachments = pendingImageAttachments,
+                pendingVideoAttachments = pendingVideoAttachments,
                 onDraftMessageChange = onDraftMessageChange,
                 onPickImage = onPickImage,
+                onPickVideo = onPickVideo,
                 onRemovePendingImageAttachment = onRemovePendingImageAttachment,
                 onRetryPendingImageAttachment = onRetryPendingImageAttachment,
+                onRemovePendingVideoAttachment = onRemovePendingVideoAttachment,
+                onRetryPendingVideoAttachment = onRetryPendingVideoAttachment,
             )
 
             Button(
@@ -199,7 +212,7 @@ fun SessionDraftScreen(
 
             Text(
                 text = if (hasPendingUploadBlockers) {
-                    "图片上传完成后才能启动会话。"
+                    "附件上传完成后才能启动会话。"
                 } else {
                     "发送首条消息时才会真正创建远端会话。"
                 },
@@ -299,10 +312,14 @@ private fun DraftConfigCard(
 private fun DraftPromptCard(
     draftMessage: String,
     pendingImageAttachments: List<PendingImageAttachmentUiState>,
+    pendingVideoAttachments: List<PendingVideoAttachmentUiState>,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
     onRemovePendingImageAttachment: (String) -> Unit,
     onRetryPendingImageAttachment: (String) -> Unit,
+    onRemovePendingVideoAttachment: (String) -> Unit,
+    onRetryPendingVideoAttachment: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -324,15 +341,27 @@ private fun DraftPromptCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                IconButton(
-                    onClick = onPickImage,
-                    modifier = Modifier.testTag(TestTags.SessionDetailAttachImageButton),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Image,
-                        contentDescription = "添加图片",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = onPickImage,
+                        modifier = Modifier.testTag(TestTags.SessionDetailAttachImageButton),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Image,
+                            contentDescription = "添加图片",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(
+                        onClick = onPickVideo,
+                        modifier = Modifier.testTag(TestTags.SessionDetailAttachVideoButton),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = "添加视频",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -349,7 +378,7 @@ private fun DraftPromptCard(
                 minLines = 5,
             )
 
-            if (pendingImageAttachments.isNotEmpty()) {
+            if (pendingImageAttachments.isNotEmpty() || pendingVideoAttachments.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier
                         .padding(16.dp)
@@ -362,6 +391,13 @@ private fun DraftPromptCard(
                             attachment = attachment,
                             onRemovePendingImageAttachment = onRemovePendingImageAttachment,
                             onRetryPendingImageAttachment = onRetryPendingImageAttachment,
+                        )
+                    }
+                    pendingVideoAttachments.forEach { attachment ->
+                        DraftVideoAttachmentCard(
+                            attachment = attachment,
+                            onRemovePendingVideoAttachment = onRemovePendingVideoAttachment,
+                            onRetryPendingVideoAttachment = onRetryPendingVideoAttachment,
                         )
                     }
                 }
@@ -569,6 +605,88 @@ private fun DraftAttachmentCard(
                         TestTags.SessionDetailClearImageButton + "_" + attachment.localId
                     },
                 ),
+        )
+    }
+}
+
+@Composable
+private fun DraftVideoAttachmentCard(
+    attachment: PendingVideoAttachmentUiState,
+    onRemovePendingVideoAttachment: (String) -> Unit,
+    onRetryPendingVideoAttachment: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .height(56.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f))
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = if (attachment.uploadState == PendingVideoUploadState.Failed) {
+                Icons.Filled.Error
+            } else {
+                Icons.Filled.PlayArrow
+            },
+            contentDescription = null,
+            tint = if (attachment.uploadState == PendingVideoUploadState.Failed) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+            modifier = Modifier.size(20.dp),
+        )
+        Column(
+            modifier = Modifier.width(132.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = attachment.displayName,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (attachment.uploadState == PendingVideoUploadState.Uploading) {
+                    CircularProgressIndicator(modifier = Modifier.size(10.dp), strokeWidth = 1.4.dp)
+                } else if (attachment.uploadState == PendingVideoUploadState.Uploaded) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF16A34A),
+                        modifier = Modifier.size(10.dp),
+                    )
+                }
+                Text(
+                    text = when (attachment.uploadState) {
+                        PendingVideoUploadState.Uploading -> "上传中"
+                        PendingVideoUploadState.Uploaded -> "已准备"
+                        PendingVideoUploadState.Failed -> "失败"
+                    },
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+        Text(
+            text = if (attachment.uploadState == PendingVideoUploadState.Failed) "重试" else "移除",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable {
+                if (attachment.uploadState == PendingVideoUploadState.Failed) {
+                    onRetryPendingVideoAttachment(attachment.localId)
+                } else {
+                    onRemovePendingVideoAttachment(attachment.localId)
+                }
+            },
         )
     }
 }

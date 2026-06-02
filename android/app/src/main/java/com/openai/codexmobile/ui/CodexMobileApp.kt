@@ -77,6 +77,26 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
             }
         }
     }
+    val videoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isEmpty()) {
+            return@rememberLauncherForActivityResult
+        }
+        coroutineScope.launch {
+            val prepared = withContext(Dispatchers.IO) {
+                uris.mapNotNull { uri ->
+                    runCatching {
+                        prepareVideoAttachmentForBridge(context, uri)
+                    }.getOrNull()
+                }
+            }
+            if (prepared.isNotEmpty()) {
+                appViewModel.attachPreparedVideos(prepared)
+            }
+            if (prepared.size != uris.size) {
+                snackbarHostState.showSnackbar("部分视频处理失败，请确认文件是可用视频。")
+            }
+        }
+    }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let { snackbarHostState.showSnackbar(it) }
@@ -194,11 +214,15 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     draftSession = uiState.selectedDraftSession,
                     draftMessage = uiState.draftMessage,
                     pendingImageAttachments = uiState.pendingImageAttachments,
+                    pendingVideoAttachments = uiState.pendingVideoAttachments,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onPickImage = { imagePickerLauncher.launch("image/*") },
+                    onPickVideo = { videoPickerLauncher.launch("video/*") },
                     onRemovePendingImageAttachment = appViewModel::removePendingImageAttachment,
                     onRetryPendingImageAttachment = appViewModel::retryPendingImageAttachment,
+                    onRemovePendingVideoAttachment = appViewModel::removePendingVideoAttachment,
+                    onRetryPendingVideoAttachment = appViewModel::retryPendingVideoAttachment,
                     onSend = appViewModel::sendInput,
                     onUpdateCwd = appViewModel::updateSelectedSessionCwd,
                     onUpdateModel = appViewModel::updateSelectedSessionModel,
@@ -231,13 +255,17 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
                     pendingImageAttachments = uiState.pendingImageAttachments,
+                    pendingVideoAttachments = uiState.pendingVideoAttachments,
                     bridgeEndpoint = uiState.endpointInput,
                     bridgeAuthToken = uiState.authTokenInput,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onPickImage = { imagePickerLauncher.launch("image/*") },
+                    onPickVideo = { videoPickerLauncher.launch("video/*") },
                     onRemovePendingImageAttachment = appViewModel::removePendingImageAttachment,
                     onRetryPendingImageAttachment = appViewModel::retryPendingImageAttachment,
+                    onRemovePendingVideoAttachment = appViewModel::removePendingVideoAttachment,
+                    onRetryPendingVideoAttachment = appViewModel::retryPendingVideoAttachment,
                     onSend = appViewModel::sendInput,
                     onInterrupt = appViewModel::interruptSelectedSession,
                     onApprovalDecision = appViewModel::submitApproval,

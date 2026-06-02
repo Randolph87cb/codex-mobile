@@ -131,13 +131,35 @@ class SessionDetailShowcaseActivity : ComponentActivity() {
                     } else {
                         emptyList()
                     },
+                    pendingVideoAttachments = if (showPending) {
+                        listOf(
+                            PendingVideoAttachmentUiState(
+                                localId = "pending-video-ready",
+                                displayName = "screen-capture.mp4",
+                                mimeType = "video/mp4",
+                                uploadState = PendingVideoUploadState.Uploaded,
+                                stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\screen-capture.mp4",
+                            ),
+                            PendingVideoAttachmentUiState(
+                                localId = "pending-video-uploading",
+                                displayName = "walkthrough.mov",
+                                mimeType = "video/quicktime",
+                                uploadState = PendingVideoUploadState.Uploading,
+                            ),
+                        )
+                    } else {
+                        emptyList()
+                    },
                     bridgeEndpoint = "",
                     bridgeAuthToken = "",
                     isLoading = false,
                     onDraftMessageChange = {},
                     onPickImage = {},
+                    onPickVideo = {},
                     onRemovePendingImageAttachment = {},
                     onRetryPendingImageAttachment = {},
+                    onRemovePendingVideoAttachment = {},
+                    onRetryPendingVideoAttachment = {},
                     onSend = {},
                     onInterrupt = {},
                     onApprovalDecision = {},

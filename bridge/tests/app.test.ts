@@ -715,6 +715,101 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("saves uploaded videos into the session workspace when sessionId is provided", async () => {
+    const sessionRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-session-video-upload-"));
+    tempDirs.push(sessionRoot);
+    const store = new SessionStore();
+    const session = store.create({
+      cwd: sessionRoot,
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const payload = Buffer.from("mp4-video-content-save");
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/video",
+      payload: {
+        displayName: "demo.mp4",
+        mimeType: "video/mp4",
+        contentBase64: payload.toString("base64"),
+        sessionId: session.id,
+      },
+    });
+
+    expect(upload.statusCode).toBe(201);
+    const uploaded = upload.json<{ path: string; savedPath?: string; savedRelativePath?: string; kind: string }>();
+    expect(uploaded.kind).toBe("video");
+    expect(uploaded.path).not.toBe(uploaded.savedPath);
+    expect(uploaded.savedRelativePath).toBe("mobile_uploads/demo.mp4");
+    expect(uploaded.savedPath).toBe(path.join(sessionRoot, "mobile_uploads", "demo.mp4"));
+    expect(await readFile(uploaded.savedPath!, "utf8")).toBe(payload.toString());
+
+    await app.close();
+  });
+
+  test("submits uploaded video attachments as bridge file links", async () => {
+    const sessionRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-session-video-input-"));
+    tempDirs.push(sessionRoot);
+    const store = new SessionStore();
+    const session = store.create({
+      cwd: sessionRoot,
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+    const payload = Buffer.from("mp4-video-content-submit");
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/attachment/video",
+      payload: {
+        displayName: "demo.mp4",
+        mimeType: "video/mp4",
+        contentBase64: payload.toString("base64"),
+        sessionId: session.id,
+      },
+    });
+    const uploaded = upload.json<{ path: string; savedPath: string }>();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        attachments: [
+          {
+            path: uploaded.path,
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(runner.submitInput).toHaveBeenCalledWith(
+      session.id,
+      expect.objectContaining({
+        text: `请查看我上传的文件。\n[demo.mp4](bridge-file://${encodeURIComponent(uploaded.savedPath)})`,
+        attachments: [
+          expect.objectContaining({
+            kind: "video",
+            path: uploaded.savedPath,
+          }),
+        ],
+      }),
+    );
+
+    await app.close();
+  });
+
   test("rejects invalid image uploads", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
@@ -748,6 +843,44 @@ describe("buildBridgeApp", () => {
     expect(invalidBase64.json()).toMatchObject({
       error: "invalid-image-upload",
       message: "invalid-image-base64",
+    });
+
+    await app.close();
+  });
+
+  test("rejects invalid video uploads", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({ store, runner });
+
+    const unsupportedMimeType = await app.inject({
+      method: "POST",
+      url: "/api/attachment/video",
+      payload: {
+        displayName: "demo.avi",
+        mimeType: "video/x-msvideo",
+        contentBase64: Buffer.from("video").toString("base64"),
+      },
+    });
+    expect(unsupportedMimeType.statusCode).toBe(400);
+    expect(unsupportedMimeType.json()).toMatchObject({
+      error: "invalid-video-upload",
+      message: "unsupported-video-mime-type",
+    });
+
+    const invalidBase64 = await app.inject({
+      method: "POST",
+      url: "/api/attachment/video",
+      payload: {
+        displayName: "demo.mp4",
+        mimeType: "video/mp4",
+        contentBase64: "not-base64!!",
+      },
+    });
+    expect(invalidBase64.statusCode).toBe(400);
+    expect(invalidBase64.json()).toMatchObject({
+      error: "invalid-video-upload",
+      message: "invalid-video-base64",
     });
 
     await app.close();

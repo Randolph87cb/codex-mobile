@@ -192,6 +192,19 @@ class RealBridgeDataProviderTest {
     }
 
     @Test
+    fun parseUploadedVideoAttachmentResponsePrefersSavedPath() {
+        val uploaded = parseUploadedVideoAttachmentResponse(
+            payload = """{"id":"att-video","displayName":"demo.mp4","mimeType":"video/mp4","stagedPath":"D:\\bridge\\staged\\demo.mp4","savedPath":"D:\\bridge\\saved\\demo.mp4"}""",
+            fallbackDisplayName = "fallback.mp4",
+            fallbackMimeType = "video/mp4",
+        )
+
+        assertTrue(uploaded.stagedPath == "D:\\bridge\\staged\\demo.mp4")
+        assertTrue(uploaded.savedPath == "D:\\bridge\\saved\\demo.mp4")
+        assertTrue(uploaded.attachmentPath == "D:\\bridge\\saved\\demo.mp4")
+    }
+
+    @Test
     fun buildUploadImageFailureMessagePrefersFriendlyBridgeMessage() {
         val message = buildUploadImageFailureMessage(
             statusCode = 413,
@@ -209,6 +222,16 @@ class RealBridgeDataProviderTest {
         )
 
         assertTrue(message == "当前只支持 JPG、PNG、WEBP、GIF、BMP 图片。")
+    }
+
+    @Test
+    fun buildUploadVideoFailureMessageFallsBackForUnsupportedMimeType() {
+        val message = buildUploadVideoFailureMessage(
+            statusCode = 400,
+            payload = """{"error":"invalid-video-upload","message":"unsupported-video-mime-type"}""",
+        )
+
+        assertTrue(message == "当前只支持 MP4、WebM、MOV 视频。")
     }
 
     @Test

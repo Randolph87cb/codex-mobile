@@ -9,10 +9,12 @@
 - 会话列表与详情：`GET /api/sessions`、`GET /api/session/:id`
 - 会话创建、改名、配置、目标与归档：`POST /api/session`、`PATCH /api/session/:id/title`、`PATCH /api/session/:id/config`、`GET /api/session/:id/goal`、`PUT /api/session/:id/goal`、`DELETE /api/session/:id/goal`、`POST /api/session/:id/archive`、`POST /api/session/:id/unarchive`
 - 会话输入与审批：`POST /api/session/:id/input`、`POST /api/session/:id/approve`、`POST /api/session/:id/interrupt`
-- 图片上传与访问：
+- 附件上传与访问：
   - `POST /api/attachment/image`
+  - `POST /api/attachment/video`
   - `GET /api/attachment/image/:id/content`
   - `GET /api/image/file?path=...`
+  - `GET /api/file/download?path=...`
 - 实时流：`GET /api/session/:id/ws`
 
 ## 认证
@@ -558,6 +560,62 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 ```
 
 ### `GET /api/attachment/image/:id/content`
+
+### `POST /api/attachment/video`
+
+向 bridge 预上传一个视频，供后续会话输入引用。
+
+如果请求里带上 `sessionId`，bridge 会在暂存成功后，继续把视频保存到该会话 `cwd` 下的 `mobile_uploads/` 目录，并在响应里返回正式保存路径。
+
+当前支持两种上传格式：
+
+1. 推荐：`multipart/form-data`
+   - `displayName`
+   - `mimeType`
+   - `file`
+   - `sessionId`（可选）
+2. 兼容旧链路：`application/json`
+   - `displayName`
+   - `mimeType`
+   - `contentBase64`
+   - `sessionId`（可选）
+
+Android 当前实际使用的是 `multipart/form-data`，并通过临时文件走流式上传，避免把整段视频一次性读进内存。
+
+bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIMIT_MB` 覆盖。
+
+当前允许的 MIME 类型：
+
+- `video/mp4`
+- `video/webm`
+- `video/quicktime`
+
+保存规则与图片一致：
+
+- 不带 `sessionId`：只暂存到 bridge 附件目录。
+- 带 `sessionId`：在暂存后继续保存到 `<cwd>/mobile_uploads/`。
+- 正式保存目录由 bridge 根据会话 `cwd` 固定推导，客户端不能直接指定主机路径。
+- 如果有同名文件，bridge 会自动去重，不覆盖现有文件。
+
+成功响应：
+
+```json
+{
+  "id": "att_xxx",
+  "path": "C:\\Users\\...\\Temp\\codex-mobile-bridge\\attachments\\att_xxx.mp4",
+  "savedPath": "D:\\workspace\\project\\mobile_uploads\\demo.mp4",
+  "savedRelativePath": "mobile_uploads/demo.mp4",
+  "kind": "video",
+  "displayName": "demo.mp4",
+  "mimeType": "video/mp4",
+  "createdAt": "2026-05-31T12:00:00.000Z"
+}
+```
+
+第一阶段行为说明：
+
+- bridge 会把视频附件保存到当前会话，并把它作为普通文件附件参与输入。
+- runner 当前不会把视频转换成上游模型输入块；bridge 会把文件链接补到文本 transcript 中，供手机端下载查看。
 
 按附件 ID 取回 bridge 已上传图片的原始内容。
 

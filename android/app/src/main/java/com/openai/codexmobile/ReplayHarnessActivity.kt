@@ -17,7 +17,9 @@ import com.openai.codexmobile.data.SessionGoalResponse
 import com.openai.codexmobile.data.SessionGoalUpdateRequest
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
+import com.openai.codexmobile.data.UploadVideoAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
+import com.openai.codexmobile.data.UploadedVideoAttachment
 import com.openai.codexmobile.diagnostics.FileAppLogger
 import com.openai.codexmobile.model.AccountQuotaCreditsSnapshot
 import com.openai.codexmobile.model.AccountQuotaSnapshot
@@ -244,6 +246,15 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
             displayName = request.displayName,
             mimeType = request.mimeType,
             stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\replay-image.png",
+        )
+    }
+
+    override suspend fun uploadVideoAttachment(request: UploadVideoAttachmentRequest): UploadedVideoAttachment {
+        return UploadedVideoAttachment(
+            id = "replay-video",
+            displayName = request.displayName,
+            mimeType = request.mimeType,
+            stagedPath = "D:\\workspace\\codex-mobile\\.tmp\\replay-video.mp4",
         )
     }
 

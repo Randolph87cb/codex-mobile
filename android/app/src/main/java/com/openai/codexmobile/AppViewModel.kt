@@ -18,7 +18,9 @@ import com.openai.codexmobile.data.SessionInputAttachmentRef
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
+import com.openai.codexmobile.data.UploadVideoAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
+import com.openai.codexmobile.data.UploadedVideoAttachment
 import com.openai.codexmobile.data.toDiagnosticsSummary
 import com.openai.codexmobile.diagnostics.AppLogger
 import com.openai.codexmobile.model.AccountQuotaSnapshot
@@ -39,6 +41,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -83,6 +86,7 @@ data class AppUiState(
     val accountQuota: AccountQuotaUiState = AccountQuotaUiState(),
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
     val pendingImageAttachments: List<PendingImageAttachmentUiState> = emptyList(),
+    val pendingVideoAttachments: List<PendingVideoAttachmentUiState> = emptyList(),
     val queuedInputs: List<String> = emptyList(),
     val diagnosticsLog: String = "暂无日志。",
 ) {
@@ -152,6 +156,22 @@ enum class PendingImageUploadState {
     Failed,
 }
 
+data class PendingVideoAttachmentUiState(
+    val localId: String,
+    val displayName: String,
+    val mimeType: String,
+    val uploadState: PendingVideoUploadState,
+    val stagedPath: String? = null,
+    val savedPath: String? = null,
+    val uploadError: String? = null,
+)
+
+enum class PendingVideoUploadState {
+    Uploading,
+    Uploaded,
+    Failed,
+}
+
 private data class RequestedSessionConfigChange(
     val cwd: String? = null,
     val model: String? = null,
@@ -186,6 +206,9 @@ class AppViewModel(
     private val pendingImageUploadRequests = mutableMapOf<String, UploadImageAttachmentRequest>()
     private val pendingImageUploadJobs = mutableMapOf<String, Job>()
     private val imageUploadMutex = Mutex()
+    private val pendingVideoUploadRequests = mutableMapOf<String, UploadVideoAttachmentRequest>()
+    private val pendingVideoUploadJobs = mutableMapOf<String, Job>()
+    private val videoUploadMutex = Mutex()
 
     init {
         bridgeApi.updateAuthToken(initialSettings.authToken)
@@ -506,6 +529,175 @@ class AppViewModel(
         pendingImageUploadRequests.clear()
     }
 
+    fun attachPreparedVideos(
+        attachments: List<UploadVideoAttachmentRequest>,
+    ) {
+        val validAttachments = attachments.filter { it.contentFilePath.isNotBlank() }
+        if (validAttachments.isEmpty()) {
+            _uiState.update { it.copy(message = "视频内容为空，无法附加。") }
+            return
+        }
+
+        val activeSessionId = uiState.value.selectedSession?.id?.takeIf { it.isNotBlank() }
+        val appended = validAttachments.map { attachment ->
+            val localId = UUID.randomUUID().toString()
+            pendingVideoUploadRequests[localId] = attachment.copy(sessionId = activeSessionId)
+            PendingVideoAttachmentUiState(
+                localId = localId,
+                displayName = attachment.displayName.ifBlank { "video" },
+                mimeType = attachment.mimeType.ifBlank { "video/mp4" },
+                uploadState = PendingVideoUploadState.Uploading,
+            )
+        }
+
+        _uiState.update {
+            it.copy(
+                pendingVideoAttachments = it.pendingVideoAttachments + appended,
+                message = if (appended.size == 1) "已附加视频，开始上传。" else "已附加 ${appended.size} 个视频，开始上传。",
+            )
+        }
+
+        appended.forEach { entry ->
+            val request = pendingVideoUploadRequests[entry.localId] ?: return@forEach
+            startPendingVideoUpload(entry.localId, request)
+        }
+    }
+
+    fun removePendingVideoAttachment(localId: String) {
+        pendingVideoUploadJobs.remove(localId)?.cancel()
+        pendingVideoUploadRequests.remove(localId)?.let(::deleteCachedVideoUpload)
+        _uiState.update {
+            val remaining = it.pendingVideoAttachments.filterNot { attachment -> attachment.localId == localId }
+            it.copy(
+                pendingVideoAttachments = remaining,
+                message = "已移除视频附件。",
+            )
+        }
+    }
+
+    fun retryPendingVideoAttachment(localId: String) {
+        val request = pendingVideoUploadRequests[localId]
+        if (request == null) {
+            _uiState.update { it.copy(message = "这个视频没有可重试的上传任务。") }
+            return
+        }
+
+        _uiState.update { state ->
+            state.copy(
+                pendingVideoAttachments = state.pendingVideoAttachments.map { attachment ->
+                    if (attachment.localId != localId) {
+                        attachment
+                    } else {
+                        attachment.copy(
+                            uploadState = PendingVideoUploadState.Uploading,
+                            uploadError = null,
+                        )
+                    }
+                },
+                message = "正在重新上传视频：${request.displayName}",
+            )
+        }
+        startPendingVideoUpload(localId, request)
+    }
+
+    private fun startPendingVideoUpload(
+        localId: String,
+        request: UploadVideoAttachmentRequest,
+    ) {
+        pendingVideoUploadJobs.remove(localId)?.cancel()
+        pendingVideoUploadJobs[localId] = viewModelScope.launch {
+            videoUploadMutex.withLock {
+                val stillPending = uiState.value.pendingVideoAttachments.any { it.localId == localId }
+                if (!stillPending) {
+                    return@withLock
+                }
+
+                appLogger.info(
+                    "AppViewModel",
+                    "开始预上传视频：localId=$localId, ${request.toDiagnosticsSummary()}",
+                )
+                runCatching {
+                    bridgeApi.uploadVideoAttachment(request)
+                }.onSuccess { uploaded ->
+                    _uiState.update { state ->
+                        state.copy(
+                            pendingVideoAttachments = state.pendingVideoAttachments.map { attachment ->
+                                if (attachment.localId != localId) {
+                                    attachment
+                                } else {
+                                    attachment.copy(
+                                        uploadState = PendingVideoUploadState.Uploaded,
+                                        stagedPath = uploaded.stagedPath,
+                                        savedPath = uploaded.savedPath,
+                                        uploadError = null,
+                                    )
+                                }
+                            },
+                            message = "视频已上传：${uploaded.displayName}",
+                        )
+                    }
+                    appLogger.info(
+                        "AppViewModel",
+                        "视频预上传完成：localId=$localId, ${request.toDiagnosticsSummary()}, stagedPath=${uploaded.stagedPath}, savedPath=${uploaded.savedPath ?: "none"}",
+                    )
+                }.onFailure { error ->
+                    if (error is CancellationException) {
+                        throw error
+                    }
+                    _uiState.update { state ->
+                        state.copy(
+                            pendingVideoAttachments = state.pendingVideoAttachments.map { attachment ->
+                                if (attachment.localId != localId) {
+                                    attachment
+                                } else {
+                                    attachment.copy(
+                                        uploadState = PendingVideoUploadState.Failed,
+                                        uploadError = error.message ?: "上传失败",
+                                    )
+                                }
+                            },
+                            message = error.message ?: "视频上传失败。",
+                        )
+                    }
+                    appLogger.error(
+                        "AppViewModel",
+                        "视频预上传失败：localId=$localId, ${request.toDiagnosticsSummary()}",
+                        error,
+                    )
+                }
+                refreshDiagnosticsLog()
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                pendingVideoUploadJobs.remove(localId)
+            }
+        }
+    }
+
+    private fun clearPendingVideoUploads() {
+        pendingVideoUploadJobs.values.forEach { it.cancel() }
+        pendingVideoUploadJobs.clear()
+        pendingVideoUploadRequests.values.forEach(::deleteCachedVideoUpload)
+        pendingVideoUploadRequests.clear()
+    }
+
+    private fun clearPendingUploads() {
+        clearPendingImageUploads()
+        clearPendingVideoUploads()
+    }
+
+    private fun deleteCachedVideoUpload(request: UploadVideoAttachmentRequest) {
+        if (request.contentFilePath.isBlank()) {
+            return
+        }
+        runCatching {
+            val file = File(request.contentFilePath)
+            if (file.exists()) {
+                file.delete()
+            }
+        }
+    }
+
     fun connect() {
         val endpoint = uiState.value.endpointInput.trim()
         if (endpoint.isBlank()) {
@@ -574,7 +766,7 @@ class AppViewModel(
         viewModelScope.launch {
             appLogger.info("AppViewModel", "切换会话筛选：archived=$showArchived")
             stopSessionStream()
-            clearPendingImageUploads()
+            clearPendingUploads()
             _uiState.update {
                 it.copy(
                     isLoading = true,
@@ -583,6 +775,7 @@ class AppViewModel(
                     selectedSession = null,
                     selectedDraftSession = null,
                     pendingImageAttachments = emptyList(),
+                    pendingVideoAttachments = emptyList(),
                     queuedInputs = emptyList(),
                     sessionRealtimeState = SessionRealtimeUiState(),
                 )
@@ -621,7 +814,7 @@ class AppViewModel(
             appLogger.info("AppViewModel", "归档会话：sessionId=$sessionId")
             if (shouldClearSelection) {
                 stopSessionStream()
-                clearPendingImageUploads()
+                clearPendingUploads()
             }
             _uiState.update { it.copy(isLoading = true, message = null) }
             try {
@@ -634,6 +827,8 @@ class AppViewModel(
                         sessions = sessions,
                         selectedSession = if (shouldClearSelection) null else it.selectedSession,
                         selectedDraftSession = if (shouldClearSelection) null else it.selectedDraftSession,
+                        pendingImageAttachments = if (shouldClearSelection) emptyList() else it.pendingImageAttachments,
+                        pendingVideoAttachments = if (shouldClearSelection) emptyList() else it.pendingVideoAttachments,
                         queuedInputs = if (shouldClearSelection) emptyList() else it.queuedInputs,
                         sessionRealtimeState = if (shouldClearSelection) SessionRealtimeUiState() else it.sessionRealtimeState,
                         message = "已归档会话。",
@@ -688,7 +883,7 @@ class AppViewModel(
         viewModelScope.launch {
             appLogger.info("AppViewModel", "用户主动断开桥接连接。")
             stopSessionStream()
-            clearPendingImageUploads()
+            clearPendingUploads()
             bridgeApi.disconnect()
             queuedInputsBySession.clear()
             flushingQueuedSessions.clear()
@@ -699,6 +894,7 @@ class AppViewModel(
                     selectedSession = null,
                     selectedDraftSession = null,
                     pendingImageAttachments = emptyList(),
+                    pendingVideoAttachments = emptyList(),
                     accountQuota = AccountQuotaUiState(),
                     message = "已断开连接。",
                     queuedInputs = emptyList(),
@@ -778,12 +974,13 @@ class AppViewModel(
 
     fun discardDraftSession() {
         stopSessionStream()
-        clearPendingImageUploads()
+        clearPendingUploads()
         _uiState.update {
             it.copy(
                 selectedDraftSession = null,
                 draftMessage = "",
                 pendingImageAttachments = emptyList(),
+                pendingVideoAttachments = emptyList(),
                 queuedInputs = emptyList(),
                 sessionRealtimeState = SessionRealtimeUiState(),
             )
@@ -895,7 +1092,7 @@ class AppViewModel(
         }
         if (sessionId == null || uiState.value.selectedSession?.id == sessionId || sessionId == DraftSessionId) {
             if (sessionId == null || sessionId == DraftSessionId) {
-                clearPendingImageUploads()
+                clearPendingUploads()
             }
             _uiState.update { it.copy(queuedInputs = emptyList()) }
         }
@@ -906,7 +1103,9 @@ class AppViewModel(
         val draftSession = uiState.value.selectedDraftSession
         val text = uiState.value.draftMessage.trim()
         val pendingImageAttachments = uiState.value.pendingImageAttachments
-        if (text.isEmpty() && pendingImageAttachments.isEmpty()) {
+        val pendingVideoAttachments = uiState.value.pendingVideoAttachments
+        val hasPendingAttachments = pendingImageAttachments.isNotEmpty() || pendingVideoAttachments.isNotEmpty()
+        if (text.isEmpty() && !hasPendingAttachments) {
             return
         }
         if (pendingImageAttachments.any { it.uploadState == PendingImageUploadState.Uploading }) {
@@ -917,6 +1116,16 @@ class AppViewModel(
         if (pendingImageAttachments.any { it.uploadState == PendingImageUploadState.Failed }) {
             appLogger.warn("AppViewModel", "用户尝试发送，但存在上传失败的图片。")
             _uiState.update { it.copy(message = "有图片上传失败，请重试或移除后再发送。") }
+            return
+        }
+        if (pendingVideoAttachments.any { it.uploadState == PendingVideoUploadState.Uploading }) {
+            appLogger.warn("AppViewModel", "用户尝试发送，但仍有视频上传中。")
+            _uiState.update { it.copy(message = "视频仍在上传，请稍后再发送。") }
+            return
+        }
+        if (pendingVideoAttachments.any { it.uploadState == PendingVideoUploadState.Failed }) {
+            appLogger.warn("AppViewModel", "用户尝试发送，但存在上传失败的视频。")
+            _uiState.update { it.copy(message = "有视频上传失败，请重试或移除后再发送。") }
             return
         }
 
@@ -943,10 +1152,15 @@ class AppViewModel(
                         sessionId = created.id,
                         pendingImageAttachments = pendingImageAttachments,
                     )
+                    val resolvedPendingVideoAttachments = resolvePendingVideoAttachmentsForSession(
+                        sessionId = created.id,
+                        pendingVideoAttachments = pendingVideoAttachments,
+                    )
                     submitInputNow(
                         detail = created,
                         text = text,
                         pendingImageAttachments = resolvedPendingImageAttachments,
+                        pendingVideoAttachments = resolvedPendingVideoAttachments,
                         fromQueue = false,
                     )
                     _uiState.update {
@@ -981,12 +1195,12 @@ class AppViewModel(
                     realtimeState = uiState.value.sessionRealtimeState,
                 )
                 if (shouldQueueInput(resolvedDetail, uiState.value.sessionRealtimeState)) {
-                    if (pendingImageAttachments.isNotEmpty()) {
-                        appLogger.warn("AppViewModel", "当前轮未结束，暂不支持带图片的排队发送：sessionId=${resolvedDetail.id}")
+                    if (hasPendingAttachments) {
+                        appLogger.warn("AppViewModel", "当前轮未结束，暂不支持带附件的排队发送：sessionId=${resolvedDetail.id}")
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
-                                message = "当前轮尚未结束，暂不支持把图片加入排队。",
+                                message = "当前轮尚未结束，暂不支持把附件加入排队。",
                             )
                         }
                         return@launch
@@ -1006,16 +1220,17 @@ class AppViewModel(
                     }
                     return@launch
                 }
-                    appLogger.info(
-                        "AppViewModel",
-                    "发送消息：sessionId=${resolvedDetail.id}, textLength=${text.length}, imageCount=${pendingImageAttachments.size}",
-                    )
-                    submitInputNow(
-                        detail = resolvedDetail,
-                        text = text,
-                        pendingImageAttachments = pendingImageAttachments,
-                        fromQueue = false,
-                    )
+                appLogger.info(
+                    "AppViewModel",
+                    "发送消息：sessionId=${resolvedDetail.id}, textLength=${text.length}, imageCount=${pendingImageAttachments.size}, videoCount=${pendingVideoAttachments.size}",
+                )
+                submitInputNow(
+                    detail = resolvedDetail,
+                    text = text,
+                    pendingImageAttachments = pendingImageAttachments,
+                    pendingVideoAttachments = pendingVideoAttachments,
+                    fromQueue = false,
+                )
             } catch (error: Exception) {
                 appLogger.error("AppViewModel", "发送消息失败：sessionId=${activeDetail.id}", error)
                 _uiState.update {
@@ -2625,11 +2840,12 @@ class AppViewModel(
         detail: SessionDetail,
         text: String,
         pendingImageAttachments: List<PendingImageAttachmentUiState>,
+        pendingVideoAttachments: List<PendingVideoAttachmentUiState>,
         fromQueue: Boolean,
     ) {
         appLogger.info(
             "AppViewModel",
-            "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, imageCount=${pendingImageAttachments.size}, fromQueue=$fromQueue",
+            "提交输入到 bridge：sessionId=${detail.id}, textLength=${text.length}, imageCount=${pendingImageAttachments.size}, videoCount=${pendingVideoAttachments.size}, fromQueue=$fromQueue",
         )
         val uploadedImages = pendingImageAttachments.map { pendingImageAttachment ->
             val stagedPath = pendingImageAttachment.stagedPath
@@ -2642,9 +2858,22 @@ class AppViewModel(
                 savedPath = pendingImageAttachment.savedPath,
             )
         }
-        val attachmentRefs = uploadedImages.map { uploaded ->
-            SessionInputAttachmentRef(stagedPath = uploaded.attachmentPath)
+        val uploadedVideos = pendingVideoAttachments.map { pendingVideoAttachment ->
+            val stagedPath = pendingVideoAttachment.stagedPath
+                ?: throw IllegalStateException("视频尚未完成预上传：${pendingVideoAttachment.displayName}")
+            UploadedVideoAttachment(
+                id = pendingVideoAttachment.localId,
+                displayName = pendingVideoAttachment.displayName,
+                mimeType = pendingVideoAttachment.mimeType,
+                stagedPath = stagedPath,
+                savedPath = pendingVideoAttachment.savedPath,
+            )
         }
+        val attachmentRefs = (uploadedImages.map { uploaded ->
+            SessionInputAttachmentRef(stagedPath = uploaded.attachmentPath)
+        } + uploadedVideos.map { uploaded ->
+            SessionInputAttachmentRef(stagedPath = uploaded.attachmentPath)
+        })
         bridgeApi.sendInput(
             detail.id,
             SendInputRequest(
@@ -2653,22 +2882,25 @@ class AppViewModel(
             ),
         )
         activeAssistantTurnId = null
-        clearPendingImageUploads()
+        clearPendingUploads()
         val updatedDetail = appendUserMessage(
             detail = detail,
             message = text,
             uploadedImages = uploadedImages,
+            uploadedVideos = uploadedVideos,
         )
+        val hasAttachments = pendingImageAttachments.isNotEmpty() || pendingVideoAttachments.isNotEmpty()
         _uiState.update {
             it.copy(
                 isLoading = false,
                 selectedSession = updatedDetail,
                 draftMessage = "",
                 pendingImageAttachments = emptyList(),
+                pendingVideoAttachments = emptyList(),
                 message = if (fromQueue) {
                     "已发送排队消息。"
-                } else if (pendingImageAttachments.isNotEmpty()) {
-                    "图片已发送，等待 Codex 回复。"
+                } else if (hasAttachments) {
+                    "附件已发送，等待 Codex 回复。"
                 } else {
                     "消息已发送，等待实时输出。"
                 },
@@ -2678,8 +2910,8 @@ class AppViewModel(
                     isInterrupting = false,
                     lastEventText = if (fromQueue) {
                         "已发送一条排队消息，等待 Codex 回复。"
-                    } else if (pendingImageAttachments.isNotEmpty()) {
-                        "已发送图片附件，等待 Codex 回复。"
+                    } else if (hasAttachments) {
+                        "已发送附件，等待 Codex 回复。"
                     } else {
                         "已发送消息，等待 Codex 回复。"
                     },
@@ -2721,6 +2953,40 @@ class AppViewModel(
             pendingImageUploadRequests[attachment.localId] = saveRequest
             attachment.copy(
                 previewSource = buildBridgeImageSource(savedUpload.attachmentPath),
+                stagedPath = savedUpload.stagedPath,
+                savedPath = savedUpload.savedPath,
+                uploadError = null,
+            )
+        }
+    }
+
+    private suspend fun resolvePendingVideoAttachmentsForSession(
+        sessionId: String,
+        pendingVideoAttachments: List<PendingVideoAttachmentUiState>,
+    ): List<PendingVideoAttachmentUiState> {
+        if (pendingVideoAttachments.isEmpty()) {
+            return pendingVideoAttachments
+        }
+
+        return pendingVideoAttachments.map { attachment ->
+            if (attachment.savedPath != null) {
+                return@map attachment
+            }
+
+            val originalRequest = pendingVideoUploadRequests[attachment.localId]
+                ?: return@map attachment
+            if (!originalRequest.sessionId.isNullOrBlank()) {
+                return@map attachment
+            }
+
+            val saveRequest = originalRequest.copy(sessionId = sessionId)
+            appLogger.info(
+                "AppViewModel",
+                "草稿会话视频转正式保存：localId=${attachment.localId}, sessionId=$sessionId",
+            )
+            val savedUpload = bridgeApi.uploadVideoAttachment(saveRequest)
+            pendingVideoUploadRequests[attachment.localId] = saveRequest
+            attachment.copy(
                 stagedPath = savedUpload.stagedPath,
                 savedPath = savedUpload.savedPath,
                 uploadError = null,
@@ -2824,6 +3090,7 @@ class AppViewModel(
                 detail = detail,
                 text = nextMessage,
                 pendingImageAttachments = emptyList(),
+                pendingVideoAttachments = emptyList(),
                 fromQueue = true,
             )
         } catch (error: Exception) {
@@ -3289,6 +3556,7 @@ private fun appendUserMessage(
     detail: SessionDetail,
     message: String,
     uploadedImages: List<UploadedImageAttachment>,
+    uploadedVideos: List<UploadedVideoAttachment>,
 ): SessionDetail {
     val current = detail.transcriptPreview.trimEnd()
     val nextTranscript = buildString {
@@ -3308,6 +3576,16 @@ private fun appendUserMessage(
             append(image.displayName)
             append("](")
             append(buildBridgeImageSource(image.attachmentPath))
+            append(")")
+        }
+        uploadedVideos.forEachIndexed { index, video ->
+            if (message.isNotBlank() || uploadedImages.isNotEmpty() || index > 0) {
+                append("\n")
+            }
+            append("[")
+            append(video.displayName)
+            append("](")
+            append(buildBridgeFileSource(video.attachmentPath))
             append(")")
         }
     }
@@ -3333,6 +3611,10 @@ private fun buildInlineImageSource(
 }
 
 private fun buildBridgeImageSource(stagedPath: String): String {
+    return buildBridgeFileSource(stagedPath)
+}
+
+private fun buildBridgeFileSource(stagedPath: String): String {
     val encodedPath = URLEncoder.encode(stagedPath, StandardCharsets.UTF_8.name())
     return "bridge-file://$encodedPath"
 }

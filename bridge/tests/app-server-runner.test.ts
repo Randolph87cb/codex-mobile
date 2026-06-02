@@ -397,6 +397,65 @@ describe("AppServerRunner", () => {
     );
   });
 
+  test("submits video-only input with a generic fallback text block", async () => {
+    const store = createSessionStore();
+    store.update("thread-1", {
+      status: "idle",
+      activeTurnId: null,
+    });
+
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string) => {
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: "thread-1",
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "idle" },
+            turns: [],
+          },
+        };
+      }
+
+      if (method === "turn/start") {
+        return { turn: { id: "turn-video-only" } };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    await runner.submitInput("thread-1", {
+      text: "",
+      attachments: [
+        {
+          id: "att-video-1",
+          kind: "video",
+          displayName: "demo.mp4",
+          mimeType: "video/mp4",
+          path: "C:\\temp\\demo.mp4",
+          createdAt: "2026-05-31T10:10:00.000Z",
+        },
+      ],
+    });
+
+    expect(client.request).toHaveBeenNthCalledWith(
+      2,
+      "turn/start",
+      expect.objectContaining({
+        input: [
+          {
+            type: "text",
+            text: "请查看这个附件。",
+          },
+        ],
+      }),
+    );
+  });
+
   test("stores approval requests and resolves them through approve()", async () => {
     const store = createSessionStore();
     const client = new FakeAppServerClient();

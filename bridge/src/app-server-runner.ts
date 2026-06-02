@@ -1696,9 +1696,10 @@ function buildTurnInput(input: ResolvedSessionInput): Array<Record<string, unkno
       text: trimmedText,
     });
   } else if (input.attachments.length > 0) {
+    const hasOnlyImages = input.attachments.every((attachment) => attachment.kind === "image");
     items.push({
       type: "text",
-      text: "请查看这个图片附件。",
+      text: hasOnlyImages ? "请查看这个图片附件。" : "请查看这个附件。",
     });
   }
 

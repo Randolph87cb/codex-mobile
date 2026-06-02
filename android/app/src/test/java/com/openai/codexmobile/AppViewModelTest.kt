@@ -14,7 +14,9 @@ import com.openai.codexmobile.data.SessionGoalClearResult
 import com.openai.codexmobile.data.SessionGoalResponse
 import com.openai.codexmobile.data.SessionGoalUpdateRequest
 import com.openai.codexmobile.data.UploadImageAttachmentRequest
+import com.openai.codexmobile.data.UploadVideoAttachmentRequest
 import com.openai.codexmobile.data.UploadedImageAttachment
+import com.openai.codexmobile.data.UploadedVideoAttachment
 import com.openai.codexmobile.data.SessionRepository
 import com.openai.codexmobile.data.SessionStreamEvent
 import com.openai.codexmobile.diagnostics.AppLogger
@@ -140,6 +142,52 @@ class AppViewModelTest {
         assertTrue(
             viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
                 "![draft.png](bridge-file://D%3A%5Cbridge%5Csaved%5Cuploaded-2.png)",
+            ) == true,
+        )
+    }
+
+    @Test
+    fun draftSessionVideoAttachmentsAreSavedAfterSessionIsCreated() = runTest(dispatcher.scheduler) {
+        val createdDetail = sampleDetail(
+            id = "sess_draft_video",
+            cwd = "D:\\workspace\\project-a",
+            model = "gpt-5.5",
+            status = "idle",
+        )
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = createdDetail,
+            returnSavedPathForUploads = true,
+        )
+        val repository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap())
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.startDraftSession("D:\\workspace\\project-a")
+        advanceUntilIdle()
+        viewModel.attachPreparedVideos(
+            listOf(
+                UploadVideoAttachmentRequest(
+                    displayName = "demo.mp4",
+                    mimeType = "video/mp4",
+                    contentFilePath = "D:\\cache\\demo.mp4",
+                    sourceByteLength = 42L,
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(listOf<String?>(null), bridgeApi.uploadedVideoRequests.map { it.sessionId })
+
+        viewModel.updateDraftMessage("首条带视频")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(listOf<String?>(null, "sess_draft_video"), bridgeApi.uploadedVideoRequests.map { it.sessionId })
+        assertEquals(
+            listOf("D:\\bridge\\saved\\uploaded-2.mp4"),
+            bridgeApi.sendInputRequests.single().attachments.map { it.stagedPath },
+        )
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview?.contains(
+                "[demo.mp4](bridge-file://D%3A%5Cbridge%5Csaved%5Cuploaded-2.mp4)",
             ) == true,
         )
     }
@@ -1780,6 +1828,7 @@ private class FakeBridgeApi(
     val sentInputs = mutableListOf<String>()
     val sendInputRequests = mutableListOf<SendInputRequest>()
     val uploadedImageRequests = mutableListOf<UploadImageAttachmentRequest>()
+    val uploadedVideoRequests = mutableListOf<UploadVideoAttachmentRequest>()
     val approvalCalls = mutableListOf<ApprovalCall>()
     val sessionConfigUpdates = mutableListOf<SessionConfigUpdate>()
     val sessionTitleUpdates = mutableListOf<String>()
@@ -1919,6 +1968,28 @@ private class FakeBridgeApi(
             stagedPath = "D:\\bridge\\staged\\uploaded-${uploadedImageRequests.size}.png",
             savedPath = if (returnSavedPathForUploads && !request.sessionId.isNullOrBlank()) {
                 "D:\\bridge\\saved\\uploaded-${uploadedImageRequests.size}.png"
+            } else {
+                null
+            },
+        )
+    }
+
+    override suspend fun uploadVideoAttachment(request: UploadVideoAttachmentRequest): UploadedVideoAttachment {
+        if (uploadDelayMs > 0) {
+            kotlinx.coroutines.delay(uploadDelayMs)
+        }
+        uploadedVideoRequests += request
+        if (failUploadsRemaining > 0) {
+            failUploadsRemaining -= 1
+            throw IllegalStateException("视频上传失败。")
+        }
+        return UploadedVideoAttachment(
+            id = "uploaded-${uploadedVideoRequests.size}",
+            displayName = request.displayName,
+            mimeType = request.mimeType,
+            stagedPath = "D:\\bridge\\staged\\uploaded-${uploadedVideoRequests.size}.mp4",
+            savedPath = if (returnSavedPathForUploads && !request.sessionId.isNullOrBlank()) {
+                "D:\\bridge\\saved\\uploaded-${uploadedVideoRequests.size}.mp4"
             } else {
                 null
             },

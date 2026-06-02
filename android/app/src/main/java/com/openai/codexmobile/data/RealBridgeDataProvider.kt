@@ -18,6 +18,7 @@ import okhttp3.OkHttpClient
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -25,6 +26,7 @@ import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -317,6 +319,49 @@ class RealBridgeDataProvider(
         )
     }
 
+    override suspend fun uploadVideoAttachment(request: UploadVideoAttachmentRequest): UploadedVideoAttachment = withContext(Dispatchers.IO) {
+        appLogger.info(
+            "BridgeApi",
+            "上传视频附件：${request.toDiagnosticsSummary()}",
+        )
+        val uploadUrl = "${requireBaseUrl()}/api/attachment/video"
+        val response = try {
+            uploadMultipartVideoAttachmentWithRetry(uploadUrl, request)
+        } catch (error: IllegalStateException) {
+            throw error
+        } catch (error: SocketTimeoutException) {
+            appLogger.warn(
+                "BridgeApi",
+                "视频上传超时：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
+            )
+            throw IllegalStateException("视频上传超时，请检查当前网络后重试。", error)
+        } catch (error: SocketException) {
+            appLogger.warn(
+                "BridgeApi",
+                "视频上传连接中断：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
+            )
+            throw IllegalStateException("视频上传连接中断，请稍后重试。", error)
+        }
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "上传视频附件失败：${request.toDiagnosticsSummary()}, HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw IllegalStateException(
+                buildUploadVideoFailureMessage(
+                    statusCode = response.statusCode,
+                    payload = response.body,
+                ),
+            )
+        }
+
+        parseUploadedVideoAttachmentResponse(
+            payload = response.body,
+            fallbackDisplayName = request.displayName,
+            fallbackMimeType = request.mimeType,
+        )
+    }
+
     override suspend fun sendInput(sessionId: String, request: SendInputRequest) = withContext(Dispatchers.IO) {
         appLogger.info(
             "BridgeApi",
@@ -459,6 +504,94 @@ class RealBridgeDataProvider(
                 "图片上传遇到 SocketException，准备重试一次：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
             )
             retryUploadMultipartImageAttachment(url, request, error)
+        }
+    }
+
+    private fun uploadMultipartVideoAttachment(
+        url: String,
+        request: UploadVideoAttachmentRequest,
+    ): HttpResponse {
+        val contentFile = File(request.contentFilePath)
+        require(contentFile.exists() && contentFile.isFile) { "视频临时文件不存在，无法上传。" }
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("displayName", request.displayName)
+            .addFormDataPart("mimeType", request.mimeType)
+            .addFormDataPart(
+                "file",
+                request.displayName,
+                contentFile.asRequestBody(request.mimeType.toMediaTypeOrNull()),
+            )
+        request.sessionId
+            ?.takeIf { it.isNotBlank() }
+            ?.let { body.addFormDataPart("sessionId", it) }
+        val requestBody = body.build()
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .header("Accept", "application/json")
+            .header("Connection", "close")
+        authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
+        appLogger.debug(
+            "BridgeApi",
+            "HTTP 请求：POST $url (upload video attachment, ${request.toDiagnosticsSummary()})",
+        )
+        uploadHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            appLogger.debug(
+                "BridgeApi",
+                "HTTP 响应：POST $url -> ${response.code}${if (payload.isBlank()) "" else ", body=${payload.compactForLog()}"}",
+            )
+            return HttpResponse(
+                statusCode = response.code,
+                body = payload,
+            )
+        }
+    }
+
+    private fun uploadMultipartVideoAttachmentWithRetry(
+        url: String,
+        request: UploadVideoAttachmentRequest,
+    ): HttpResponse {
+        return try {
+            uploadMultipartVideoAttachment(url, request)
+        } catch (error: SocketTimeoutException) {
+            appLogger.warn(
+                "BridgeApi",
+                "视频上传遇到 SocketTimeoutException，准备重试一次：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
+            )
+            retryUploadMultipartVideoAttachment(url, request, error)
+        } catch (error: SocketException) {
+            appLogger.warn(
+                "BridgeApi",
+                "视频上传遇到 SocketException，准备重试一次：${request.toDiagnosticsSummary()}, error=${error.message ?: "unknown"}",
+            )
+            retryUploadMultipartVideoAttachment(url, request, error)
+        }
+    }
+
+    private fun retryUploadMultipartVideoAttachment(
+        url: String,
+        request: UploadVideoAttachmentRequest,
+        firstError: Exception,
+    ): HttpResponse {
+        return try {
+            uploadMultipartVideoAttachment(url, request)
+        } catch (retryError: SocketTimeoutException) {
+            appLogger.warn(
+                "BridgeApi",
+                "视频上传重试仍超时：${request.toDiagnosticsSummary()}, error=${retryError.message ?: "unknown"}",
+            )
+            throw retryError
+        } catch (retryError: SocketException) {
+            appLogger.warn(
+                "BridgeApi",
+                "视频上传重试仍连接中断：${request.toDiagnosticsSummary()}, error=${retryError.message ?: "unknown"}",
+            )
+            throw retryError
+        } catch (retryError: Exception) {
+            retryError.addSuppressed(firstError)
+            throw retryError
         }
     }
 
@@ -876,6 +1009,26 @@ internal fun parseUploadedImageAttachmentResponse(
     )
 }
 
+internal fun parseUploadedVideoAttachmentResponse(
+    payload: String,
+    fallbackDisplayName: String,
+    fallbackMimeType: String,
+): UploadedVideoAttachment {
+    val json = JSONObject(payload)
+    val stagedPath = json.optString("stagedPath")
+        .ifBlank { json.optString("path") }
+        .ifBlank { json.optString("savedPath") }
+        .ifBlank { error("bridge 未返回附件路径。") }
+    val savedPath = json.optString("savedPath").takeIf { it.isNotBlank() }
+    return UploadedVideoAttachment(
+        id = json.optString("id").ifBlank { error("bridge 未返回附件 ID。") },
+        displayName = json.optString("displayName").ifBlank { fallbackDisplayName },
+        mimeType = json.optString("mimeType").ifBlank { fallbackMimeType },
+        stagedPath = stagedPath,
+        savedPath = savedPath,
+    )
+}
+
 internal fun buildUploadImageFailureMessage(
     statusCode: Int,
     payload: String,
@@ -897,6 +1050,30 @@ internal fun buildUploadImageFailureMessage(
         !message.isNullOrBlank() -> message
         statusCode == 413 -> "图片过大，超过 bridge 上传上限。"
         else -> "图片上传失败（HTTP $statusCode）。"
+    }
+}
+
+internal fun buildUploadVideoFailureMessage(
+    statusCode: Int,
+    payload: String,
+): String {
+    val parsedBody = payload.takeIf { it.isNotBlank() }?.let {
+        runCatching { JSONObject(it) }.getOrNull()
+    }
+    val errorCode = parsedBody?.optString("error")?.takeIf { it.isNotBlank() }
+    val message = parsedBody?.optString("message")?.takeIf { it.isNotBlank() }
+    val maxMegabytes = parsedBody?.takeIf { it.has("maxMegabytes") && !it.isNull("maxMegabytes") }?.optInt("maxMegabytes")
+
+    return when {
+        errorCode == "video-too-large" && !message.isNullOrBlank() -> message
+        errorCode == "video-too-large" && maxMegabytes != null && maxMegabytes > 0 -> "视频过大，当前上限 ${maxMegabytes} MB。"
+        errorCode == "video-too-large" -> "视频过大，超过 bridge 上传上限。"
+        errorCode == "bridge-restarting" -> "bridge 正在重启，暂时无法上传视频。"
+        errorCode == "session-not-found" -> "视频所属会话不存在，请刷新后重试。"
+        errorCode == "invalid-video-upload" && message == "unsupported-video-mime-type" -> "当前只支持 MP4、WebM、MOV 视频。"
+        !message.isNullOrBlank() -> message
+        statusCode == 413 -> "视频过大，超过 bridge 上传上限。"
+        else -> "视频上传失败（HTTP $statusCode）。"
     }
 }
 
