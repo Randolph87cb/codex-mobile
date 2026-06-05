@@ -470,7 +470,18 @@ function sanitizeDispositionFileName(value: string): string {
   const sanitized = value
     .replace(/[\r\n"]/g, "_")
     .trim();
-  return sanitized || "download";
+  const parsed = path.parse(sanitized);
+  const asciiBaseName = parsed.name
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/[\\/:*?<>|;,=]/g, "_")
+    .trim();
+  const asciiExtension = parsed.ext
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/[^.A-Za-z0-9]/g, "");
+  const fallbackBaseName = /[A-Za-z0-9]/.test(asciiBaseName) ? asciiBaseName : "download";
+  return `${fallbackBaseName}${asciiExtension}`;
 }
 
 function isSameOrChildPath(candidate: string, allowedRoot: string): boolean {

@@ -1271,6 +1271,38 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
+  test("serves whitelisted local file downloads with utf-8 filename fallback", async () => {
+    const allowedRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-download-file-utf8-"));
+    tempDirs.push(allowedRoot);
+    const filePath = path.join(allowedRoot, "番茄鸡蛋米线-手绘注解样张.png");
+    await writeFile(filePath, "utf8-name-content");
+
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const app = await buildBridgeApp({
+      store,
+      runner,
+      security: createSecurityConfig({
+        allowedCwds: [allowedRoot.toLowerCase()],
+      }),
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/file/download?path=${encodeURIComponent(filePath)}`,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("image/png");
+    expect(response.headers["content-disposition"]).toContain("attachment;");
+    expect(response.headers["content-disposition"]).toContain('filename="download.png"');
+    expect(response.headers["content-disposition"]).toContain(
+      `filename*=UTF-8''${encodeURIComponent("番茄鸡蛋米线-手绘注解样张.png")}`,
+    );
+    expect(response.body).toBe("utf8-name-content");
+
+    await app.close();
+  });
+
   test("returns 409 when thread is already active in another client", async () => {
     const store = new SessionStore();
     const runner = new TestRunner(store);
