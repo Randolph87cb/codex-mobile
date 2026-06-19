@@ -2620,7 +2620,9 @@ class AppViewModel(
                     approvalMode = ManagedApprovalMode,
                     sandboxMode = ManagedSandboxMode,
                 ),
-            ).let(::enforceManagedSessionDetailLocally)
+            ).let { updated ->
+                mergeSessionDetail(detail, updated)
+            }
         } catch (error: Exception) {
             appLogger.error("AppViewModel", "修正会话托管策略失败：sessionId=${detail.id}", error)
             enforceManagedSessionDetailLocally(detail)

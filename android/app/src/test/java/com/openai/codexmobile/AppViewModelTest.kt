@@ -1326,6 +1326,39 @@ class AppViewModelTest {
     }
 
     @Test
+    fun openingManagedSessionPolicyFixDoesNotDiscardMoreCompleteTranscript() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(
+            id = "sess_policy_transcript",
+            approvalMode = "manual",
+            sandboxMode = "workspace-write",
+            status = "idle",
+        ).copy(
+            transcriptPreview = "工作目录：D:\\workspace\\codex-mobile\n\n你：复现历史线程\n\nCodex：历史回复完整保留",
+        )
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail.copy(transcriptPreview = "工作目录：D:\\workspace\\codex-mobile"),
+        )
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_policy_transcript")
+        advanceUntilIdle()
+
+        assertTrue(
+            bridgeApi.sessionConfigUpdates.any {
+                it.approvalMode == "auto" && it.sandboxMode == "danger-full-access"
+            },
+        )
+        val transcript = viewModel.uiState.value.selectedSession?.transcriptPreview.orEmpty()
+        assertTrue(transcript.contains("你：复现历史线程"))
+        assertTrue(transcript.contains("Codex：历史回复完整保留"))
+        assertTrue(transcript.length > "工作目录：D:\\workspace\\codex-mobile".length)
+    }
+
+    @Test
     fun defaultServiceTierUsesOrdinaryModeAndPersistsAsDefault() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_default", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)
