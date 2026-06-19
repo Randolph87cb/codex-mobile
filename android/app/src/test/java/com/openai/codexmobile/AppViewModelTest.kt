@@ -636,28 +636,37 @@ class AppViewModelTest {
     }
 
     @Test
-    fun connectSynchronizesExistingSessionsToManagedPolicy() = runTest(dispatcher.scheduler) {
-        val detail = sampleDetail(
-            id = "sess_managed_sync",
+    fun connectLoadsSessionListWithoutBatchPolicySyncAndNormalizesDisplayLocally() = runTest(dispatcher.scheduler) {
+        val manualDetail = sampleDetail(
+            id = "sess_manual_policy",
             approvalMode = "manual",
             sandboxMode = "workspace-write",
             status = "idle",
         )
-        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val readOnlyDetail = sampleDetail(
+            id = "sess_read_only_policy",
+            approvalMode = "manual",
+            sandboxMode = "read-only",
+            status = "running",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = manualDetail)
         val repository = FakeSessionRepository(
-            sessionSummaries = listOf(detail.toSummary()),
-            detailsById = mapOf(detail.id to detail),
+            sessionSummaries = listOf(manualDetail.toSummary(), readOnlyDetail.toSummary()),
+            detailsById = mapOf(
+                manualDetail.id to manualDetail,
+                readOnlyDetail.id to readOnlyDetail,
+            ),
         )
         val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
 
         viewModel.connect()
         advanceUntilIdle()
 
-        assertTrue(
-            bridgeApi.sessionConfigUpdates.any {
-                it.approvalMode == "auto" && it.sandboxMode == "danger-full-access"
-            },
-        )
+        assertTrue(bridgeApi.sessionConfigUpdates.isEmpty())
+        assertEquals(listOf("sess_manual_policy", "sess_read_only_policy"), viewModel.uiState.value.sessions.map { it.id })
+        assertTrue(viewModel.uiState.value.sessions.all { it.approvalMode == "auto" })
+        assertTrue(viewModel.uiState.value.sessions.all { it.sandboxMode == "danger-full-access" })
+        assertTrue(viewModel.uiState.value.sessions.single { it.id == "sess_read_only_policy" }.subtitle.contains("进行中"))
         assertEquals("auto", viewModel.uiState.value.selectedSession?.approvalMode)
         assertEquals("danger-full-access", viewModel.uiState.value.selectedSession?.sandboxMode)
     }

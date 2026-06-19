@@ -2600,41 +2600,8 @@ class AppViewModel(
         )
     }
 
-    private suspend fun synchronizeManagedSessionPolicies(sessions: List<SessionSummary>): List<SessionSummary> {
-        var changed = false
-        for (session in sessions) {
-            if (session.approvalMode == ManagedApprovalMode && session.sandboxMode == ManagedSandboxMode) {
-                continue
-            }
-
-            changed = true
-            try {
-                appLogger.info(
-                    "AppViewModel",
-                    "同步会话托管策略：sessionId=${session.id}, approvalMode=${session.approvalMode}, sandboxMode=${session.sandboxMode}",
-                )
-                bridgeApi.updateSessionConfig(
-                    session.id,
-                    SessionConfigUpdate(
-                        approvalMode = ManagedApprovalMode,
-                        sandboxMode = ManagedSandboxMode,
-                    ),
-                )
-            } catch (error: Exception) {
-                appLogger.error("AppViewModel", "同步会话托管策略失败：sessionId=${session.id}", error)
-            }
-        }
-
-        val latest = if (changed) {
-            sessionRepository.listSessions()
-        } else {
-            sessions
-        }
-        return latest.map(::enforceManagedSessionSummaryLocally)
-    }
-
     private suspend fun loadManagedSessionSummaries(archived: Boolean): List<SessionSummary> {
-        return synchronizeManagedSessionPolicies(sessionRepository.listSessions(archived = archived))
+        return sessionRepository.listSessions(archived = archived).map(::enforceManagedSessionSummaryLocally)
     }
 
     private suspend fun ensureManagedSessionPolicy(detail: SessionDetail): SessionDetail {

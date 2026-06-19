@@ -1082,6 +1082,118 @@ describe("AppServerRunner", () => {
     });
   });
 
+  test("lists active thread views without requesting archived threads when local store is empty", async () => {
+    const store = new SessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: any) => {
+      if (method === "thread/list" && params?.archived === false) {
+        return {
+          data: [
+            {
+              id: "thread-active",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: 1716080300,
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      if (method === "thread/list" && params?.archived === true) {
+        return { data: [] };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const activeViews = await runner.listSessionViews(false);
+
+    expect(activeViews.map((view) => view.id)).toEqual(["thread-active"]);
+    expect(client.request).toHaveBeenCalledTimes(1);
+    expect(client.request).toHaveBeenCalledWith(
+      "thread/list",
+      expect.objectContaining({
+        archived: false,
+      }),
+    );
+  });
+
+  test("lists archived threads when local store has records so archived sessions stay filtered from active views", async () => {
+    const store = new SessionStore();
+    store.attach({
+      id: "thread-locally-known",
+      cwd: "D:\\workspace\\archived",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+      status: "idle",
+      threadId: "thread-locally-known",
+      activeTurnId: null,
+      lastError: null,
+      createdAt: "2026-05-19T02:00:00.000Z",
+      updatedAt: "2026-05-19T02:00:00.000Z",
+    });
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: any) => {
+      if (method === "thread/list" && params?.archived === false) {
+        return {
+          data: [
+            {
+              id: "thread-active",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: 1716080300,
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      if (method === "thread/list" && params?.archived === true) {
+        return {
+          data: [
+            {
+              id: "thread-locally-known",
+              cwd: "D:\\workspace\\archived",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: 1716080400,
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const activeViews = await runner.listSessionViews(false);
+
+    expect(activeViews.map((view) => view.id)).toEqual(["thread-active"]);
+    expect(client.request).toHaveBeenCalledWith(
+      "thread/list",
+      expect.objectContaining({
+        archived: false,
+      }),
+    );
+    expect(client.request).toHaveBeenCalledWith(
+      "thread/list",
+      expect.objectContaining({
+        archived: true,
+      }),
+    );
+  });
+
   test("filters archived thread lists and keeps archived attached sessions out of active list", async () => {
     const store = createSessionStore();
     store.attach({

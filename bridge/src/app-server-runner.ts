@@ -360,10 +360,18 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       return views.sort((left, right) => right.lastUpdated.localeCompare(left.lastUpdated));
     }
 
+    const storedSessions = this.store.list();
     const knownThreadIds = new Set(threads.map((thread) => thread.id));
-    const archivedThreadIds = new Set((await this.listThreads(true)).map((thread) => thread.id));
-    for (const session of this.store.list()) {
-      if (knownThreadIds.has(session.id) || archivedThreadIds.has(session.id)) {
+    const unknownStoredSessions = storedSessions.filter(
+      (session) => !knownThreadIds.has(session.threadId ?? session.id),
+    );
+    const archivedThreadIds =
+      unknownStoredSessions.length > 0
+        ? new Set((await this.listThreads(true)).map((thread) => thread.id))
+        : new Set<string>();
+    for (const session of storedSessions) {
+      const sessionThreadId = session.threadId ?? session.id;
+      if (knownThreadIds.has(sessionThreadId) || archivedThreadIds.has(sessionThreadId)) {
         continue;
       }
       views.push(buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id)));
