@@ -41,3 +41,16 @@
   - fallback 成功时删除 state 文件并记录关键控制日志。
   - fallback 失败时非零退出、保留 state 文件并记录失败原因。
 - 验证：已运行 `powershell -ExecutionPolicy Bypass -File .\scripts\tests\bridge-background.acceptance.ps1`，新增 lock 竞争用例后共 4 个脚本级验收用例通过。
+
+## 2026-06-19 拉取 main 并重新注册 bridge 服务
+
+- 目标：拉取远端 `main` 最新内容，并重新注册本机 bridge 后台服务。
+- 执行：
+  - `git pull origin main` 快进到 `3253b7a`。
+  - 当前 `CodexMobileBridge` 计划任务原配置为登录触发，监听 `0.0.0.0:8787`，runner 为 `app-server`。
+  - 先执行 `scripts/uninstall-bridge-autostart.ps1 -TaskName CodexMobileBridge` 移除旧计划任务。
+  - 再执行 `scripts/install-bridge-autostart.ps1 -TaskName CodexMobileBridge -HostAddress 0.0.0.0 -Port 8787 -Runner app-server` 重新注册计划任务。
+  - 执行 `Start-ScheduledTask -TaskName CodexMobileBridge` 启动任务。
+- 验证：
+  - `http://127.0.0.1:8787/health` 返回 `ok = true`，`runnerMode = app-server`，`lifecycle.phase = running`。
+  - 计划任务 `CodexMobileBridge` 存在，状态为 `Ready`，动作指向 `scripts/restart-bridge-background.ps1`。
