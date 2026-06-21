@@ -226,18 +226,44 @@ export function createSessionService(
   }
 
   async function listSessionViews(archived: boolean): Promise<Array<SessionRecord | SessionView>> {
-    return deps.historyRunner ? await deps.historyRunner.listSessionViews(archived) : deps.store.list();
+    const views = deps.historyRunner ? await deps.historyRunner.listSessionViews(archived) : deps.store.list();
+    if (!deps.localHistoryStore) {
+      return views;
+    }
+
+    const knownIds = new Set<string>();
+    for (const view of views) {
+      knownIds.add(view.id);
+      if (view.threadId) {
+        knownIds.add(view.threadId);
+      }
+    }
+
+    const fallbackViews = await deps.localHistoryStore.listSessionViews(archived);
+    for (const view of fallbackViews) {
+      if (knownIds.has(view.id) || (view.threadId && knownIds.has(view.threadId))) {
+        continue;
+      }
+
+      views.push(view);
+      knownIds.add(view.id);
+      if (view.threadId) {
+        knownIds.add(view.threadId);
+      }
+    }
+
+    return views.sort((left, right) => getSessionLastUpdated(right).localeCompare(getSessionLastUpdated(left)));
   }
 
   async function getSessionView(sessionId: string): Promise<SessionRecord | SessionView | null> {
     if (deps.historyRunner) {
-      const view = await deps.historyRunner.getSessionView(sessionId);
+      const view = await tryGetHistorySessionView(sessionId);
       if (view) {
         return view;
       }
     }
 
-    return deps.store.get(sessionId) ?? null;
+    return deps.store.get(sessionId) ?? await deps.localHistoryStore?.getSessionView(sessionId) ?? null;
   }
 
   async function getAccountQuota(): Promise<unknown> {
@@ -440,6 +466,19 @@ export function createSessionService(
     return deps.store.get(sessionId) ?? null;
   }
 
+  async function tryGetHistorySessionView(sessionId: string): Promise<SessionView | null> {
+    try {
+      return await deps.historyRunner!.getSessionView(sessionId);
+    } catch (error) {
+      const fallback = await deps.localHistoryStore?.getSessionView(sessionId) ?? null;
+      if (fallback) {
+        return fallback;
+      }
+
+      throw error;
+    }
+  }
+
   function ensureGoalSupport(): void {
     if (!deps.historyRunner) {
       throw new BridgeServiceError(501, { error: "goal-not-supported" });
@@ -451,6 +490,10 @@ export function createSessionService(
       throw new BridgeServiceError(501, { error: "archive-not-supported" });
     }
   }
+}
+
+function getSessionLastUpdated(session: SessionRecord | SessionView): string {
+  return "lastUpdated" in session ? session.lastUpdated : session.lastActivityAt ?? session.updatedAt;
 }
 
 function mapGoalError(error: unknown): BridgeServiceError {

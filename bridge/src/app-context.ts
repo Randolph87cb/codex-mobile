@@ -1,5 +1,6 @@
 import type { AttachmentStore } from "./attachment-store.js";
 import type { BridgeRunner, HistoryCapableBridgeRunner } from "./bridge-runner.js";
+import type { LocalHistoryStore } from "./local-history-store.js";
 import type { SessionStore } from "./session-store.js";
 import type { BridgeLifecycleState, BridgeSecurityConfig, BridgeSecurityState } from "./types.js";
 
@@ -7,6 +8,7 @@ export interface BuildBridgeAppOptions {
   runner?: BridgeRunner;
   store?: SessionStore;
   security?: BridgeSecurityConfig;
+  localHistoryStore?: LocalHistoryStore | null;
 }
 
 export interface SessionSocket {
@@ -27,6 +29,7 @@ export interface BridgeLifecycleController {
 export interface BridgeAppDependencies {
   runner: BridgeRunner;
   historyRunner: HistoryCapableBridgeRunner | null;
+  localHistoryStore: LocalHistoryStore | null;
   store: SessionStore;
   attachmentStore: AttachmentStore;
   security: BridgeSecurityConfig;

@@ -7,6 +7,7 @@ import { buildAttachmentTooLargeError, createAttachmentService } from "./attachm
 import { isHistoryCapableRunner, type BridgeRunner } from "./bridge-runner.js";
 import { AppServerRunner } from "./app-server-runner.js";
 import { createBridgeLifecycleController } from "./lifecycle-service.js";
+import { LocalHistoryStore } from "./local-history-store.js";
 import { MockRunner } from "./mock-runner.js";
 import { registerBridgeRoutes } from "./routes.js";
 import { buildBridgeSecurityState, authorizeApiRequest, resolveBridgeSecurityConfig } from "./security.js";
@@ -23,6 +24,9 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   const attachmentStore = new AttachmentStore();
   const runner = options.runner ?? createRunner(store);
   const historyRunner = isHistoryCapableRunner(runner) ? runner : null;
+  const localHistoryStore = options.localHistoryStore === undefined
+    ? runner.mode === "app-server" ? new LocalHistoryStore() : null
+    : options.localHistoryStore;
   const security = options.security ?? resolveBridgeSecurityConfig();
   const bridgeVersion = process.env.CODEX_MOBILE_BRIDGE_VERSION ?? "0.1.0";
   const bridgeStartedAt = new Date().toISOString();
@@ -30,6 +34,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
   const deps: BridgeAppDependencies = {
     runner,
     historyRunner,
+    localHistoryStore,
     store,
     attachmentStore,
     security,
