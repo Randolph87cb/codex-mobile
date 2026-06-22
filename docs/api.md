@@ -645,6 +645,17 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 
 对正式线程来说，这里的 `:id` 也是 `threadId`。
 
+Android 当前有两类消费者会使用同一条实时流接口：
+
+- 会话详情页：作为 UI 状态同步来源，负责渲染实时输出、执行过程和审批状态。
+- 后台会话监听前台服务：用户在 App 内成功发送消息后启动，只观察当前 `sessionId` 的事件，在 `assistant.done`、`run.status=idle/error`、`run.interrupted`、`tool.request`、`error` 时发系统通知并自停。该服务不接管 UI 状态，也不作为会话状态真相源。
+
+后台监听服务从 Android 本地设置读取 bridge 地址和 Bearer token，复用客户端已有 WebSocket 解析逻辑；Android 13+ 如果用户未授予通知权限，服务仍会尽量保持前台监听，结果提醒可能不会显示，用户需要回到 App 查看状态。通知通道拆成两类：常驻监听通知使用低打扰通道，线程结束、等待审批、中断和出错使用高重要级别结果提醒通道，以便系统尽量以横幅或弹出通知提示用户。
+
+结果提醒的点击行为由 Android 客户端处理：通知会携带 `sessionId` 打开 App，客户端会先保留这个待打开目标；如果 bridge 已连接，会立即导航到对应会话详情并补拉 `GET /api/session/:id`；如果尚未连接，会按当前保存的 endpoint/token 主动连接 bridge，连接成功后再打开目标会话；如果连接失败，客户端会保留待打开 `sessionId` 并显示中文提示，用户稍后手动连接成功后会继续尝试打开。
+
+当终态是普通完成时，后台服务会在发送高重要级别结果通知前补拉 `GET /api/session/:id`，从 `transcriptPreview` 中提取最后一段 `Codex：` 回复的前 1-2 行作为大文本通知内容，并限制长度，避免把完整回复塞进系统通知。补拉失败、没有可用 Codex 回复、等待审批、中断、出错和后台监听中断仍使用各自专门文案。
+
 事件基础结构：
 
 ```json

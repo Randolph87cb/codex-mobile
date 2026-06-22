@@ -88,6 +88,8 @@ data class AppUiState(
     val settingsItems: List<Pair<String, String>>,
     val accountQuota: AccountQuotaUiState = AccountQuotaUiState(),
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
+    val pendingNotificationSessionId: String? = null,
+    val notificationNavigationSessionId: String? = null,
     val pendingImageAttachments: List<PendingImageAttachmentUiState> = emptyList(),
     val pendingVideoAttachments: List<PendingVideoAttachmentUiState> = emptyList(),
     val queuedInputs: List<String> = emptyList(),
@@ -189,6 +191,7 @@ class AppViewModel(
     private val sessionRepository: SessionRepository,
     private val settingsStore: AppSettingsStore,
     private val appLogger: AppLogger,
+    private val startSessionWatch: (String) -> Unit = {},
 ) : ViewModel() {
 
     private val initialSettings = settingsStore.load().sanitize()
@@ -743,9 +746,13 @@ class AppViewModel(
                 }
                 refreshAccountQuotaSnapshot()
                 refreshDiagnosticsLog()
+                uiState.value.pendingNotificationSessionId?.let { pendingSessionId ->
+                    openConnectedNotificationSession(pendingSessionId)
+                }
             } catch (error: Exception) {
                 appLogger.error("AppViewModel", "连接桥接服务失败：$endpoint", error)
                 _uiState.update { state ->
+                    val pendingSessionId = state.pendingNotificationSessionId
                     state.copy(
                         isLoading = false,
                         connectionState = BridgeConnectionState.Disconnected,
@@ -753,7 +760,11 @@ class AppViewModel(
                         selectedSession = null,
                         selectedDraftSession = null,
                         accountQuota = AccountQuotaUiState(),
-                        message = error.message ?: "连接桥接服务失败。",
+                        message = if (pendingSessionId.isNullOrBlank()) {
+                            error.message ?: "连接桥接服务失败。"
+                        } else {
+                            "连接 bridge 失败，已保留通知里的会话，稍后连接成功会继续打开。"
+                        },
                     ).withSettingsItems()
                 }
                 refreshDiagnosticsLog()
@@ -1001,6 +1012,114 @@ class AppViewModel(
         cancelPendingSessionStreamReconnect()
     }
 
+    fun openSessionFromNotification(sessionId: String) {
+        val normalizedSessionId = sessionId.trim()
+        if (normalizedSessionId.isBlank() || normalizedSessionId == DraftSessionId) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                pendingNotificationSessionId = normalizedSessionId,
+                message = "正在打开通知对应的会话。",
+            )
+        }
+
+        viewModelScope.launch {
+            if (uiState.value.connectionState is BridgeConnectionState.Connected) {
+                openConnectedNotificationSession(normalizedSessionId)
+                return@launch
+            }
+
+            if (uiState.value.isLoading) {
+                _uiState.update {
+                    it.copy(message = "正在连接 bridge，连接成功后会打开通知里的会话。")
+                }
+                return@launch
+            }
+
+            if (connectForNotificationSession(normalizedSessionId)) {
+                openConnectedNotificationSession(normalizedSessionId)
+            }
+        }
+    }
+
+    fun consumeNotificationNavigationSession(sessionId: String) {
+        _uiState.update { state ->
+            if (state.notificationNavigationSessionId == sessionId) {
+                state.copy(notificationNavigationSessionId = null)
+            } else {
+                state
+            }
+        }
+    }
+
+    private suspend fun connectForNotificationSession(sessionId: String): Boolean {
+        val endpoint = uiState.value.endpointInput.trim()
+        if (endpoint.isBlank()) {
+            appLogger.warn("AppViewModel", "通知打开会话失败：bridge 地址为空，sessionId=$sessionId")
+            _uiState.update {
+                it.copy(message = "请先填写桥接地址，已保留通知里的会话。")
+            }
+            return false
+        }
+
+        stopSessionStream()
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                message = "正在连接 bridge，以打开通知里的会话。",
+                selectedDraftSession = null,
+                accountQuota = it.accountQuota.copy(isLoading = true),
+            )
+        }
+
+        return try {
+            appLogger.info("AppViewModel", "通知触发连接 bridge：endpoint=$endpoint, sessionId=$sessionId")
+            val connectionState = bridgeApi.connect(endpoint)
+            val syncedSessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
+            _uiState.update { state ->
+                state.copy(
+                    isLoading = false,
+                    connectionState = connectionState,
+                    sessions = syncedSessions,
+                    selectedDraftSession = null,
+                    message = "已连接 bridge，正在打开通知里的会话。",
+                ).withSettingsItems()
+            }
+            refreshAccountQuotaSnapshot()
+            refreshDiagnosticsLog()
+            true
+        } catch (error: Exception) {
+            appLogger.error("AppViewModel", "通知触发连接 bridge 失败：sessionId=$sessionId", error)
+            _uiState.update { state ->
+                state.copy(
+                    isLoading = false,
+                    connectionState = BridgeConnectionState.Disconnected,
+                    accountQuota = AccountQuotaUiState(),
+                    message = "无法连接 bridge，已保留通知里的会话，稍后连接成功会继续打开。",
+                ).withSettingsItems()
+            }
+            refreshDiagnosticsLog()
+            false
+        }
+    }
+
+    private fun openConnectedNotificationSession(sessionId: String) {
+        _uiState.update {
+            it.copy(
+                pendingNotificationSessionId = sessionId,
+                notificationNavigationSessionId = sessionId,
+                message = "正在打开通知对应的会话。",
+            )
+        }
+        openSessionDetail(
+            sessionId = sessionId,
+            forceRefresh = true,
+            openedFromNotification = true,
+        )
+    }
+
     fun startDraftSession(cwd: String? = null) {
         stopSessionStream()
         val draft = buildDraftSession(
@@ -1050,11 +1169,15 @@ class AppViewModel(
         }
     }
 
-    fun openSessionDetail(sessionId: String) {
+    fun openSessionDetail(
+        sessionId: String,
+        forceRefresh: Boolean = false,
+        openedFromNotification: Boolean = false,
+    ) {
         if (sessionId.isBlank() || sessionId == DraftSessionId) {
             return
         }
-        if (activeStreamSessionId == sessionId && sessionStreamJob?.isActive == true) {
+        if (!forceRefresh && activeStreamSessionId == sessionId && sessionStreamJob?.isActive == true) {
             return
         }
 
@@ -1089,7 +1212,13 @@ class AppViewModel(
                         isLoading = false,
                         selectedSession = null,
                         selectedDraftSession = null,
-                        message = error.message ?: "加载会话失败。",
+                        message = if (openedFromNotification) {
+                            error.message
+                                ?.let { message -> "无法打开通知里的会话，已保留待重试：$message" }
+                                ?: "无法打开通知里的会话，已保留待重试。"
+                        } else {
+                            error.message ?: "加载会话失败。"
+                        },
                         queuedInputs = emptyList(),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
                             isConnected = false,
@@ -1110,6 +1239,14 @@ class AppViewModel(
                         isLoading = false,
                         selectedSession = null,
                         selectedDraftSession = null,
+                        pendingNotificationSessionId = if (
+                            openedFromNotification &&
+                            it.pendingNotificationSessionId == sessionId
+                        ) {
+                            null
+                        } else {
+                            it.pendingNotificationSessionId
+                        },
                         message = "未找到会话：$sessionId",
                         queuedInputs = emptyList(),
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -1131,6 +1268,14 @@ class AppViewModel(
                 state.copy(
                     isLoading = false,
                     selectedSession = merged,
+                    pendingNotificationSessionId = if (
+                        openedFromNotification &&
+                        state.pendingNotificationSessionId == sessionId
+                    ) {
+                        null
+                    } else {
+                        state.pendingNotificationSessionId
+                    },
                     queuedInputs = queuedInputsFor(sessionId),
                     sessionRealtimeState = state.sessionRealtimeState.copy(
                         statusText = localizedSessionStatus(merged.status),
@@ -3015,6 +3160,14 @@ class AppViewModel(
                 attachments = attachmentRefs,
             ),
         )
+        runCatching {
+            startSessionWatch(detail.id)
+        }.onFailure { error ->
+            appLogger.warn(
+                "AppViewModel",
+                "启动后台会话监听失败：sessionId=${detail.id}, error=${error.message ?: "unknown"}",
+            )
+        }
         activeAssistantTurnId = null
         clearPendingUploads()
         val updatedDetail = appendUserMessage(
@@ -4062,11 +4215,18 @@ class AppViewModelFactory(
     private val sessionRepository: SessionRepository,
     private val settingsStore: AppSettingsStore,
     private val appLogger: AppLogger,
+    private val startSessionWatch: (String) -> Unit = {},
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AppViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return AppViewModel(bridgeApi, sessionRepository, settingsStore, appLogger) as T
+            return AppViewModel(
+                bridgeApi = bridgeApi,
+                sessionRepository = sessionRepository,
+                settingsStore = settingsStore,
+                appLogger = appLogger,
+                startSessionWatch = startSessionWatch,
+            ) as T
         }
         error("Unknown ViewModel class: ${modelClass.name}")
     }

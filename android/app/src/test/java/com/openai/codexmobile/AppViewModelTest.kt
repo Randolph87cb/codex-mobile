@@ -270,6 +270,64 @@ class AppViewModelTest {
     }
 
     @Test
+    fun notificationOpenConnectsAndRefreshesTargetSession() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_notification", status = "idle")
+        val refreshedDetail = detail.copy(
+            status = "running",
+            transcriptPreview = "Codex：通知点击后补拉的新内容",
+        )
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to refreshedDetail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+        advanceUntilIdle()
+
+        viewModel.openSessionFromNotification("sess_notification")
+        advanceUntilIdle()
+
+        assertEquals(1, bridgeApi.connectCallCount)
+        assertEquals("sess_notification", viewModel.uiState.value.notificationNavigationSessionId)
+        assertNull(viewModel.uiState.value.pendingNotificationSessionId)
+        assertEquals("sess_notification", viewModel.uiState.value.selectedSession?.id)
+        assertTrue(
+            viewModel.uiState.value.selectedSession?.transcriptPreview
+                ?.contains("通知点击后补拉的新内容") == true,
+        )
+    }
+
+    @Test
+    fun notificationOpenKeepsSessionIdAfterConnectFailureAndRetriesOnManualConnect() =
+        runTest(dispatcher.scheduler) {
+            val detail = sampleDetail(id = "sess_notification_retry", status = "idle")
+            val bridgeApi = FakeBridgeApi(
+                createdDetail = detail,
+                failConnectRequestsRemaining = 1,
+            )
+            val repository = FakeSessionRepository(
+                sessionSummaries = listOf(detail.toSummary()),
+                detailsById = mapOf(detail.id to detail),
+            )
+            val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+            advanceUntilIdle()
+
+            viewModel.openSessionFromNotification("sess_notification_retry")
+            advanceUntilIdle()
+
+            assertEquals("sess_notification_retry", viewModel.uiState.value.pendingNotificationSessionId)
+            assertNull(viewModel.uiState.value.notificationNavigationSessionId)
+            assertTrue(viewModel.uiState.value.message?.contains("已保留通知里的会话") == true)
+
+            viewModel.connect()
+            advanceUntilIdle()
+
+            assertEquals("sess_notification_retry", viewModel.uiState.value.notificationNavigationSessionId)
+            assertNull(viewModel.uiState.value.pendingNotificationSessionId)
+            assertEquals("sess_notification_retry", viewModel.uiState.value.selectedSession?.id)
+        }
+
+    @Test
     fun goalActionsUpdateSelectedSessionAndCallBridge() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_goal", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)

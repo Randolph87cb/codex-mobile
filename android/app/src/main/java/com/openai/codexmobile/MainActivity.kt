@@ -1,22 +1,35 @@
 package com.openai.codexmobile
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.setContent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import com.openai.codexmobile.data.AppSettingsDefaults
 import com.openai.codexmobile.data.RealBridgeDataProvider
 import com.openai.codexmobile.data.SharedPreferencesAppSettingsStore
 import com.openai.codexmobile.data.defaultEndpointForCurrentDevice
 import com.openai.codexmobile.diagnostics.FileAppLogger
+import com.openai.codexmobile.service.SessionWatchService
 import com.openai.codexmobile.ui.CodexMobileApp
 import com.openai.codexmobile.ui.theme.CodexMobileTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
+    private val requestedSessionId = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestedSessionId.value = intent.sessionIdExtra()
+        requestNotificationPermissionIfNeeded()
 
         val settingsStore = SharedPreferencesAppSettingsStore(
             context = applicationContext,
@@ -38,12 +51,52 @@ class MainActivity : ComponentActivity() {
                     sessionRepository = dataProvider,
                     settingsStore = settingsStore,
                     appLogger = appLogger,
+                    startSessionWatch = { sessionId ->
+                        SessionWatchService.startWatching(applicationContext, sessionId)
+                    },
                 ),
             )
             val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
+            val sessionIdFromNotification by requestedSessionId.collectAsStateWithLifecycle()
+            LaunchedEffect(sessionIdFromNotification) {
+                val sessionId = sessionIdFromNotification ?: return@LaunchedEffect
+                appViewModel.openSessionFromNotification(sessionId)
+                requestedSessionId.value = null
+            }
             CodexMobileTheme(typeScale = uiState.fontSizeTypeScale) {
                 CodexMobileApp(appViewModel = appViewModel)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        requestedSessionId.value = intent.sessionIdExtra()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            REQUEST_POST_NOTIFICATIONS,
+        )
+    }
+
+    private fun Intent.sessionIdExtra(): String? {
+        return getStringExtra(SessionWatchService.EXTRA_SESSION_ID)
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private companion object {
+        const val REQUEST_POST_NOTIFICATIONS = 3201
     }
 }

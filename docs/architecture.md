@@ -36,6 +36,7 @@ codex.exe app-server
 - 渲染实时流、历史 transcript、执行过程和图片
 - 维护结构化实时执行活动，不再只靠 transcript 文本猜系统消息边界
 - 在前后台切换和实时流恢复后主动补拉详情快照，追平断线窗口内的状态
+- 用户发送消息成功后启动会话后台监听前台服务；服务只观察 bridge WebSocket 事件、发送系统通知并在终态或提醒事件后自停，不成为 UI 状态真相源
 - 在发送前预上传图片，再按 bridge 暂存路径提交输入
 
 ### Windows Bridge
@@ -66,6 +67,15 @@ codex.exe app-server
 7. Android 将历史 transcript 与结构化实时活动合并显示，其中非对话类过程默认进入“执行过程”
 8. 执行过程按连续片段分组：只有相邻连续的过程项会合并；一旦中间插入 Codex 文字回复，就结束前一段并开始新的执行过程分组
 9. 执行过程分组在 UI 上归属于 Codex 回复本身，而不是作为独立系统卡片悬浮在消息流中
+
+### 后台会话监听
+
+1. Android 在 `POST /api/session/:id/input` 成功后启动 `SessionWatchService` 前台服务。
+2. 服务读取与 App 相同的 bridge 地址和 token 设置，连接 bridge 后复用 `observeSessionEvents(sessionId)` 监听 `/api/session/:id/ws`。
+3. 常驻通知显示“正在等待 Codex 回复”，使用低打扰通知通道。收到 `assistant.done`、`run.status=idle/error`、`run.interrupted`、`tool.request`、`error` 后，服务通过高重要级别结果提醒通道发送系统通知并自停，让线程结束、等待审批、中断和出错尽量以横幅或弹出通知出现。
+4. 普通完成通知会先补拉 `GET /api/session/:id`，从最新 transcript 中提取最后一段 Codex 回复的 1-2 行摘要放进大文本通知；如果补拉或提取失败，则回退为“回复已结束，点按返回 App 查看会话。”。等待审批、中断、出错和后台监听中断继续使用专门文案。
+5. 结果通知区分“回复已结束 / 等待审批 / 已中断 / 出错 / 后台监听中断”。点击通知会打开 App，并携带 `sessionId`；客户端会保留待打开目标，已连接时直接导航并补拉详情，未连接时主动使用现有 endpoint/token 连接 bridge，连接失败时保留目标并用中文提示用户，稍后连接成功后继续打开。
+6. Android 13+ 会在 App 启动时请求 `POST_NOTIFICATIONS`。如果用户未授权，后台监听不因此崩溃，但系统可能不展示结果通知。
 
 ### 图片输入
 
@@ -130,6 +140,7 @@ codex.exe app-server
 - 图片缩略图、大图预览和保存
 - 历史 transcript 渲染
 - 实时流状态同步
+- 发送后前台服务后台监听当前会话并发送系统通知
 - 结构化实时执行活动聚合
 - 操作过程按连续片段合并显示，并挂在 Codex 回复布局内
 - 审批请求展示与响应

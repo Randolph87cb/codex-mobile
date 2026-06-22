@@ -102,6 +102,14 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
         uiState.message?.let { snackbarHostState.showSnackbar(it) }
     }
 
+    LaunchedEffect(uiState.notificationNavigationSessionId) {
+        val sessionId = uiState.notificationNavigationSessionId ?: return@LaunchedEffect
+        navController.navigate("session/$sessionId") {
+            launchSingleTop = true
+        }
+        appViewModel.consumeNotificationNavigationSession(sessionId)
+    }
+
     LaunchedEffect(uiState.connectionState, currentRoute, navigateToSessionsAfterConnect.value) {
         if (navigateToSessionsAfterConnect.value &&
             uiState.connectionState is BridgeConnectionState.Connected &&
