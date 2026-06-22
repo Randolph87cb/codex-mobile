@@ -62,7 +62,8 @@ describe("createBridgeRestartScheduler", () => {
     expect(helperCommand).toContain("-HostAddress '127.0.0.1'");
     expect(helperCommand).toContain("-Port 9999");
     expect(helperCommand).toContain("-Runner 'mock-runner'");
-    expect(helperCommand).toContain("*>>");
+    expect(helperCommand).toContain("$scriptOutput = &");
+    expect(helperCommand).toContain("foreach ($line in $scriptOutput)");
     expect(helperCommand).not.toContain("-SkipBuild");
 
     launcher.stdout.write("HELPER_STARTED pid=1234 log=D:\\workspace\\codex-mobile\\.logs\\bridge\\restart-helper.log\r\n");
