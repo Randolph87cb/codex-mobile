@@ -21,6 +21,7 @@ export interface SessionSocket {
 export interface BridgeLifecycleController {
   isDraining(): boolean;
   beginDrain(reason?: string, graceMs?: number): BridgeLifecycleState;
+  cancelDrain(): BridgeLifecycleState;
   buildLifecycleState(): BridgeLifecycleState;
   broadcastLifecycle(): void;
   attachSessionSocket(sessionId: string, socket: SessionSocket): void;

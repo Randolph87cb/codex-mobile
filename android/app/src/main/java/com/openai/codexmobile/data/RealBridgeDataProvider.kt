@@ -81,6 +81,19 @@ class RealBridgeDataProvider(
         }
 
         val body = JSONObject(response.body)
+        val lifecycle = body.optJSONObject("lifecycle")
+        val lifecyclePhase = lifecycle?.optString("phase")?.takeIf { it.isNotBlank() }
+            ?: body.optString("phase").takeIf { it.isNotBlank() }
+        val lifecycleDraining = lifecycle?.optBoolean("draining", false) == true ||
+            body.optBoolean("draining", false)
+        if (lifecycleDraining || lifecyclePhase == "restarting") {
+            appLogger.warn(
+                "BridgeApi",
+                "bridge 正在重启，暂不视为连接成功：phase=${lifecyclePhase ?: "unknown"}, draining=$lifecycleDraining",
+            )
+            throw IllegalStateException("bridge 正在重启，请稍后再试。")
+        }
+
         val nextState = BridgeConnectionState.Connected(
             endpoint = normalizedEndpoint,
             service = body.optString("service").takeIf { it.isNotBlank() },

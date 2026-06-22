@@ -1,6 +1,7 @@
 package com.openai.codexmobile.data
 
 import com.openai.codexmobile.diagnostics.AppLogger
+import com.openai.codexmobile.model.BridgeConnectionState
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -73,6 +74,33 @@ class RealBridgeDataProviderTest {
             assertEquals("{}", restartRequest.body.readUtf8())
             assertTrue(result.ok)
             assertEquals("scheduled", result.phase)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun connectRejectsDrainingHealthResponse() = runTest {
+        val server = MockWebServer().apply {
+            enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "application/json; charset=utf-8")
+                    .setBody(
+                        """{"ok":true,"service":"codex-mobile-bridge","runnerMode":"app-server","lifecycle":{"phase":"restarting","draining":true}}""",
+                    ),
+            )
+            start()
+        }
+
+        try {
+            val provider = RealBridgeDataProvider(NoopAppLogger())
+            val result = runCatching {
+                provider.connect(server.url("/").toString().removeSuffix("/"))
+            }
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("bridge 正在重启") == true)
+            assertTrue(provider.currentConnection() is BridgeConnectionState.Disconnected)
         } finally {
             server.shutdown()
         }

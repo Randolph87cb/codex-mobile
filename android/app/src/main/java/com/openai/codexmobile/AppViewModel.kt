@@ -808,11 +808,12 @@ class AppViewModel(
                 throw error
             } catch (error: Exception) {
                 appLogger.error("AppViewModel", "请求 bridge 重启失败：$endpoint", error)
-                bridgeRestartExpectedSessionId = null
+                clearBridgeRestartRecoveryState()
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
                         message = error.message ?: "请求 bridge 重启失败。",
+                        sessionRealtimeState = state.sessionRealtimeState.withRestartNoticeCleared(),
                     ).withSettingsItems()
                 }
                 refreshDiagnosticsLog()
@@ -1506,6 +1507,7 @@ class AppViewModel(
                     ?.let { sessionRepository.getSessionDetail(it) }
                     ?.let(::enforceManagedSessionDetailLocally)
 
+                clearBridgeRestartRecoveryState()
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
@@ -1515,13 +1517,13 @@ class AppViewModel(
                         selectedDraftSession = null,
                         message = "bridge 已重启并恢复连接。",
                         sessionRealtimeState = if (resumeRealtime) {
-                            state.sessionRealtimeState.copy(
+                            state.sessionRealtimeState.withRestartNoticeCleared().copy(
                                 connectionText = "正在恢复实时流",
-                                lastEventText = "bridge 已恢复，正在刷新当前会话。",
+                                lastEventText = "正在恢复实时流。",
                                 fallbackNotice = null,
                             )
                         } else {
-                            state.sessionRealtimeState
+                            state.sessionRealtimeState.withRestartNoticeCleared()
                         },
                     ).withSettingsItems()
                 }
@@ -1530,8 +1532,6 @@ class AppViewModel(
                 refreshDiagnosticsLog()
                 if (resumeRealtime && restoredSession != null) {
                     startSessionStream(restoredSession.id)
-                } else {
-                    bridgeRestartExpectedSessionId = null
                 }
                 return
             } catch (error: CancellationException) {
@@ -1548,7 +1548,7 @@ class AppViewModel(
             }
         }
 
-        bridgeRestartExpectedSessionId = null
+        clearBridgeRestartRecoveryState()
         _uiState.update { state ->
             state.copy(
                 isLoading = false,
@@ -1973,8 +1973,7 @@ class AppViewModel(
         when (event) {
             is SessionStreamEvent.StreamOpened -> {
                 appLogger.info("AppViewModel", "实时流已连接：sessionId=$sessionId")
-                bridgeRestartExpectedSessionId = null
-                resetSessionStreamReconnectState()
+                clearBridgeRestartRecoveryState()
                 _uiState.update {
                     it.copy(
                         sessionRealtimeState = it.sessionRealtimeState.copy(
@@ -2051,8 +2050,7 @@ class AppViewModel(
                     "AppViewModel",
                     "会话实时流就绪：sessionId=$sessionId, status=${event.status}, threadId=${event.threadId ?: "none"}",
                 )
-                bridgeRestartExpectedSessionId = null
-                resetSessionStreamReconnectState()
+                clearBridgeRestartRecoveryState()
                 val nextDetail = buildOrUpdateSessionFromStart(
                     current = uiState.value.selectedSession,
                     event = event,
@@ -2128,26 +2126,33 @@ class AppViewModel(
                 )
                 if (event.phase == "restarting") {
                     bridgeRestartExpectedSessionId = sessionId
+                } else {
+                    clearBridgeRestartRecoveryState()
                 }
                 _uiState.update {
+                    val realtimeState = if (event.phase == "restarting") {
+                        it.sessionRealtimeState
+                    } else {
+                        it.sessionRealtimeState.withRestartNoticeCleared()
+                    }
                     it.copy(
-                        sessionRealtimeState = it.sessionRealtimeState.copy(
+                        sessionRealtimeState = realtimeState.copy(
                             isActive = true,
                             isConnected = true,
                             connectionText = if (event.phase == "restarting") {
                                 "bridge 即将重启"
                             } else {
-                                it.sessionRealtimeState.connectionText
+                                realtimeState.connectionText
                             },
                             lastEventText = if (event.phase == "restarting") {
                                 "bridge 正在进入平滑重启窗口。"
                             } else {
-                                it.sessionRealtimeState.lastEventText
+                                realtimeState.lastEventText
                             },
                             fallbackNotice = if (event.phase == "restarting") {
                                 buildBridgeLifecycleNotice(event)
                             } else {
-                                it.sessionRealtimeState.fallbackNotice
+                                realtimeState.fallbackNotice
                             },
                         ),
                     )
@@ -2636,6 +2641,12 @@ class AppViewModel(
         cancelPendingSessionStreamReconnect(resetAttempt = true)
     }
 
+    private fun clearBridgeRestartRecoveryState() {
+        bridgeRestartExpectedSessionId = null
+        pendingRealtimeRecoverySnapshotSessionId = null
+        resetSessionStreamReconnectState()
+    }
+
     private fun buildStreamReconnectNotice(
         reconnectScheduled: Boolean,
         reason: String,
@@ -2694,6 +2705,25 @@ class AppViewModel(
 
     private fun isRetryableStreamNotice(message: String?): Boolean {
         return message?.startsWith("上游响应流暂时中断，bridge 正在重试：") == true
+    }
+
+    private fun SessionRealtimeUiState.withRestartNoticeCleared(): SessionRealtimeUiState {
+        val shouldClearConnectionText = isBridgeRestartNoticeText(connectionText)
+        return copy(
+            connectionText = if (shouldClearConnectionText) {
+                if (isConnected) "已连接实时流" else "未连接实时流"
+            } else {
+                connectionText
+            },
+            lastEventText = if (isBridgeRestartNoticeText(lastEventText)) null else lastEventText,
+            fallbackNotice = if (isBridgeRestartNoticeText(fallbackNotice)) null else fallbackNotice,
+        )
+    }
+
+    private fun isBridgeRestartNoticeText(message: String?): Boolean {
+        val normalized = message ?: return false
+        return normalized.contains("bridge", ignoreCase = true) &&
+            (normalized.contains("重启") || normalized.contains("恢复"))
     }
 
     private fun updateSettingsState(transform: (AppUiState) -> AppUiState) {

@@ -18,6 +18,7 @@ export function createBridgeLifecycleController(
   return {
     isDraining,
     beginDrain,
+    cancelDrain,
     buildLifecycleState,
     broadcastLifecycle,
     attachSessionSocket,
@@ -32,6 +33,13 @@ export function createBridgeLifecycleController(
     drainStartedAt = new Date().toISOString();
     drainReason = reason ?? "bridge restart requested";
     drainGraceMs = normalizeDrainGraceMs(graceMs);
+    return buildLifecycleState();
+  }
+
+  function cancelDrain(): BridgeLifecycleState {
+    drainStartedAt = null;
+    drainReason = null;
+    drainGraceMs = null;
     return buildLifecycleState();
   }
 

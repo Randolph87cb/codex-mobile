@@ -80,9 +80,12 @@ function registerAdminRoutes(
       });
     } catch (error) {
       request.log.error({ err: error }, "failed to schedule bridge restart");
+      deps.lifecycle.cancelDrain();
+      deps.lifecycle.broadcastLifecycle();
       return reply.status(500).send({
         error: "restart-schedule-failed",
         message: "bridge 重启调度失败，请检查 Windows 侧日志。",
+        lifecycle: deps.lifecycle.buildLifecycleState(),
       });
     }
   });

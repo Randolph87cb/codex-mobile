@@ -1607,8 +1607,23 @@ describe("buildBridgeApp", () => {
     expect(response.statusCode).toBe(500);
     expect(response.json()).toMatchObject({
       error: "restart-schedule-failed",
+      lifecycle: {
+        phase: "running",
+        draining: false,
+      },
     });
     expect(restartScheduler.scheduleRestart).toHaveBeenCalledTimes(1);
+
+    const health = await app.inject({
+      method: "GET",
+      url: "/health",
+    });
+    expect(health.json()).toMatchObject({
+      lifecycle: {
+        phase: "running",
+        draining: false,
+      },
+    });
 
     await app.close();
   });

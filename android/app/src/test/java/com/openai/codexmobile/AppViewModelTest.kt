@@ -1885,6 +1885,120 @@ class AppViewModelTest {
         assertEquals("bridge 已重启并恢复连接。", viewModel.uiState.value.message)
         assertEquals(listOf("sess_restart"), viewModel.uiState.value.sessions.map { it.id })
     }
+
+    @Test
+    fun restartBridgeRecoveryClearsRestartNoticeAfterSuccess() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_restart_notice", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_restart_notice")
+        advanceUntilIdle()
+
+        viewModel.restartBridge()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.sessionRealtimeState.fallbackNotice?.contains("重启") == true)
+
+        advanceTimeBy(2_000L)
+        advanceUntilIdle()
+
+        val realtimeState = viewModel.uiState.value.sessionRealtimeState
+        assertNull(realtimeState.fallbackNotice)
+        assertTrue(realtimeState.lastEventText?.contains("重启") != true)
+        assertTrue(viewModel.uiState.value.connectionState is BridgeConnectionState.Connected)
+    }
+
+    @Test
+    fun bridgeLifecycleRunningClearsRestartNotice() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_lifecycle_running", status = "running")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail("sess_lifecycle_running")
+        advanceUntilIdle()
+
+        bridgeApi.emit(
+            SessionStreamEvent.BridgeLifecycle(
+                sessionId = "sess_lifecycle_running",
+                phase = "restarting",
+                reason = "mobile restart",
+                graceMs = 2_000,
+                bridgeVersion = "0.1.0",
+                bridgeStartedAt = "2026-06-22T10:00:00Z",
+                timestamp = "2026-06-22T10:01:00Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.sessionRealtimeState.fallbackNotice?.contains("重启") == true)
+
+        bridgeApi.emit(
+            SessionStreamEvent.BridgeLifecycle(
+                sessionId = "sess_lifecycle_running",
+                phase = "running",
+                reason = null,
+                graceMs = null,
+                bridgeVersion = "0.1.0",
+                bridgeStartedAt = "2026-06-22T10:01:05Z",
+                timestamp = "2026-06-22T10:01:05Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        val realtimeState = viewModel.uiState.value.sessionRealtimeState
+        assertNull(realtimeState.fallbackNotice)
+        assertNull(realtimeState.lastEventText)
+        assertEquals("已连接实时流", realtimeState.connectionText)
+    }
+
+    @Test
+    fun openingAnotherSessionDoesNotKeepRestartNotice() = runTest(dispatcher.scheduler) {
+        val first = sampleDetail(id = "sess_restart_old", status = "running")
+        val second = sampleDetail(id = "sess_restart_new", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = first)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(first.toSummary(), second.toSummary()),
+            detailsById = mapOf(
+                first.id to first,
+                second.id to second,
+            ),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.openSessionDetail(first.id)
+        advanceUntilIdle()
+        bridgeApi.emit(
+            SessionStreamEvent.BridgeLifecycle(
+                sessionId = first.id,
+                phase = "restarting",
+                reason = "mobile restart",
+                graceMs = 2_000,
+                bridgeVersion = "0.1.0",
+                bridgeStartedAt = "2026-06-22T10:00:00Z",
+                timestamp = "2026-06-22T10:01:00Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.sessionRealtimeState.fallbackNotice?.contains("重启") == true)
+
+        viewModel.openSessionDetail(second.id)
+        advanceUntilIdle()
+
+        val realtimeState = viewModel.uiState.value.sessionRealtimeState
+        assertEquals(second.id, viewModel.uiState.value.selectedSession?.id)
+        assertNull(realtimeState.fallbackNotice)
+        assertTrue(realtimeState.lastEventText?.contains("重启") != true)
+    }
 }
 
 private class FakeBridgeApi(
