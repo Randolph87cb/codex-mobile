@@ -467,6 +467,31 @@ function registerRealtimeRoutes(
     const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const state = await sessionService.getRealtimeSessionState(params.id);
     if (!state) {
+      const view = await sessionService.getSessionView(params.id);
+      if (view) {
+        socket.send(
+          JSON.stringify({
+            type: "session.started",
+            sessionId: view.id,
+            timestamp: new Date().toISOString(),
+            data: {
+              cwd: view.cwd,
+              model: view.model,
+              approvalMode: view.approvalMode,
+              reasoningEffort: view.reasoningEffort,
+              serviceTier: view.serviceTier,
+              sandboxMode: view.sandboxMode,
+              status: view.status,
+              threadId: view.threadId,
+              pendingApproval: "pendingApproval" in view ? view.pendingApproval ?? null : null,
+              goal: "goal" in view ? view.goal ?? null : null,
+              goalCapability: "goalCapability" in view ? view.goalCapability ?? "unknown" : "unknown",
+            },
+          }),
+        );
+        return;
+      }
+
       socket.send(JSON.stringify({ error: "session-not-found" }));
       socket.close();
       return;

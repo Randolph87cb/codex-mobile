@@ -199,6 +199,32 @@ describe("local history fallback", () => {
     const subagentDetail = await app.inject({ method: "GET", url: "/api/session/local-subagent" });
     expect(subagentDetail.statusCode).toBe(404);
 
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const address = app.server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("unexpected-server-address");
+    }
+
+    const wsPayload = await new Promise<string>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/session/local-missing/ws`);
+      socket.addEventListener("message", (event) => {
+        resolve(String(event.data));
+        socket.close();
+      });
+      socket.addEventListener("error", () => {
+        reject(new Error("websocket-connect-failed"));
+      });
+    });
+
+    expect(JSON.parse(wsPayload)).toMatchObject({
+      type: "session.started",
+      sessionId: "local-missing",
+      data: {
+        status: "idle",
+        threadId: "local-missing",
+      },
+    });
+
     await app.close();
   });
 });
