@@ -95,6 +95,8 @@ describe("local history fallback", () => {
       ["local-duplicate", "本地重复项", "2026-06-21T15:46:00.000Z"],
       ["local-archived", "本地归档项", "2026-06-21T15:47:00.000Z"],
       ["local-throw", "本地读失败兜底", "2026-06-21T15:48:00.000Z"],
+      ["local-subagent", "内部 subagent", "2026-06-21T15:49:00.000Z"],
+      ["local-subagent-archived", "内部归档 subagent", "2026-06-21T15:50:00.000Z"],
     ]);
     await writeRollout(codexHome, {
       id: "local-missing",
@@ -125,6 +127,23 @@ describe("local history fallback", () => {
       assistantText: "fallback detail",
       updatedAt: "2026-06-21T15:48:00.000Z",
     });
+    await writeRollout(codexHome, {
+      id: "local-subagent",
+      cwd: "D:\\workspace\\subagent",
+      titleUserText: "不应显示的内部线程",
+      assistantText: "internal detail",
+      updatedAt: "2026-06-21T15:49:00.000Z",
+      subagent: true,
+    });
+    await writeRollout(codexHome, {
+      id: "local-subagent-archived",
+      cwd: "D:\\workspace\\subagent-archived",
+      titleUserText: "不应显示的归档内部线程",
+      assistantText: "internal archived detail",
+      updatedAt: "2026-06-21T15:50:00.000Z",
+      archived: true,
+      subagent: true,
+    });
     await writeBadRollout(codexHome);
 
     const runner = new FallbackTestRunner();
@@ -146,6 +165,7 @@ describe("local history fallback", () => {
     expect(activeItems.filter((item) => item.id === "local-duplicate")).toHaveLength(1);
     expect(activeItems.find((item) => item.id === "local-duplicate")?.title).toBe("app-server 优先");
     expect(activeItems.some((item) => item.id === "local-archived")).toBe(false);
+    expect(activeItems.some((item) => item.id === "local-subagent")).toBe(false);
 
     const archived = await app.inject({ method: "GET", url: "/api/sessions?archived=true" });
     expect(archived.statusCode).toBe(200);
@@ -156,6 +176,7 @@ describe("local history fallback", () => {
         transcriptPreview: expect.stringContaining("你：归档线程"),
       }),
     ]);
+    expect(archived.json<{ items: SessionView[] }>().items.some((item) => item.id === "local-subagent-archived")).toBe(false);
 
     const missingDetail = await app.inject({ method: "GET", url: "/api/session/local-missing" });
     expect(missingDetail.statusCode).toBe(200);
@@ -174,6 +195,9 @@ describe("local history fallback", () => {
       title: "本地读失败兜底",
       transcriptPreview: expect.stringContaining("Codex：fallback detail"),
     });
+
+    const subagentDetail = await app.inject({ method: "GET", url: "/api/session/local-subagent" });
+    expect(subagentDetail.statusCode).toBe(404);
 
     await app.close();
   });
@@ -224,6 +248,7 @@ async function writeRollout(
     assistantText: string;
     updatedAt: string;
     archived?: boolean;
+    subagent?: boolean;
   },
 ): Promise<void> {
   const dir = options.archived
@@ -240,6 +265,16 @@ async function writeRollout(
         timestamp: "2026-06-21T15:43:48.384Z",
         cwd: options.cwd,
         model_provider: "openai",
+        ...(options.subagent
+          ? {
+              thread_source: "subagent",
+              source: {
+                subagent: {
+                  thread_spawn: {},
+                },
+              },
+            }
+          : {}),
       },
     },
     {

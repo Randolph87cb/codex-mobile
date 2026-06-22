@@ -1,6 +1,7 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { buildSessionViewFromThread, type AppServerThread } from "./session-view.js";
+import { isInternalSubagentThread } from "./thread-visibility.js";
 import type { SessionView } from "./types.js";
 
 interface LocalHistoryStoreOptions {
@@ -171,6 +172,10 @@ export class LocalHistoryStore {
 
     const metaEntry = entries.find((entry) => entry.type === "session_meta");
     const meta = metaEntry?.payload ?? {};
+    if (isInternalSubagentThread(meta)) {
+      return null;
+    }
+
     const id = normalizeText(meta.id) ?? extractSessionIdFromFileName(candidate.filePath);
     const cwd = normalizeText(meta.cwd) ?? findLatestCwd(entries) ?? "";
     if (!id || !cwd) {

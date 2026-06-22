@@ -69,6 +69,9 @@ export interface AppServerThread {
   modelProvider?: string;
   name?: string | null;
   preview?: string;
+  thread_source?: string;
+  threadSource?: string;
+  source?: Record<string, unknown> | null;
   createdAt?: number | string | null;
   updatedAt?: number | string | null;
   status?: AppServerThreadStatus;

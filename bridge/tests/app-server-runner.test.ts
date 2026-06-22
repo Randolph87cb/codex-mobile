@@ -1082,6 +1082,100 @@ describe("AppServerRunner", () => {
     });
   });
 
+  test("filters internal subagent threads from app-server lists and direct reads", async () => {
+    const store = new SessionStore();
+    const client = new FakeAppServerClient();
+    client.request.mockImplementation(async (method: string, params: any) => {
+      if (method === "thread/list" && params?.archived === false) {
+        return {
+          data: [
+            {
+              id: "thread-visible-active",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: 1716080300,
+              status: { type: "inactive" },
+              turns: [],
+            },
+            {
+              id: "thread-subagent-active",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              threadSource: "subagent",
+              source: {
+                subagent: {
+                  thread_spawn: {},
+                },
+              },
+              createdAt: 1716080000,
+              updatedAt: 1716080400,
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      if (method === "thread/list" && params?.archived === true) {
+        return {
+          data: [
+            {
+              id: "thread-subagent-archived",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              thread_source: "subagent",
+              createdAt: 1716080000,
+              updatedAt: 1716080500,
+              status: { type: "inactive" },
+              turns: [],
+            },
+            {
+              id: "thread-visible-archived",
+              cwd: "D:\\workspace\\codex-mobile",
+              modelProvider: "openai",
+              createdAt: 1716080000,
+              updatedAt: 1716080200,
+              status: { type: "inactive" },
+              turns: [],
+            },
+          ],
+        };
+      }
+
+      if (method === "thread/read") {
+        return {
+          thread: {
+            id: params?.threadId,
+            cwd: "D:\\workspace\\codex-mobile",
+            modelProvider: "openai",
+            thread_source: "subagent",
+            source: {
+              subagent: {
+                thread_spawn: {},
+              },
+            },
+            createdAt: 1716080000,
+            updatedAt: 1716080300,
+            status: { type: "inactive" },
+            turns: [],
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const runner = new AppServerRunner(store, client);
+    const activeViews = await runner.listSessionViews(false);
+    const archivedViews = await runner.listSessionViews(true);
+    const directView = await runner.getSessionView("thread-subagent-active");
+
+    expect(activeViews.map((view) => view.id)).toEqual(["thread-visible-active"]);
+    expect(archivedViews.map((view) => view.id)).toEqual(["thread-visible-archived"]);
+    expect(directView).toBeNull();
+  });
+
   test("lists active thread views without requesting archived threads when local store is empty", async () => {
     const store = new SessionStore();
     const client = new FakeAppServerClient();

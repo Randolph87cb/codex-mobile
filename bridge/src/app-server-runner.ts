@@ -9,6 +9,7 @@ import {
   type AppServerThread,
 } from "./session-view.js";
 import { SessionStore } from "./session-store.js";
+import { isInternalSubagentThread } from "./thread-visibility.js";
 import type {
   AccountQuotaSnapshot,
   ApprovalDecision,
@@ -77,6 +78,11 @@ interface ThreadResumeResult {
         type?: "readOnly" | "workspaceWrite" | "dangerFullAccess" | "externalSandbox";
       }
     | null;
+}
+
+interface ThreadReadResult {
+  thread: AppServerThread | null;
+  hidden: boolean;
 }
 
 interface AppServerGoal {
@@ -383,7 +389,12 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
   async getSessionView(threadId: string): Promise<SessionView | null> {
     const session = this.store.get(threadId);
     if (session?.threadId) {
-      const thread = await this.tryReadThread(session.threadId);
+      const read = await this.tryReadThreadWithVisibility(session.threadId);
+      if (read.hidden) {
+        return null;
+      }
+
+      const thread = read.thread;
       if (!thread) {
         return this.decorateSessionViewWithGoal(
           buildSessionViewFromRecord(session, this.getPendingApprovalView(session.id)),
@@ -402,7 +413,8 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       );
     }
 
-    const thread = await this.tryReadThread(threadId);
+    const read = await this.tryReadThreadWithVisibility(threadId);
+    const thread = read.thread;
     return thread ? this.decorateSessionViewWithGoal(buildSessionViewFromThread(thread)) : null;
   }
 
@@ -1040,16 +1052,24 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     }
   }
 
-  private async tryReadThread(threadId: string): Promise<AppServerThread | null> {
+  private async tryReadThreadWithVisibility(threadId: string): Promise<ThreadReadResult> {
     try {
       const result = await this.client.request<{ thread: AppServerThread }>("thread/read", {
         threadId,
         includeTurns: true,
       });
-      return result.thread;
+      if (isInternalSubagentThread(result.thread)) {
+        return { thread: null, hidden: true };
+      }
+
+      return { thread: result.thread, hidden: false };
     } catch {
-      return null;
+      return { thread: null, hidden: false };
     }
+  }
+
+  private async tryReadThread(threadId: string): Promise<AppServerThread | null> {
+    return (await this.tryReadThreadWithVisibility(threadId)).thread;
   }
 
   private async listThreads(archived: boolean): Promise<AppServerThread[]> {
@@ -1058,7 +1078,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       sortDirection: "desc",
       sortKey: "updated_at",
     });
-    return result.data;
+    return result.data.filter((thread) => !isInternalSubagentThread(thread));
   }
 
   private async startTurnWithResumeRetry(
@@ -1120,6 +1140,9 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
       excludeTurns: true,
       ...buildServiceTierParams(session.serviceTier),
     });
+    if (isInternalSubagentThread(resumed.thread)) {
+      throw new Error("thread-not-visible");
+    }
 
     return (
       this.store.update(session.id, {
@@ -1141,7 +1164,7 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
     sessionOverrides?: Pick<SessionRecord, "approvalMode" | "sandboxMode">,
   ): Promise<ThreadResumeResult | null> {
     try {
-      return await this.client.request<ThreadResumeResult>("thread/resume", {
+      const result = await this.client.request<ThreadResumeResult>("thread/resume", {
         threadId,
         approvalPolicy: sessionOverrides
           ? this.getApprovalPolicy(sessionOverrides.approvalMode)
@@ -1149,16 +1172,18 @@ export class AppServerRunner implements HistoryCapableBridgeRunner {
         sandbox: sessionOverrides?.sandboxMode,
         excludeTurns: true,
       });
+      return isInternalSubagentThread(result.thread) ? null : result;
     } catch {
       if (!sessionOverrides) {
         return null;
       }
 
       try {
-        return await this.client.request<ThreadResumeResult>("thread/resume", {
+        const result = await this.client.request<ThreadResumeResult>("thread/resume", {
           threadId,
           excludeTurns: true,
         });
+        return isInternalSubagentThread(result.thread) ? null : result;
       } catch {
         return null;
       }
