@@ -189,6 +189,7 @@ private fun SettingsShowcase() {
         onRefreshLogs = {},
         onClearLogs = {},
         onCopyLogs = {},
+        onRestartBridge = {},
         onBack = {},
         onNavigateToConnect = {},
         onNavigateToSessions = {},

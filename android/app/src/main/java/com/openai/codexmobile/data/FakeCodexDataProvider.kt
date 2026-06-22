@@ -73,6 +73,15 @@ class FakeCodexDataProvider : CodexDataProvider {
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
 
+    override suspend fun restartBridge(): BridgeRestartResult {
+        delay(100)
+        return BridgeRestartResult(
+            ok = true,
+            phase = "scheduled",
+            message = "模拟 bridge 重启已调度。",
+        )
+    }
+
     override suspend fun getAccountQuota(): AccountQuotaSnapshot {
         delay(80)
         return AccountQuotaSnapshot(

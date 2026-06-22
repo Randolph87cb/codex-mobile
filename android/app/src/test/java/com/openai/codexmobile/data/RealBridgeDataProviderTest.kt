@@ -44,6 +44,41 @@ class RealBridgeDataProviderTest {
     }
 
     @Test
+    fun restartBridgePostsAdminRestartRequest() = runTest {
+        val server = MockWebServer().apply {
+            enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "application/json; charset=utf-8")
+                    .setBody("""{"ok":true,"service":"codex-mobile-bridge","runnerMode":"app-server"}"""),
+            )
+            enqueue(
+                MockResponse()
+                    .setResponseCode(202)
+                    .setHeader("Content-Type", "application/json; charset=utf-8")
+                    .setBody("""{"ok":true,"phase":"scheduled","message":"bridge 重启已调度。"}"""),
+            )
+            start()
+        }
+
+        try {
+            val provider = RealBridgeDataProvider(NoopAppLogger())
+            provider.connect(server.url("/").toString().removeSuffix("/"))
+            val result = provider.restartBridge()
+
+            server.takeRequest()
+            val restartRequest = server.takeRequest()
+            assertEquals("/api/admin/restart", restartRequest.path)
+            assertEquals("POST", restartRequest.method)
+            assertEquals("application/json; charset=utf-8", restartRequest.getHeader("Content-Type"))
+            assertEquals("{}", restartRequest.body.readUtf8())
+            assertTrue(result.ok)
+            assertEquals("scheduled", result.phase)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun shouldSuppressStreamFailureOnlyForClientInitiatedShutdown() {
         assertTrue(shouldSuppressStreamFailure("Socket closed", closedByClient = true))
         assertTrue(shouldSuppressStreamFailure(null, closedByClient = true))
@@ -242,6 +277,16 @@ class RealBridgeDataProviderTest {
         )
 
         assertTrue(message == "bridge 正在重启，暂时无法刷新额度。")
+    }
+
+    @Test
+    fun buildRestartBridgeFailureMessageUsesFriendlyAuthHint() {
+        val message = buildRestartBridgeFailureMessage(
+            statusCode = 401,
+            payload = """{"error":"unauthorized","message":"missing bearer token"}""",
+        )
+
+        assertTrue(message == "重启 bridge 失败，请检查 bridge 鉴权令牌。")
     }
 }
 

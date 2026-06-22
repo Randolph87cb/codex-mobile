@@ -9,6 +9,7 @@ import com.openai.codexmobile.data.AppSettingsStore
 import com.openai.codexmobile.data.ApprovalActionResult
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeRequestId
+import com.openai.codexmobile.data.BridgeRestartResult
 import com.openai.codexmobile.data.CodexDataProvider
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SendInputRequest
@@ -155,6 +156,14 @@ private class DeterministicReplayDataProvider : CodexDataProvider {
     }
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
+
+    override suspend fun restartBridge(): BridgeRestartResult {
+        return BridgeRestartResult(
+            ok = true,
+            phase = "scheduled",
+            message = "回放模式已模拟 bridge 重启。",
+        )
+    }
 
     override suspend fun getAccountQuota(): AccountQuotaSnapshot {
         return AccountQuotaSnapshot(

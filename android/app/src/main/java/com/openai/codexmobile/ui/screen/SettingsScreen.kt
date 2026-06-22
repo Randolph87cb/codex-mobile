@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
@@ -104,6 +105,7 @@ fun SettingsScreen(
     onRefreshLogs: () -> Unit,
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
+    onRestartBridge: () -> Unit,
     onBack: () -> Unit,
     onNavigateToConnect: () -> Unit,
     onNavigateToSessions: () -> Unit,
@@ -192,6 +194,8 @@ fun SettingsScreen(
                         icon = Icons.Filled.Key,
                         placeholder = "Bridge Token",
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+                    RestartBridgeRow(onRestartBridge = onRestartBridge)
                     if (savedConnections.isNotEmpty()) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
                         Column(
@@ -324,6 +328,38 @@ fun SettingsScreen(
                     onCopyLogs = onCopyLogs,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun RestartBridgeRow(
+    onRestartBridge: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        SettingsIconTile(icon = Icons.Filled.RestartAlt)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text("重启 Bridge", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(
+                text = "让 Windows 侧 bridge 后台重启",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        OutlinedButton(
+            onClick = onRestartBridge,
+            modifier = Modifier.testTag(TestTags.SettingsRestartBridgeButton),
+        ) {
+            Text("重启")
         }
     }
 }

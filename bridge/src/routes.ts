@@ -25,6 +25,11 @@ const drainBridgeSchema = z.object({
   graceMs: z.number().int().min(0).max(15_000).optional(),
 });
 
+const restartBridgeSchema = z.object({
+  reason: z.string().trim().min(1).max(200).optional(),
+  graceMs: z.number().int().min(0).max(15_000).optional(),
+});
+
 interface RegisterBridgeRoutesOptions {
   deps: BridgeAppDependencies;
   sessionService: BridgeSessionService;
@@ -37,10 +42,50 @@ export async function registerBridgeRoutes(
   options: RegisterBridgeRoutesOptions,
 ): Promise<void> {
   registerHealthAndLifecycleRoutes(app, options);
+  registerAdminRoutes(app, options);
   registerAccountRoutes(app, options);
   registerAttachmentRoutes(app, options);
   registerSessionRoutes(app, options);
   registerRealtimeRoutes(app, options);
+}
+
+function registerAdminRoutes(
+  app: FastifyInstance,
+  { deps }: RegisterBridgeRoutesOptions,
+): void {
+  app.post("/api/admin/restart", async (request, reply) => {
+    const body = restartBridgeSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "invalid-request",
+        issues: body.error.flatten(),
+      });
+    }
+
+    const reason = body.data.reason ?? "mobile bridge restart requested";
+    const graceMs = body.data.graceMs ?? 2_000;
+    const lifecycle = deps.lifecycle.beginDrain(reason, graceMs);
+    deps.lifecycle.broadcastLifecycle();
+
+    try {
+      const scheduled = await deps.restartScheduler.scheduleRestart({
+        reason,
+        graceMs: lifecycle.drainGraceMs ?? graceMs,
+      });
+      return reply.status(202).send({
+        ok: true,
+        phase: scheduled.phase,
+        message: scheduled.message,
+        lifecycle: deps.lifecycle.buildLifecycleState(),
+      });
+    } catch (error) {
+      request.log.error({ err: error }, "failed to schedule bridge restart");
+      return reply.status(500).send({
+        error: "restart-schedule-failed",
+        message: "bridge 重启调度失败，请检查 Windows 侧日志。",
+      });
+    }
+  });
 }
 
 function registerHealthAndLifecycleRoutes(

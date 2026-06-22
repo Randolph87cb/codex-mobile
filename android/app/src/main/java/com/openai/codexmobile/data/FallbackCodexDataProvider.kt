@@ -45,6 +45,10 @@ class FallbackCodexDataProvider(
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
 
+    override suspend fun restartBridge(): BridgeRestartResult {
+        return requireActiveProvider().restartBridge()
+    }
+
     override suspend fun getAccountQuota(): AccountQuotaSnapshot {
         return requireActiveProvider().getAccountQuota()
     }

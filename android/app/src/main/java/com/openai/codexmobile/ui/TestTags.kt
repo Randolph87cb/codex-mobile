@@ -95,6 +95,7 @@ object TestTags {
     const val SettingsConnectionsDeletePrefix = "settings_connections_delete_"
     const val SettingsEndpointField = "settings_endpoint_field"
     const val SettingsAuthTokenField = "settings_auth_token_field"
+    const val SettingsRestartBridgeButton = "settings_restart_bridge_button"
     const val SettingsCwdField = "settings_cwd_field"
     const val SettingsModelField = "settings_model_field"
     const val SettingsReasoningMinimalButton = "settings_reasoning_minimal_button"

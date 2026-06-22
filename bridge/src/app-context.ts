@@ -9,6 +9,7 @@ export interface BuildBridgeAppOptions {
   store?: SessionStore;
   security?: BridgeSecurityConfig;
   localHistoryStore?: LocalHistoryStore | null;
+  restartScheduler?: BridgeRestartScheduler;
 }
 
 export interface SessionSocket {
@@ -26,6 +27,20 @@ export interface BridgeLifecycleController {
   detachSessionSocket(sessionId: string, socket: SessionSocket): void;
 }
 
+export interface BridgeRestartScheduleInput {
+  reason: string;
+  graceMs: number;
+}
+
+export interface BridgeRestartScheduleResult {
+  phase: "scheduled";
+  message: string;
+}
+
+export interface BridgeRestartScheduler {
+  scheduleRestart(input: BridgeRestartScheduleInput): Promise<BridgeRestartScheduleResult>;
+}
+
 export interface BridgeAppDependencies {
   runner: BridgeRunner;
   historyRunner: HistoryCapableBridgeRunner | null;
@@ -35,6 +50,7 @@ export interface BridgeAppDependencies {
   security: BridgeSecurityConfig;
   securityState: BridgeSecurityState;
   lifecycle: BridgeLifecycleController;
+  restartScheduler: BridgeRestartScheduler;
 }
 
 export class BridgeServiceError extends Error {

@@ -9,6 +9,7 @@ import { AppServerRunner } from "./app-server-runner.js";
 import { createBridgeLifecycleController } from "./lifecycle-service.js";
 import { LocalHistoryStore } from "./local-history-store.js";
 import { MockRunner } from "./mock-runner.js";
+import { createBridgeRestartScheduler } from "./restart-scheduler.js";
 import { registerBridgeRoutes } from "./routes.js";
 import { buildBridgeSecurityState, authorizeApiRequest, resolveBridgeSecurityConfig } from "./security.js";
 import { createSessionService } from "./session-service.js";
@@ -43,6 +44,7 @@ export async function buildBridgeApp(options: BuildBridgeAppOptions = {}): Promi
       bridgeVersion,
       bridgeStartedAt,
     }),
+    restartScheduler: options.restartScheduler ?? createBridgeRestartScheduler(),
   };
 
   const attachmentService = createAttachmentService({

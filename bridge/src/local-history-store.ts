@@ -179,10 +179,13 @@ export class LocalHistoryStore {
 
     const index = indexById.get(id);
     const createdAt = normalizeTimestamp(meta.timestamp) ?? normalizeTimestamp(metaEntry?.timestamp) ?? fileUpdatedAt;
+    const entryUpdatedAt = entries
+      .map((entry) => normalizeTimestamp(entry.timestamp))
+      .filter((value): value is string => Boolean(value))
+      .at(-1);
     const updatedAt = pickLatestTimestamp(
       index?.updatedAt,
-      entries.map((entry) => normalizeTimestamp(entry.timestamp)).filter((value): value is string => Boolean(value)).at(-1),
-      fileUpdatedAt,
+      entryUpdatedAt,
       createdAt,
     );
     const items = buildThreadItems(entries);

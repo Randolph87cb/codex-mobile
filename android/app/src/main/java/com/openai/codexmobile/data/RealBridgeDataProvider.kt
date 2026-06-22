@@ -103,6 +103,31 @@ class RealBridgeDataProvider(
 
     override suspend fun currentConnection(): BridgeConnectionState = connectionState
 
+    override suspend fun restartBridge(): BridgeRestartResult = withContext(Dispatchers.IO) {
+        appLogger.info("BridgeApi", "请求 bridge 后台重启。")
+        val response = request(
+            method = "POST",
+            url = "${requireBaseUrl()}/api/admin/restart",
+            body = JSONObject().toString(),
+            summary = "restart bridge",
+            forceClose = true,
+        )
+        if (response.statusCode !in 200..299) {
+            appLogger.warn(
+                "BridgeApi",
+                "请求 bridge 重启失败，HTTP ${response.statusCode}：${response.body.compactForLog()}",
+            )
+            throw IllegalStateException(
+                buildRestartBridgeFailureMessage(
+                    statusCode = response.statusCode,
+                    payload = response.body,
+                ),
+            )
+        }
+
+        response.body.toBridgeRestartResult()
+    }
+
     override suspend fun getAccountQuota(): AccountQuotaSnapshot = withContext(Dispatchers.IO) {
         appLogger.info("BridgeApi", "读取全局额度快照。")
         val response = request(
@@ -1096,6 +1121,24 @@ internal fun buildAccountQuotaFailureMessage(
     }
 }
 
+internal fun buildRestartBridgeFailureMessage(
+    statusCode: Int,
+    payload: String,
+): String {
+    val parsedBody = payload.takeIf { it.isNotBlank() }?.let {
+        runCatching { JSONObject(it) }.getOrNull()
+    }
+    val errorCode = parsedBody?.optString("error")?.takeIf { it.isNotBlank() }
+    val message = parsedBody?.optString("message")?.takeIf { it.isNotBlank() }
+
+    return when {
+        statusCode == 401 || statusCode == 403 -> "重启 bridge 失败，请检查 bridge 鉴权令牌。"
+        errorCode == "restart-schedule-failed" -> message ?: "bridge 重启调度失败，请检查 Windows 侧日志。"
+        !message.isNullOrBlank() -> message
+        else -> "重启 bridge 失败（HTTP $statusCode）。"
+    }
+}
+
 private fun parseRequestId(value: Any?): BridgeRequestId? {
     return when (value) {
         null -> null
@@ -1262,6 +1305,15 @@ private fun JSONObject.toSessionGoalClearResult(): SessionGoalClearResult {
     return SessionGoalClearResult(
         capability = optString("capability").ifBlank { "unknown" },
         cleared = optBoolean("cleared", true),
+    )
+}
+
+private fun String.toBridgeRestartResult(): BridgeRestartResult {
+    val json = JSONObject(this.ifBlank { """{"ok":true,"phase":"scheduled"}""" })
+    return BridgeRestartResult(
+        ok = json.optBoolean("ok", true),
+        phase = json.optString("phase").ifBlank { "scheduled" },
+        message = json.optString("message").takeIf { it.isNotBlank() },
     )
 }
 

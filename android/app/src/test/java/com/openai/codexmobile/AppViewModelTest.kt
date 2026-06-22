@@ -5,6 +5,7 @@ import com.openai.codexmobile.data.AppSettingsStore
 import com.openai.codexmobile.data.ApprovalActionResult
 import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.data.BridgeApi
+import com.openai.codexmobile.data.BridgeRestartResult
 import com.openai.codexmobile.data.BridgeRequestId
 import com.openai.codexmobile.data.CreateSessionRequest
 import com.openai.codexmobile.data.SendInputRequest
@@ -1851,6 +1852,39 @@ class AppViewModelTest {
         assertNotNull(quotaState.snapshot)
         assertEquals("bridge 正在重启，暂时无法刷新额度。", quotaState.errorMessage)
     }
+
+    @Test
+    fun restartBridgeSchedulesRestartAndRecoversConnection() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_restart", status = "idle")
+        val bridgeApi = FakeBridgeApi(
+            createdDetail = detail,
+            failConnectRequestsRemaining = 1,
+        )
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail.copy(status = "running")),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.restartBridge()
+        runCurrent()
+
+        assertEquals(1, bridgeApi.restartBridgeCallCount)
+        assertTrue(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.connectionState is BridgeConnectionState.Disconnected)
+
+        advanceTimeBy(2_000L)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        advanceTimeBy(1_500L)
+        advanceUntilIdle()
+
+        assertEquals(2, bridgeApi.connectCallCount)
+        assertTrue(viewModel.uiState.value.connectionState is BridgeConnectionState.Connected)
+        assertEquals("bridge 已重启并恢复连接。", viewModel.uiState.value.message)
+        assertEquals(listOf("sess_restart"), viewModel.uiState.value.sessions.map { it.id })
+    }
 }
 
 private class FakeBridgeApi(
@@ -1860,10 +1894,15 @@ private class FakeBridgeApi(
     private var failUploadsRemaining: Int = 0,
     private val returnSavedPathForUploads: Boolean = false,
     var failQuotaRequestsRemaining: Int = 0,
+    var failConnectRequestsRemaining: Int = 0,
 ) : BridgeApi {
     private val events = MutableSharedFlow<SessionStreamEvent>(extraBufferCapacity = 16)
     private var currentDetail: SessionDetail = createdDetail
     var observeSessionEventsCallCount: Int = 0
+        private set
+    var connectCallCount: Int = 0
+        private set
+    var restartBridgeCallCount: Int = 0
         private set
     var accountQuotaCallCount: Int = 0
         private set
@@ -1886,13 +1925,27 @@ private class FakeBridgeApi(
     }
 
     override suspend fun connect(endpoint: String): BridgeConnectionState {
+        connectCallCount += 1
         authTokenAtConnect = updatedAuthToken
+        if (failConnectRequestsRemaining > 0) {
+            failConnectRequestsRemaining -= 1
+            throw IllegalStateException("bridge 尚未恢复。")
+        }
         return BridgeConnectionState.Connected(endpoint = endpoint)
     }
 
     override suspend fun disconnect() = Unit
 
     override suspend fun currentConnection(): BridgeConnectionState = BridgeConnectionState.Disconnected
+
+    override suspend fun restartBridge(): BridgeRestartResult {
+        restartBridgeCallCount += 1
+        return BridgeRestartResult(
+            ok = true,
+            phase = "scheduled",
+            message = "bridge 重启已调度。",
+        )
+    }
 
     override suspend fun getAccountQuota(): AccountQuotaSnapshot {
         if (failQuotaRequestsRemaining > 0) {

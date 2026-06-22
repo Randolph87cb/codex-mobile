@@ -53,6 +53,9 @@ private const val DraftSessionId = "__draft__"
 private const val SessionStreamReconnectBaseDelayMs = 1_500L
 private const val SessionStreamReconnectMaxDelayMs = 15_000L
 private const val SessionStreamReconnectMaxAttempts = 5
+private const val BridgeRestartRecoveryInitialDelayMs = 2_000L
+private const val BridgeRestartRecoveryIntervalMs = 1_500L
+private const val BridgeRestartRecoveryMaxAttempts = 12
 private const val ManagedApprovalMode = "auto"
 private const val ManagedSandboxMode = "danger-full-access"
 
@@ -758,6 +761,65 @@ class AppViewModel(
         }
     }
 
+    fun restartBridge() {
+        val endpoint = uiState.value.endpointInput.trim()
+        if (endpoint.isBlank()) {
+            appLogger.warn("AppViewModel", "用户尝试重启 bridge，但桥接地址为空。")
+            _uiState.update { it.copy(message = "请先填写桥接地址。") }
+            return
+        }
+
+        viewModelScope.launch {
+            val selectedSessionId = uiState.value.selectedSession?.id
+            val shouldResumeRealtime = selectedSessionId != null && uiState.value.sessionRealtimeState.isActive
+            selectedSessionId?.let { bridgeRestartExpectedSessionId = it }
+            _uiState.update { state ->
+                state.copy(
+                    isLoading = true,
+                    message = null,
+                    connectionState = BridgeConnectionState.Disconnected,
+                    sessionRealtimeState = if (shouldResumeRealtime) {
+                        state.sessionRealtimeState.copy(
+                            isConnected = false,
+                            connectionText = "bridge 重启中",
+                            lastEventText = "已请求 bridge 重启，等待服务恢复。",
+                            fallbackNotice = "bridge 正在重启，当前内容会在恢复连接后刷新。",
+                        )
+                    } else {
+                        state.sessionRealtimeState
+                    },
+                ).withSettingsItems()
+            }
+
+            try {
+                appLogger.info("AppViewModel", "请求 bridge 重启：endpoint=$endpoint")
+                val result = bridgeApi.restartBridge()
+                _uiState.update {
+                    it.copy(
+                        message = result.message ?: "已请求 bridge 重启，正在等待恢复。",
+                    )
+                }
+                recoverBridgeAfterRestart(
+                    endpoint = endpoint,
+                    selectedSessionId = selectedSessionId,
+                    resumeRealtime = shouldResumeRealtime,
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                appLogger.error("AppViewModel", "请求 bridge 重启失败：$endpoint", error)
+                bridgeRestartExpectedSessionId = null
+                _uiState.update { state ->
+                    state.copy(
+                        isLoading = false,
+                        message = error.message ?: "请求 bridge 重启失败。",
+                    ).withSettingsItems()
+                }
+                refreshDiagnosticsLog()
+            }
+        }
+    }
+
     fun setShowArchivedSessions(showArchived: Boolean) {
         if (uiState.value.showArchivedSessions == showArchived) {
             return
@@ -1422,6 +1484,79 @@ class AppViewModel(
             refreshSessions()
             refreshAccountQuotaSnapshot()
         }
+    }
+
+    private suspend fun recoverBridgeAfterRestart(
+        endpoint: String,
+        selectedSessionId: String?,
+        resumeRealtime: Boolean,
+    ) {
+        delay(BridgeRestartRecoveryInitialDelayMs)
+        var lastError: Exception? = null
+
+        repeat(BridgeRestartRecoveryMaxAttempts) { attempt ->
+            try {
+                appLogger.info(
+                    "AppViewModel",
+                    "尝试恢复 bridge 连接：attempt=${attempt + 1}, endpoint=$endpoint",
+                )
+                val connectionState = bridgeApi.connect(endpoint)
+                val sessions = loadManagedSessionSummaries(uiState.value.showArchivedSessions)
+                val restoredSession = selectedSessionId
+                    ?.let { sessionRepository.getSessionDetail(it) }
+                    ?.let(::enforceManagedSessionDetailLocally)
+
+                _uiState.update { state ->
+                    state.copy(
+                        isLoading = false,
+                        connectionState = connectionState,
+                        sessions = sessions,
+                        selectedSession = restoredSession ?: state.selectedSession,
+                        selectedDraftSession = null,
+                        message = "bridge 已重启并恢复连接。",
+                        sessionRealtimeState = if (resumeRealtime) {
+                            state.sessionRealtimeState.copy(
+                                connectionText = "正在恢复实时流",
+                                lastEventText = "bridge 已恢复，正在刷新当前会话。",
+                                fallbackNotice = null,
+                            )
+                        } else {
+                            state.sessionRealtimeState
+                        },
+                    ).withSettingsItems()
+                }
+
+                refreshAccountQuotaSnapshot()
+                refreshDiagnosticsLog()
+                if (resumeRealtime && restoredSession != null) {
+                    startSessionStream(restoredSession.id)
+                } else {
+                    bridgeRestartExpectedSessionId = null
+                }
+                return
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                lastError = error
+                appLogger.warn(
+                    "AppViewModel",
+                    "bridge 重启恢复暂未成功：attempt=${attempt + 1}, error=${error.message ?: "unknown"}",
+                )
+                if (attempt < BridgeRestartRecoveryMaxAttempts - 1) {
+                    delay(BridgeRestartRecoveryIntervalMs)
+                }
+            }
+        }
+
+        bridgeRestartExpectedSessionId = null
+        _uiState.update { state ->
+            state.copy(
+                isLoading = false,
+                connectionState = BridgeConnectionState.Disconnected,
+                message = lastError?.message ?: "bridge 重启后暂未恢复连接，请稍后手动重连。",
+            ).withSettingsItems()
+        }
+        refreshDiagnosticsLog()
     }
 
     fun updateSelectedSessionGoal(

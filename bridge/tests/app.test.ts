@@ -4,6 +4,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import type { HistoryCapableBridgeRunner } from "../src/bridge-runner.js";
 import { buildBridgeApp } from "../src/app.js";
+import type { BridgeRestartScheduler } from "../src/app-context.js";
 import { SessionStore } from "../src/session-store.js";
 import type {
   AccountQuotaSnapshot,
@@ -234,6 +235,15 @@ describe("buildBridgeApp", () => {
     };
   }
 
+  function createRestartScheduler(): BridgeRestartScheduler {
+    return {
+      scheduleRestart: vi.fn(async () => ({
+        phase: "scheduled" as const,
+        message: "bridge 重启已调度。",
+      })),
+    };
+  }
+
   async function buildMultipartUploadPayload(
     fileName: string,
     mimeType: string,
@@ -337,6 +347,13 @@ describe("buildBridgeApp", () => {
       },
     });
     expect(authenticated.statusCode).toBe(200);
+
+    const unauthenticatedRestart = await app.inject({
+      method: "POST",
+      url: "/api/admin/restart",
+      payload: {},
+    });
+    expect(unauthenticatedRestart.statusCode).toBe(401);
 
     await app.close();
   });
@@ -1512,6 +1529,86 @@ describe("buildBridgeApp", () => {
         drainGraceMs: 2500,
       },
     });
+
+    await app.close();
+  });
+
+  test("admin restart schedules helper and rejects later mutating requests", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const restartScheduler = createRestartScheduler();
+    const app = await buildBridgeApp({ store, runner, restartScheduler });
+    const session = store.create({
+      cwd: "D:\\workspace\\codex-mobile",
+      model: "gpt-5.5",
+      approvalMode: "manual",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      sandboxMode: "workspace-write",
+    });
+
+    const restart = await app.inject({
+      method: "POST",
+      url: "/api/admin/restart",
+      payload: {
+        reason: "mobile settings restart",
+        graceMs: 1200,
+      },
+    });
+
+    expect(restart.statusCode).toBe(202);
+    expect(restart.json()).toMatchObject({
+      ok: true,
+      phase: "scheduled",
+      lifecycle: {
+        phase: "restarting",
+        draining: true,
+        reason: "mobile settings restart",
+        drainGraceMs: 1200,
+      },
+    });
+    expect(restartScheduler.scheduleRestart).toHaveBeenCalledWith({
+      reason: "mobile settings restart",
+      graceMs: 1200,
+    });
+
+    const whileDraining = await app.inject({
+      method: "POST",
+      url: `/api/session/${session.id}/input`,
+      payload: {
+        text: "继续",
+      },
+    });
+    expect(whileDraining.statusCode).toBe(503);
+    expect(whileDraining.json()).toMatchObject({
+      error: "bridge-restarting",
+      action: "session-input",
+    });
+
+    await app.close();
+  });
+
+  test("admin restart reports scheduler failures", async () => {
+    const store = new SessionStore();
+    const runner = new TestRunner(store);
+    const restartScheduler: BridgeRestartScheduler = {
+      scheduleRestart: vi.fn(async () => {
+        throw new Error("spawn failed");
+      }),
+    };
+    const app = await buildBridgeApp({ store, runner, restartScheduler });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/restart",
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({
+      error: "restart-schedule-failed",
+    });
+    expect(restartScheduler.scheduleRestart).toHaveBeenCalledTimes(1);
 
     await app.close();
   });

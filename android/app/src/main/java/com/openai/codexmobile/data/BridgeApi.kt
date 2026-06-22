@@ -133,11 +133,18 @@ data class SessionGoalClearResult(
     val cleared: Boolean,
 )
 
+data class BridgeRestartResult(
+    val ok: Boolean,
+    val phase: String,
+    val message: String?,
+)
+
 interface BridgeApi {
     fun updateAuthToken(token: String)
     suspend fun connect(endpoint: String): BridgeConnectionState
     suspend fun disconnect()
     suspend fun currentConnection(): BridgeConnectionState
+    suspend fun restartBridge(): BridgeRestartResult
     suspend fun getAccountQuota(): AccountQuotaSnapshot
     suspend fun createSession(request: CreateSessionRequest = CreateSessionRequest()): SessionDetail
     suspend fun updateSessionConfig(sessionId: String, update: SessionConfigUpdate): SessionDetail

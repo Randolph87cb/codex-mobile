@@ -323,6 +323,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     onFontSizeChange = appViewModel::updateFontSizeInput,
                     onRefreshLogs = appViewModel::refreshDiagnosticsLog,
                     onClearLogs = appViewModel::clearDiagnosticsLog,
+                    onRestartBridge = appViewModel::restartBridge,
                     onCopyLogs = { logs ->
                         clipboardManager.setText(AnnotatedString(logs))
                         coroutineScope.launch {
