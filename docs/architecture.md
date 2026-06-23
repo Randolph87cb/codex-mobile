@@ -81,7 +81,7 @@ codex.exe app-server
 
 ### 调试包下载
 
-Android 设置页复用 bridge 的 `GET /api/file/download?path=...`，把 `D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk` 编码成当前 bridge 下载 URL。该能力只展示和复制链接，不新建云服务，也不改变 bridge 协议；当前连接不可用时显示中文提示。
+Android 设置页复用 bridge 的 `GET /api/file/download?path=...`，把 `D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk` 编码成当前 bridge 下载 URL。App 内点击“下载安装”会下载 APK 到本机缓存，并通过 `FileProvider` 打开系统安装器；复制链接仅作为兜底动作。该能力不新建云服务，也不改变 bridge 协议；当前连接不可用时显示中文提示。
 
 ### 图片输入
 

@@ -426,7 +426,7 @@ class AppViewModelTest {
         assertNotNull(url)
         assertTrue(url!!.startsWith("http://10.0.2.2:8787/api/file/download?path="))
         assertTrue(url.contains("android%5Capp%5Cbuild%5Coutputs%5Capk%5Cdebug%5Capp-debug.apk"))
-        assertTrue(viewModel.uiState.value.latestDebugApkDownloadHint.contains("手机浏览器"))
+        assertTrue(viewModel.uiState.value.latestDebugApkDownloadHint.contains("打开系统安装器"))
     }
 
     @Test

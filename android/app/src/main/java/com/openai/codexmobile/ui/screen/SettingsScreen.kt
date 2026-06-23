@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Forum
@@ -109,6 +110,7 @@ fun SettingsScreen(
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
     onCopyApkDownloadUrl: (String) -> Unit = {},
+    onInstallDebugApk: (String) -> Unit = {},
     onRestartBridge: () -> Unit,
     onBack: () -> Unit,
     onNavigateToConnect: () -> Unit,
@@ -330,6 +332,7 @@ fun SettingsScreen(
                     latestDebugApkDownloadUrl = latestDebugApkDownloadUrl,
                     latestDebugApkDownloadHint = latestDebugApkDownloadHint,
                     onCopyApkDownloadUrl = onCopyApkDownloadUrl,
+                    onInstallDebugApk = onInstallDebugApk,
                 )
             }
 
@@ -665,6 +668,7 @@ private fun ApkDownloadSection(
     latestDebugApkDownloadUrl: String?,
     latestDebugApkDownloadHint: String,
     onCopyApkDownloadUrl: (String) -> Unit,
+    onInstallDebugApk: (String) -> Unit,
 ) {
     SettingsSectionHeader(text = "Debug APK")
     SettingsCard(modifier = Modifier.testTag(TestTags.SettingsApkDownloadCard)) {
@@ -675,7 +679,7 @@ private fun ApkDownloadSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SettingsIconTile(icon = Icons.Filled.Link)
+            SettingsIconTile(icon = Icons.Filled.Download)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -687,14 +691,14 @@ private fun ApkDownloadSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            OutlinedButton(
+            Button(
                 onClick = {
-                    latestDebugApkDownloadUrl?.let(onCopyApkDownloadUrl)
+                    latestDebugApkDownloadUrl?.let(onInstallDebugApk)
                 },
                 enabled = latestDebugApkDownloadUrl != null,
-                modifier = Modifier.testTag(TestTags.SettingsCopyApkDownloadUrlButton),
+                modifier = Modifier.testTag(TestTags.SettingsInstallDebugApkButton),
             ) {
-                Text("复制链接")
+                Text("下载安装")
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
@@ -721,6 +725,21 @@ private fun ApkDownloadSection(
                         MaterialTheme.colorScheme.primary
                     },
                 )
+            }
+            OutlinedButton(
+                onClick = {
+                    latestDebugApkDownloadUrl?.let(onCopyApkDownloadUrl)
+                },
+                enabled = latestDebugApkDownloadUrl != null,
+                modifier = Modifier.testTag(TestTags.SettingsCopyApkDownloadUrlButton),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("复制链接")
             }
         }
     }

@@ -646,7 +646,7 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 /api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5Candroid%5Capp%5Cbuild%5Coutputs%5Capk%5Cdebug%5Capp-debug.apk
 ```
 
-该入口用于把当前本机 `android/app/build/outputs/apk/debug/app-debug.apk` 更容易交给手机浏览器下载；如果当前 bridge 未连接，Android 只显示中文不可用提示。
+该入口用于把当前本机 `android/app/build/outputs/apk/debug/app-debug.apk` 交给手机端下载。Android 设置页的“下载安装”会在 App 内拉取该 URL，下载完成后打开系统安装器；“复制链接”仅作为兜底动作。如果当前 bridge 未连接，Android 只显示中文不可用提示。
 
 ## 实时流
 

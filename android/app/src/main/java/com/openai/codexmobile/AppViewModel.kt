@@ -124,7 +124,7 @@ data class AppUiState(
         get() = if (latestDebugApkDownloadUrl == null) {
             "当前连接不可用，连接 bridge 后会生成下载链接。"
         } else {
-            "手机浏览器打开该链接即可下载当前本机调试包。"
+            "点击下载安装会下载到本机并打开系统安装器。"
         }
 }
 

@@ -100,6 +100,7 @@ object TestTags {
     const val SettingsRestartBridgeButton = "settings_restart_bridge_button"
     const val SettingsApkDownloadCard = "settings_apk_download_card"
     const val SettingsApkDownloadUrl = "settings_apk_download_url"
+    const val SettingsInstallDebugApkButton = "settings_install_debug_apk_button"
     const val SettingsCopyApkDownloadUrlButton = "settings_copy_apk_download_url_button"
     const val SettingsCwdField = "settings_cwd_field"
     const val SettingsModelField = "settings_model_field"

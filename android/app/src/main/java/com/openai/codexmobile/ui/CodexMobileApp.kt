@@ -46,7 +46,10 @@ private object Routes {
 }
 
 @Composable
-fun CodexMobileApp(appViewModel: AppViewModel) {
+fun CodexMobileApp(
+    appViewModel: AppViewModel,
+    onInstallDebugApk: suspend (String, String) -> String = { _, _ -> "当前版本不支持直接安装 APK。" },
+) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -346,6 +349,16 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         clipboardManager.setText(AnnotatedString(url))
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar("APK 下载链接已复制到剪贴板。")
+                        }
+                    },
+                    onInstallDebugApk = { url ->
+                        coroutineScope.launch {
+                            val message = runCatching {
+                                onInstallDebugApk(url, uiState.authTokenInput)
+                            }.getOrElse { error ->
+                                error.localizedMessage ?: "APK 下载或安装启动失败。"
+                            }
+                            snackbarHostState.showSnackbar(message)
                         }
                     },
                     onBack = { navController.popBackStack() },
