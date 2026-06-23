@@ -1860,6 +1860,22 @@ class AppViewModelTest {
         assertEquals("app-icon", viewModel.uiState.value.userAvatarStyleInput)
         assertEquals("rounded", settingsStore.saved.avatarShape)
         assertEquals("app-icon", settingsStore.saved.userAvatarStyle)
+
+        viewModel.updateUserAvatarImagePath("D:\\avatars\\me.png")
+        advanceUntilIdle()
+
+        assertEquals("image", viewModel.uiState.value.userAvatarStyleInput)
+        assertEquals("D:\\avatars\\me.png", viewModel.uiState.value.userAvatarImagePathInput)
+        assertEquals("image", settingsStore.saved.userAvatarStyle)
+        assertEquals("D:\\avatars\\me.png", settingsStore.saved.userAvatarImagePath)
+
+        viewModel.clearUserAvatarImage()
+        advanceUntilIdle()
+
+        assertEquals("text", viewModel.uiState.value.userAvatarStyleInput)
+        assertEquals("", viewModel.uiState.value.userAvatarImagePathInput)
+        assertEquals("text", settingsStore.saved.userAvatarStyle)
+        assertEquals("", settingsStore.saved.userAvatarImagePath)
     }
 
     @Test

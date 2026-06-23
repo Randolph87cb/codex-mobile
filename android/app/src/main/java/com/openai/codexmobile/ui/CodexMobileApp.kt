@@ -100,6 +100,23 @@ fun CodexMobileApp(
             }
         }
     }
+    val userAvatarPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) {
+            return@rememberLauncherForActivityResult
+        }
+        coroutineScope.launch {
+            val avatarPath = withContext(Dispatchers.IO) {
+                runCatching {
+                    prepareUserAvatarImage(context, uri)
+                }
+            }
+            avatarPath
+                .onSuccess { path -> appViewModel.updateUserAvatarImagePath(path) }
+                .onFailure {
+                    snackbarHostState.showSnackbar("头像图片处理失败，请换一张图片重试。")
+                }
+        }
+    }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let { snackbarHostState.showSnackbar(it) }
@@ -280,6 +297,7 @@ fun CodexMobileApp(
                     bridgeAuthToken = uiState.authTokenInput,
                     avatarShape = uiState.avatarShapeInput,
                     userAvatarStyle = uiState.userAvatarStyleInput,
+                    userAvatarImagePath = uiState.userAvatarImagePathInput,
                     isLoading = uiState.isLoading,
                     onDraftMessageChange = appViewModel::updateDraftMessage,
                     onPickImage = { imagePickerLauncher.launch("image/*") },
@@ -331,6 +349,7 @@ fun CodexMobileApp(
                     fontSizeInput = uiState.fontSizeInput,
                     avatarShapeInput = uiState.avatarShapeInput,
                     userAvatarStyleInput = uiState.userAvatarStyleInput,
+                    userAvatarImagePathInput = uiState.userAvatarImagePathInput,
                     latestDebugApkPath = uiState.latestDebugApkPath,
                     latestDebugApkDownloadUrl = uiState.latestDebugApkDownloadUrl,
                     latestDebugApkDownloadHint = uiState.latestDebugApkDownloadHint,
@@ -350,6 +369,8 @@ fun CodexMobileApp(
                     onFontSizeChange = appViewModel::updateFontSizeInput,
                     onAvatarShapeChange = appViewModel::updateAvatarShapeInput,
                     onUserAvatarStyleChange = appViewModel::updateUserAvatarStyleInput,
+                    onPickUserAvatarImage = { userAvatarPickerLauncher.launch("image/*") },
+                    onClearUserAvatarImage = appViewModel::clearUserAvatarImage,
                     onRefreshLogs = appViewModel::refreshDiagnosticsLog,
                     onClearLogs = appViewModel::clearDiagnosticsLog,
                     onRestartBridge = appViewModel::restartBridge,

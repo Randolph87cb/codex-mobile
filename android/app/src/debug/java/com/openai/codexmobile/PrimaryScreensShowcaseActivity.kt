@@ -166,6 +166,7 @@ private fun SettingsShowcase() {
         fontSizeInput = "standard",
         avatarShapeInput = "circle",
         userAvatarStyleInput = "text",
+        userAvatarImagePathInput = "",
         diagnosticsLog = """
             [10:11:04] INFO  bridge connected: ws://10.0.0.12:8080
             [10:12:39] INFO  loaded 5 sessions from bridge
@@ -186,6 +187,8 @@ private fun SettingsShowcase() {
         onFontSizeChange = {},
         onAvatarShapeChange = {},
         onUserAvatarStyleChange = {},
+        onPickUserAvatarImage = {},
+        onClearUserAvatarImage = {},
         onRefreshLogs = {},
         onClearLogs = {},
         onCopyLogs = {},

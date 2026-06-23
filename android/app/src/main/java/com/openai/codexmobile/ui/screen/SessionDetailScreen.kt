@@ -135,6 +135,7 @@ import com.openai.codexmobile.data.ApprovalDecision
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.model.SessionDetail
 import com.openai.codexmobile.ui.TestTags
+import com.openai.codexmobile.ui.loadUserAvatarBitmap
 import com.openai.codexmobile.ui.screen.copyText
 import com.openai.codexmobile.ui.screen.prefersExpandedByDefault
 import com.openai.codexmobile.ui.screen.summaryLine
@@ -223,6 +224,7 @@ fun SessionDetailScreen(
     bridgeAuthToken: String,
     avatarShape: String = "circle",
     userAvatarStyle: String = "text",
+    userAvatarImagePath: String = "",
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
@@ -513,6 +515,7 @@ fun SessionDetailScreen(
                         bridgeAuthToken = bridgeAuthToken,
                         avatarShape = avatarShape,
                         userAvatarStyle = userAvatarStyle,
+                        userAvatarImagePath = userAvatarImagePath,
                         activeSelectionBubbleTag = activeSelectionBubbleTag,
                         onActivateTextSelection = { bubbleTag ->
                             activeSelectionBubbleTag = bubbleTag
@@ -2352,6 +2355,7 @@ private fun TranscriptBubbleList(
     bridgeAuthToken: String,
     avatarShape: String,
     userAvatarStyle: String,
+    userAvatarImagePath: String,
     activeSelectionBubbleTag: String?,
     onActivateTextSelection: (String) -> Unit,
     onClearActiveTextSelection: () -> Unit,
@@ -2385,6 +2389,7 @@ private fun TranscriptBubbleList(
                     bridgeAuthToken = bridgeAuthToken,
                     avatarShape = avatarShape,
                     userAvatarStyle = userAvatarStyle,
+                    userAvatarImagePath = userAvatarImagePath,
                     isTextSelectionEnabled = activeSelectionBubbleTag ==
                         (TestTags.SessionDetailTranscriptBubbleTogglePrefix + index),
                     onActivateTextSelection = {
@@ -2425,6 +2430,7 @@ private fun TranscriptBubbleCard(
     bridgeAuthToken: String,
     avatarShape: String = "circle",
     userAvatarStyle: String = "text",
+    userAvatarImagePath: String = "",
     isTextSelectionEnabled: Boolean,
     onActivateTextSelection: () -> Unit,
     onClearTextSelection: () -> Unit,
@@ -2450,6 +2456,7 @@ private fun TranscriptBubbleCard(
                 isUser = false,
                 avatarShape = avatarShape,
                 userAvatarStyle = userAvatarStyle,
+                userAvatarImagePath = userAvatarImagePath,
             )
         } else {
             Spacer(modifier = Modifier.size(ConversationAvatarSize))
@@ -2502,6 +2509,7 @@ private fun TranscriptBubbleCard(
                 isUser = true,
                 avatarShape = avatarShape,
                 userAvatarStyle = userAvatarStyle,
+                userAvatarImagePath = userAvatarImagePath,
             )
         } else {
             Spacer(modifier = Modifier.size(ConversationAvatarSize))
@@ -2747,14 +2755,19 @@ private fun ConversationSpeakerBadge(
     isUser: Boolean,
     avatarShape: String = "circle",
     userAvatarStyle: String = "text",
+    userAvatarImagePath: String = "",
 ) {
+    val customAvatarBitmap = remember(userAvatarImagePath) {
+        loadUserAvatarBitmap(userAvatarImagePath)
+    }
+    val useCustomImage = isUser && userAvatarStyle == "image" && customAvatarBitmap != null
     val useAppIcon = !isUser || userAvatarStyle == "app-icon"
     val badgeContainerColor = if (isUser) UserAvatarContainer else CodexAvatarContainer
     val badgeContentColor = Color.White
     val shape = if (avatarShape == "rounded") RoundedCornerShape(12.dp) else CircleShape
     Surface(
         shape = shape,
-        color = if (useAppIcon) Color.Transparent else badgeContainerColor,
+        color = if (useAppIcon || useCustomImage) Color.Transparent else badgeContainerColor,
         contentColor = badgeContentColor,
         modifier = Modifier.size(ConversationAvatarSize),
     ) {
@@ -2764,9 +2777,16 @@ private fun ConversationSpeakerBadge(
                 .clip(shape),
             contentAlignment = Alignment.Center,
         ) {
-            if (useAppIcon) {
+            if (useCustomImage) {
                 Image(
-                    painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                    bitmap = customAvatarBitmap!!,
+                    contentDescription = "我的头像",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else if (useAppIcon) {
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher),
                     contentDescription = if (isUser) "我的头像" else "Codex 头像",
                     modifier = Modifier
                         .fillMaxSize()

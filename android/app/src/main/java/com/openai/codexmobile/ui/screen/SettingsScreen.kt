@@ -1,6 +1,7 @@
 package com.openai.codexmobile.ui.screen
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -59,20 +61,25 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openai.codexmobile.R
 import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.ui.TestTags
+import com.openai.codexmobile.ui.loadUserAvatarBitmap
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -92,6 +99,7 @@ fun SettingsScreen(
     fontSizeInput: String,
     avatarShapeInput: String,
     userAvatarStyleInput: String,
+    userAvatarImagePathInput: String,
     latestDebugApkPath: String = "D:\\workspace\\codex-mobile\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
     latestDebugApkDownloadUrl: String? = null,
     latestDebugApkDownloadHint: String = "当前连接不可用，连接 bridge 后会生成下载链接。",
@@ -111,6 +119,8 @@ fun SettingsScreen(
     onFontSizeChange: (String) -> Unit,
     onAvatarShapeChange: (String) -> Unit,
     onUserAvatarStyleChange: (String) -> Unit,
+    onPickUserAvatarImage: () -> Unit,
+    onClearUserAvatarImage: () -> Unit,
     onRefreshLogs: () -> Unit,
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
@@ -265,7 +275,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
                     SettingsSegmentedRow(
                         title = "我的头像",
-                        subtitle = "选择聊天中用户侧头像样式",
+                        subtitle = "选择默认头像样式，或上传一张本地图片",
                         icon = Icons.Filled.Person,
                         currentValue = userAvatarStyleInput,
                         options = listOf(
@@ -273,6 +283,14 @@ fun SettingsScreen(
                             SettingOption("应用图标", "app-icon", TestTags.SettingsUserAvatarAppIconButton),
                         ),
                         onValueChange = onUserAvatarStyleChange,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+                    UserAvatarImagePreferenceRow(
+                        avatarShape = avatarShapeInput,
+                        userAvatarStyle = userAvatarStyleInput,
+                        userAvatarImagePath = userAvatarImagePathInput,
+                        onPickImage = onPickUserAvatarImage,
+                        onClearImage = onClearUserAvatarImage,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
                     SettingsSegmentedRow(
@@ -563,6 +581,98 @@ private data class SettingOption(
     val value: String,
     val testTag: String,
 )
+
+@Composable
+private fun UserAvatarImagePreferenceRow(
+    avatarShape: String,
+    userAvatarStyle: String,
+    userAvatarImagePath: String,
+    onPickImage: () -> Unit,
+    onClearImage: () -> Unit,
+) {
+    val avatarBitmap = remember(userAvatarImagePath) {
+        loadUserAvatarBitmap(userAvatarImagePath)
+    }
+    val previewShape = if (avatarShape == "rounded") RoundedCornerShape(12.dp) else CircleShape
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(previewShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .testTag(TestTags.SettingsUserAvatarPreview),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                userAvatarStyle == "image" && avatarBitmap != null -> {
+                    Image(
+                        bitmap = avatarBitmap,
+                        contentDescription = "我的头像预览",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+
+                userAvatarStyle == "app-icon" -> {
+                    Image(
+                        painter = painterResource(id = R.mipmap.ic_launcher),
+                        contentDescription = "应用图标头像预览",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(2.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                }
+
+                else -> {
+                    Text(
+                        text = "你",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text("自定义图片", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(
+                text = if (userAvatarImagePath.isBlank()) {
+                    "未选择图片，聊天中会使用当前样式"
+                } else {
+                    "已保存到 App 本地私有目录"
+                },
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onPickImage,
+                modifier = Modifier.testTag(TestTags.SettingsUserAvatarPickImageButton),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text("选择图片", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+                onClick = onClearImage,
+                enabled = userAvatarImagePath.isNotBlank() || userAvatarStyle != "text",
+                modifier = Modifier.testTag(TestTags.SettingsUserAvatarClearImageButton),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text("恢复默认", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

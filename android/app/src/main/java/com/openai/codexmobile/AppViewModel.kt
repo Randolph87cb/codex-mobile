@@ -82,6 +82,7 @@ data class AppUiState(
     val fontSizeInput: String,
     val avatarShapeInput: String,
     val userAvatarStyleInput: String,
+    val userAvatarImagePathInput: String,
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     val showArchivedSessions: Boolean = false,
     val sessions: List<SessionSummary> = emptyList(),
@@ -424,6 +425,26 @@ class AppViewModel(
         updateSettingsState {
             it.copy(
                 userAvatarStyleInput = normalizeUserAvatarStyle(value),
+            )
+        }
+    }
+
+    fun updateUserAvatarImagePath(path: String) {
+        updateSettingsState {
+            it.copy(
+                userAvatarStyleInput = "image",
+                userAvatarImagePathInput = path.trim(),
+                message = "我的头像已更新。",
+            )
+        }
+    }
+
+    fun clearUserAvatarImage() {
+        updateSettingsState {
+            it.copy(
+                userAvatarStyleInput = "text",
+                userAvatarImagePathInput = "",
+                message = "已恢复默认文字头像。",
             )
         }
     }
@@ -2985,6 +3006,7 @@ class AppViewModel(
                 fontSize = state.fontSizeInput,
                 avatarShape = state.avatarShapeInput,
                 userAvatarStyle = state.userAvatarStyleInput,
+                userAvatarImagePath = state.userAvatarImagePathInput,
                 savedConnections = normalizedConnections,
                 selectedConnectionId = state.selectedConnectionId,
             ),
@@ -3504,6 +3526,7 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
         fontSizeInput = settings.fontSize,
         avatarShapeInput = settings.avatarShape,
         userAvatarStyleInput = settings.userAvatarStyle,
+        userAvatarImagePathInput = settings.userAvatarImagePath,
         settingsItems = defaultSettingsItems(
             savedConnections = settings.savedConnections,
             selectedConnectionId = settings.selectedConnectionId ?: settings.savedConnections.first().id,
@@ -3518,6 +3541,7 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
             fontSizeInput = settings.fontSize,
             avatarShapeInput = settings.avatarShape,
             userAvatarStyleInput = settings.userAvatarStyle,
+            userAvatarImagePathInput = settings.userAvatarImagePath,
         ),
     )
 }
@@ -3537,6 +3561,9 @@ private fun AppUiState.withSettingsItems(): AppUiState {
             serviceTierInput = serviceTierInput,
             sandboxModeInput = sandboxModeInput,
             fontSizeInput = fontSizeInput,
+            avatarShapeInput = avatarShapeInput,
+            userAvatarStyleInput = userAvatarStyleInput,
+            userAvatarImagePathInput = userAvatarImagePathInput,
         ),
     )
 }
@@ -3578,6 +3605,7 @@ private fun AppSettings.sanitize(): AppSettings {
         fontSize = normalizeFontSize(fontSize),
         avatarShape = normalizeAvatarShape(avatarShape),
         userAvatarStyle = normalizeUserAvatarStyle(userAvatarStyle),
+        userAvatarImagePath = userAvatarImagePath.trim(),
         savedConnections = normalizedConnections,
         selectedConnectionId = resolvedSelectedConnection.id,
     )
@@ -4182,6 +4210,7 @@ private fun defaultSettingsItems(
     fontSizeInput: String = "standard",
     avatarShapeInput: String = "circle",
     userAvatarStyleInput: String = "text",
+    userAvatarImagePathInput: String = "",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     val selectedConnection = savedConnections.firstOrNull { it.id == selectedConnectionId }
@@ -4197,7 +4226,7 @@ private fun defaultSettingsItems(
         "速度档位" to localizedServiceTier(serviceTierInput),
         "字体大小" to localizedFontSize(fontSizeInput),
         "头像形状" to localizedAvatarShape(avatarShapeInput),
-        "我的头像" to localizedUserAvatarStyle(userAvatarStyleInput),
+        "我的头像" to localizedUserAvatarStyle(userAvatarStyleInput, userAvatarImagePathInput),
         "文件权限" to localizedSandboxMode(sandboxModeInput),
         "审批模式" to localizedApprovalMode(approvalModeInput),
         "运行器" to (connectedState?.runnerMode ?: "未连接"),
@@ -4230,7 +4259,7 @@ private fun normalizeAvatarShape(value: String): String {
 
 private fun normalizeUserAvatarStyle(value: String): String {
     return when (value) {
-        "text", "app-icon" -> value
+        "text", "app-icon", "image" -> value
         else -> "text"
     }
 }
@@ -4300,9 +4329,10 @@ private fun localizedAvatarShape(value: String): String {
     }
 }
 
-private fun localizedUserAvatarStyle(value: String): String {
+private fun localizedUserAvatarStyle(value: String, imagePath: String = ""): String {
     return when (normalizeUserAvatarStyle(value)) {
         "app-icon" -> "应用图标"
+        "image" -> if (imagePath.isNotBlank()) "自定义图片" else "自定义图片未设置"
         else -> "文字头像"
     }
 }
