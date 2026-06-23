@@ -226,7 +226,11 @@ function registerAttachmentRoutes(
     }
 
     try {
-      const file = await attachmentService.resolveDownloadableFile(query.data.path, "file-path-not-allowed");
+      const file = await attachmentService.resolveDownloadableFile(
+        query.data.path,
+        "file-path-not-allowed",
+        { enforceAllowedPath: false },
+      );
       return sendDownloadFile(reply, file.filePath, file.displayName, file.mimeType);
     } catch (error) {
       return sendServiceError(reply, error);

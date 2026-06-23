@@ -43,7 +43,12 @@ export interface BridgeAttachmentService {
   resolveDownloadableFile(
     rawPath: string,
     deniedErrorCode?: "image-path-not-allowed" | "file-path-not-allowed",
+    options?: ResolveDownloadableFileOptions,
   ): Promise<{ filePath: string; displayName: string; mimeType: string }>;
+}
+
+interface ResolveDownloadableFileOptions {
+  enforceAllowedPath?: boolean;
 }
 
 interface AttachmentResponse {
@@ -117,9 +122,11 @@ export function createAttachmentService(options: CreateAttachmentServiceOptions)
   async function resolveDownloadableFile(
     rawPath: string,
     deniedErrorCode: "image-path-not-allowed" | "file-path-not-allowed" = "file-path-not-allowed",
+    resolveOptions: ResolveDownloadableFileOptions = {},
   ): Promise<{ filePath: string; displayName: string; mimeType: string }> {
     const candidatePath = path.resolve(rawPath);
-    if (!canServeLocalPath(candidatePath, options.security, options.attachmentStore)) {
+    const enforceAllowedPath = resolveOptions.enforceAllowedPath ?? true;
+    if (enforceAllowedPath && !canServeLocalPath(candidatePath, options.security, options.attachmentStore)) {
       throw new BridgeServiceError(403, {
         error: deniedErrorCode,
       });

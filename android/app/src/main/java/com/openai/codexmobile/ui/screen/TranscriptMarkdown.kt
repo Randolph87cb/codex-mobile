@@ -377,6 +377,7 @@ internal fun buildMarkdownAnnotatedString(
             linkColor = linkColor,
             inlineCodeBackground = inlineCodeBackground,
             inlineCodeColor = inlineCodeColor,
+            autoLinkBarePaths = true,
         )
     }
 }
@@ -387,10 +388,25 @@ private fun appendMarkdownInline(
     linkColor: Color,
     inlineCodeBackground: Color,
     inlineCodeColor: Color,
+    autoLinkBarePaths: Boolean,
 ) {
     var index = 0
     while (index < text.length) {
+        val localPath = if (autoLinkBarePaths) findBareWindowsPath(text, index) else null
         when {
+            localPath != null -> {
+                appendMarkdownLink(
+                    builder = builder,
+                    label = localPath,
+                    url = localPath,
+                    linkColor = linkColor,
+                    inlineCodeBackground = inlineCodeBackground,
+                    inlineCodeColor = inlineCodeColor,
+                    parseLabelMarkdown = false,
+                )
+                index += localPath.length
+            }
+
             text[index] == '\\' && index + 1 < text.length -> {
                 builder.append(text[index + 1])
                 index += 2
@@ -407,6 +423,7 @@ private fun appendMarkdownInline(
                         linkColor = linkColor,
                         inlineCodeBackground = inlineCodeBackground,
                         inlineCodeColor = inlineCodeColor,
+                        autoLinkBarePaths = autoLinkBarePaths,
                     )
                     builder.pop()
                     index = closing + 2
@@ -426,6 +443,7 @@ private fun appendMarkdownInline(
                         linkColor = linkColor,
                         inlineCodeBackground = inlineCodeBackground,
                         inlineCodeColor = inlineCodeColor,
+                        autoLinkBarePaths = autoLinkBarePaths,
                     )
                     builder.pop()
                     index = closing + 2
@@ -469,22 +487,14 @@ private fun appendMarkdownInline(
                 if (closingBracket > index && openParen == closingBracket + 1 && closingParen > openParen + 1) {
                     val label = text.substring(index + 1, closingBracket)
                     val url = text.substring(openParen + 1, closingParen).trim()
-                    builder.pushStringAnnotation(tag = MarkdownLinkTag, annotation = url)
-                    builder.pushStyle(
-                        SpanStyle(
-                            color = if (linkColor == Color.Unspecified) Color(0xFF356AC3) else linkColor,
-                            textDecoration = TextDecoration.Underline,
-                        ),
-                    )
-                    appendMarkdownInline(
+                    appendMarkdownLink(
                         builder = builder,
-                        text = label,
+                        label = label,
+                        url = url,
                         linkColor = linkColor,
                         inlineCodeBackground = inlineCodeBackground,
                         inlineCodeColor = inlineCodeColor,
                     )
-                    builder.pop()
-                    builder.pop()
                     index = closingParen + 1
                 } else {
                     builder.append(text[index])
@@ -503,6 +513,7 @@ private fun appendMarkdownInline(
                         linkColor = linkColor,
                         inlineCodeBackground = inlineCodeBackground,
                         inlineCodeColor = inlineCodeColor,
+                        autoLinkBarePaths = autoLinkBarePaths,
                     )
                     builder.pop()
                     index = closing + 1
@@ -518,6 +529,88 @@ private fun appendMarkdownInline(
             }
         }
     }
+}
+
+private fun appendMarkdownLink(
+    builder: AnnotatedString.Builder,
+    label: String,
+    url: String,
+    linkColor: Color,
+    inlineCodeBackground: Color,
+    inlineCodeColor: Color,
+    parseLabelMarkdown: Boolean = true,
+) {
+    builder.pushStringAnnotation(tag = MarkdownLinkTag, annotation = url)
+    builder.pushStyle(
+        SpanStyle(
+            color = if (linkColor == Color.Unspecified) Color(0xFF356AC3) else linkColor,
+            textDecoration = TextDecoration.Underline,
+        ),
+    )
+    if (parseLabelMarkdown) {
+        appendMarkdownInline(
+            builder = builder,
+            text = label,
+            linkColor = linkColor,
+            inlineCodeBackground = inlineCodeBackground,
+            inlineCodeColor = inlineCodeColor,
+            autoLinkBarePaths = false,
+        )
+    } else {
+        builder.append(label)
+    }
+    builder.pop()
+    builder.pop()
+}
+
+private fun findBareWindowsPath(text: String, startIndex: Int): String? {
+    if (startIndex + 3 > text.length) {
+        return null
+    }
+    val drive = text[startIndex]
+    if (!drive.isLetter() || text[startIndex + 1] != ':') {
+        return null
+    }
+    val firstSeparator = text[startIndex + 2]
+    if (firstSeparator != '\\' && firstSeparator != '/') {
+        return null
+    }
+    if (startIndex > 0 && isPathBodyChar(text[startIndex - 1])) {
+        return null
+    }
+
+    var endIndex = startIndex + 3
+    while (endIndex < text.length && isPathBodyChar(text[endIndex])) {
+        endIndex += 1
+    }
+    while (endIndex > startIndex && isTrailingPathPunctuation(text[endIndex - 1])) {
+        endIndex -= 1
+    }
+    return text.substring(startIndex, endIndex).takeIf { it.length > 3 }
+}
+
+private fun isPathBodyChar(value: Char): Boolean {
+    return !value.isWhitespace() &&
+        value != '`' &&
+        value != '<' &&
+        value != '>' &&
+        value != '[' &&
+        value != ']' &&
+        value != '(' &&
+        value != ')' &&
+        value != '"' &&
+        value != '\''
+}
+
+private fun isTrailingPathPunctuation(value: Char): Boolean {
+    return value == '.' ||
+        value == ',' ||
+        value == ';' ||
+        value == ':' ||
+        value == '，' ||
+        value == '。' ||
+        value == '；' ||
+        value == '：'
 }
 
 private val HeadingRegex = Regex("^(#{1,6})\\s+(.+)$")

@@ -58,4 +58,44 @@ class TranscriptMarkdownTest {
             ).any { it.item == "https://example.com" },
         )
     }
+
+    @Test
+    fun buildMarkdownAnnotatedStringLinksBareWindowsPaths() {
+        val firstPath = "D:\\workspace\\codex-pet-suite\\pets\\tuantuan\\workspace\\qa\\behavior-contact-sheet-full.png"
+        val secondPath = "D:\\workspace\\codex-pet-suite\\pets\\tuantuan\\workspace\\qa\\runtime-preview-board.png"
+        val annotated = buildMarkdownAnnotatedString(
+            text = "文件：\n$firstPath\n\n$secondPath",
+            linkColor = Color.Unspecified,
+            inlineCodeBackground = Color(0x1F000000),
+            inlineCodeColor = Color.Black,
+        )
+
+        assertEquals("文件：\n$firstPath\n\n$secondPath", annotated.text)
+        val links = annotated.getStringAnnotations(
+            tag = "markdown_link",
+            start = 0,
+            end = annotated.length,
+        ).map { it.item }
+        assertEquals(listOf(firstPath, secondPath), links)
+    }
+
+    @Test
+    fun buildMarkdownAnnotatedStringDoesNotLinkBareWindowsPathsInsideInlineCode() {
+        val path = "D:\\workspace\\codex-mobile\\README.md"
+        val annotated = buildMarkdownAnnotatedString(
+            text = "`$path`",
+            linkColor = Color.Unspecified,
+            inlineCodeBackground = Color(0x1F000000),
+            inlineCodeColor = Color.Black,
+        )
+
+        assertEquals(path, annotated.text)
+        assertTrue(
+            annotated.getStringAnnotations(
+                tag = "markdown_link",
+                start = 0,
+                end = annotated.length,
+            ).isEmpty(),
+        )
+    }
 }

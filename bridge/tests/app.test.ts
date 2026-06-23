@@ -1245,7 +1245,7 @@ describe("buildBridgeApp", () => {
     await app.close();
   });
 
-  test("serves whitelisted local file downloads with attachment disposition", async () => {
+  test("serves local file downloads with attachment disposition without cwd whitelist restriction", async () => {
     const allowedRoot = await mkdtemp(path.join(tmpdir(), "codex-mobile-bridge-download-file-"));
     tempDirs.push(allowedRoot);
     const filePath = path.join(allowedRoot, "session report.md");
@@ -1276,14 +1276,15 @@ describe("buildBridgeApp", () => {
     expect(allowedResponse.headers["content-disposition"]).toContain("session report.md");
     expect(allowedResponse.body).toBe("# report");
 
-    const forbiddenResponse = await app.inject({
+    const outsideWhitelistResponse = await app.inject({
       method: "GET",
       url: `/api/file/download?path=${encodeURIComponent(blockedFilePath)}`,
     });
-    expect(forbiddenResponse.statusCode).toBe(403);
-    expect(forbiddenResponse.json()).toMatchObject({
-      error: "file-path-not-allowed",
-    });
+    expect(outsideWhitelistResponse.statusCode).toBe(200);
+    expect(outsideWhitelistResponse.headers["content-type"]).toContain("text/plain");
+    expect(outsideWhitelistResponse.headers["content-disposition"]).toContain("attachment;");
+    expect(outsideWhitelistResponse.headers["content-disposition"]).toContain("outside.txt");
+    expect(outsideWhitelistResponse.body).toBe("outside");
 
     await app.close();
   });
