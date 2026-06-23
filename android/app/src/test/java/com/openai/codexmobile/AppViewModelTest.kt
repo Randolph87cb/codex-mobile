@@ -1842,6 +1842,27 @@ class AppViewModelTest {
     }
 
     @Test
+    fun avatarPreferencesArePersistedWithSettings() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_avatar_preferences", status = "idle")
+        val settingsStore = FakeAppSettingsStore()
+        val viewModel = AppViewModel(
+            bridgeApi = FakeBridgeApi(createdDetail = detail),
+            sessionRepository = FakeSessionRepository(sessionSummaries = emptyList(), detailsById = emptyMap()),
+            settingsStore = settingsStore,
+            appLogger = FakeAppLogger(),
+        )
+
+        viewModel.updateAvatarShapeInput("rounded")
+        viewModel.updateUserAvatarStyleInput("app-icon")
+        advanceUntilIdle()
+
+        assertEquals("rounded", viewModel.uiState.value.avatarShapeInput)
+        assertEquals("app-icon", viewModel.uiState.value.userAvatarStyleInput)
+        assertEquals("rounded", settingsStore.saved.avatarShape)
+        assertEquals("app-icon", settingsStore.saved.userAvatarStyle)
+    }
+
+    @Test
     fun legacySingleConnectionSettingsAreExposedAsSavedConnection() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_legacy", status = "idle")
         val viewModel = AppViewModel(

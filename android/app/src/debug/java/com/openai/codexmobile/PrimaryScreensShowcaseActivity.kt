@@ -164,6 +164,8 @@ private fun SettingsShowcase() {
         serviceTierInput = "default",
         sandboxModeInput = "danger-full-access",
         fontSizeInput = "standard",
+        avatarShapeInput = "circle",
+        userAvatarStyleInput = "text",
         diagnosticsLog = """
             [10:11:04] INFO  bridge connected: ws://10.0.0.12:8080
             [10:12:39] INFO  loaded 5 sessions from bridge
@@ -182,6 +184,8 @@ private fun SettingsShowcase() {
         onServiceTierChange = {},
         onSandboxModeChange = {},
         onFontSizeChange = {},
+        onAvatarShapeChange = {},
+        onUserAvatarStyleChange = {},
         onRefreshLogs = {},
         onClearLogs = {},
         onCopyLogs = {},

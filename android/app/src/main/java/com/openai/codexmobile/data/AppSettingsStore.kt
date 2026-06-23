@@ -22,6 +22,8 @@ data class AppSettings(
     val serviceTier: String,
     val sandboxMode: String,
     val fontSize: String = "standard",
+    val avatarShape: String = "circle",
+    val userAvatarStyle: String = "text",
     val savedConnections: List<SavedBridgeConnection> = emptyList(),
     val selectedConnectionId: String? = null,
 )
@@ -35,6 +37,8 @@ data class AppSettingsDefaults(
     val serviceTier: String = "default",
     val sandboxMode: String = "danger-full-access",
     val fontSize: String = "standard",
+    val avatarShape: String = "circle",
+    val userAvatarStyle: String = "text",
 )
 
 interface AppSettingsStore {
@@ -73,6 +77,12 @@ class SharedPreferencesAppSettingsStore(
             fontSize = preferences.getString(KEY_FONT_SIZE, defaults.fontSize)
                 ?.takeIf { it == "small" || it == "standard" || it == "large" }
                 ?: defaults.fontSize,
+            avatarShape = preferences.getString(KEY_AVATAR_SHAPE, defaults.avatarShape)
+                ?.takeIf { it == "circle" || it == "rounded" }
+                ?: defaults.avatarShape,
+            userAvatarStyle = preferences.getString(KEY_USER_AVATAR_STYLE, defaults.userAvatarStyle)
+                ?.takeIf { it == "text" || it == "app-icon" }
+                ?: defaults.userAvatarStyle,
             savedConnections = savedConnections,
             selectedConnectionId = preferences.getString(KEY_SELECTED_CONNECTION_ID, null),
         )
@@ -89,6 +99,8 @@ class SharedPreferencesAppSettingsStore(
             .putString(KEY_SERVICE_TIER, settings.serviceTier)
             .putString(KEY_SANDBOX_MODE, settings.sandboxMode)
             .putString(KEY_FONT_SIZE, settings.fontSize)
+            .putString(KEY_AVATAR_SHAPE, settings.avatarShape)
+            .putString(KEY_USER_AVATAR_STYLE, settings.userAvatarStyle)
             .putString(KEY_SAVED_CONNECTIONS, encodeSavedConnections(settings.savedConnections))
             .putString(KEY_SELECTED_CONNECTION_ID, settings.selectedConnectionId)
             .apply()
@@ -105,6 +117,8 @@ class SharedPreferencesAppSettingsStore(
         const val KEY_SERVICE_TIER = "service_tier"
         const val KEY_SANDBOX_MODE = "sandbox_mode"
         const val KEY_FONT_SIZE = "font_size"
+        const val KEY_AVATAR_SHAPE = "avatar_shape"
+        const val KEY_USER_AVATAR_STYLE = "user_avatar_style"
         const val KEY_SAVED_CONNECTIONS = "saved_connections"
         const val KEY_SELECTED_CONNECTION_ID = "selected_connection_id"
     }

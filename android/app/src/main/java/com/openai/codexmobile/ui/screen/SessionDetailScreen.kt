@@ -97,6 +97,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -106,6 +107,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.selected
@@ -119,6 +121,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.openai.codexmobile.R
 import com.openai.codexmobile.AccountQuotaUiState
 import com.openai.codexmobile.BackgroundWatchUiState
 import com.openai.codexmobile.DraftSessionUiState
@@ -218,6 +221,8 @@ fun SessionDetailScreen(
     pendingVideoAttachments: List<PendingVideoAttachmentUiState>,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    avatarShape: String = "circle",
+    userAvatarStyle: String = "text",
     isLoading: Boolean,
     onDraftMessageChange: (String) -> Unit,
     onPickImage: () -> Unit,
@@ -506,6 +511,8 @@ fun SessionDetailScreen(
                         sessionCwd = detail?.cwd,
                         bridgeEndpoint = bridgeEndpoint,
                         bridgeAuthToken = bridgeAuthToken,
+                        avatarShape = avatarShape,
+                        userAvatarStyle = userAvatarStyle,
                         activeSelectionBubbleTag = activeSelectionBubbleTag,
                         onActivateTextSelection = { bubbleTag ->
                             activeSelectionBubbleTag = bubbleTag
@@ -2343,6 +2350,8 @@ private fun TranscriptBubbleList(
     sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    avatarShape: String,
+    userAvatarStyle: String,
     activeSelectionBubbleTag: String?,
     onActivateTextSelection: (String) -> Unit,
     onClearActiveTextSelection: () -> Unit,
@@ -2374,6 +2383,8 @@ private fun TranscriptBubbleList(
                     sessionCwd = sessionCwd,
                     bridgeEndpoint = bridgeEndpoint,
                     bridgeAuthToken = bridgeAuthToken,
+                    avatarShape = avatarShape,
+                    userAvatarStyle = userAvatarStyle,
                     isTextSelectionEnabled = activeSelectionBubbleTag ==
                         (TestTags.SessionDetailTranscriptBubbleTogglePrefix + index),
                     onActivateTextSelection = {
@@ -2412,6 +2423,8 @@ private fun TranscriptBubbleCard(
     sessionCwd: String?,
     bridgeEndpoint: String,
     bridgeAuthToken: String,
+    avatarShape: String = "circle",
+    userAvatarStyle: String = "text",
     isTextSelectionEnabled: Boolean,
     onActivateTextSelection: () -> Unit,
     onClearTextSelection: () -> Unit,
@@ -2433,7 +2446,11 @@ private fun TranscriptBubbleCard(
         verticalAlignment = Alignment.Top,
     ) {
         if (!isUser) {
-            ConversationSpeakerBadge(isUser = false)
+            ConversationSpeakerBadge(
+                isUser = false,
+                avatarShape = avatarShape,
+                userAvatarStyle = userAvatarStyle,
+            )
         } else {
             Spacer(modifier = Modifier.size(ConversationAvatarSize))
         }
@@ -2481,7 +2498,11 @@ private fun TranscriptBubbleCard(
         Spacer(modifier = Modifier.width(ConversationAvatarGap))
 
         if (isUser) {
-            ConversationSpeakerBadge(isUser = true)
+            ConversationSpeakerBadge(
+                isUser = true,
+                avatarShape = avatarShape,
+                userAvatarStyle = userAvatarStyle,
+            )
         } else {
             Spacer(modifier = Modifier.size(ConversationAvatarSize))
         }
@@ -2722,26 +2743,39 @@ private fun TranscriptBubble.conversationBubbleBorder(): Color {
 }
 
 @Composable
-private fun ConversationSpeakerBadge(isUser: Boolean) {
+private fun ConversationSpeakerBadge(
+    isUser: Boolean,
+    avatarShape: String = "circle",
+    userAvatarStyle: String = "text",
+) {
+    val useAppIcon = !isUser || userAvatarStyle == "app-icon"
     val badgeContainerColor = if (isUser) UserAvatarContainer else CodexAvatarContainer
     val badgeContentColor = Color.White
+    val shape = if (avatarShape == "rounded") RoundedCornerShape(12.dp) else CircleShape
     Surface(
-        shape = CircleShape,
-        color = badgeContainerColor,
+        shape = shape,
+        color = if (useAppIcon) Color.Transparent else badgeContainerColor,
         contentColor = badgeContentColor,
         modifier = Modifier.size(ConversationAvatarSize),
     ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isUser) {
-                Text(
-                    text = "你",
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 15.sp, lineHeight = 18.sp),
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    color = badgeContentColor,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(shape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (useAppIcon) {
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                    contentDescription = if (isUser) "我的头像" else "Codex 头像",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(1.dp),
+                    contentScale = ContentScale.Fit,
                 )
             } else {
                 Text(
-                    text = ">_",
+                    text = "你",
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 15.sp, lineHeight = 18.sp),
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     color = badgeContentColor,

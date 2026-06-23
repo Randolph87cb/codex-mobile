@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Router
@@ -89,6 +90,8 @@ fun SettingsScreen(
     serviceTierInput: String,
     sandboxModeInput: String,
     fontSizeInput: String,
+    avatarShapeInput: String,
+    userAvatarStyleInput: String,
     latestDebugApkPath: String = "D:\\workspace\\codex-mobile\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
     latestDebugApkDownloadUrl: String? = null,
     latestDebugApkDownloadHint: String = "当前连接不可用，连接 bridge 后会生成下载链接。",
@@ -106,6 +109,8 @@ fun SettingsScreen(
     onServiceTierChange: (String) -> Unit,
     onSandboxModeChange: (String) -> Unit,
     onFontSizeChange: (String) -> Unit,
+    onAvatarShapeChange: (String) -> Unit,
+    onUserAvatarStyleChange: (String) -> Unit,
     onRefreshLogs: () -> Unit,
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
@@ -244,6 +249,30 @@ fun SettingsScreen(
                             SettingOption("大", "large", TestTags.SettingsFontSizeLargeButton),
                         ),
                         onValueChange = onFontSizeChange,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+                    SettingsSegmentedRow(
+                        title = "头像形状",
+                        subtitle = "控制聊天头像显示为圆形或圆角矩形",
+                        icon = Icons.Filled.Person,
+                        currentValue = avatarShapeInput,
+                        options = listOf(
+                            SettingOption("圆形", "circle", TestTags.SettingsAvatarShapeCircleButton),
+                            SettingOption("圆角矩形", "rounded", TestTags.SettingsAvatarShapeRoundedButton),
+                        ),
+                        onValueChange = onAvatarShapeChange,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+                    SettingsSegmentedRow(
+                        title = "我的头像",
+                        subtitle = "选择聊天中用户侧头像样式",
+                        icon = Icons.Filled.Person,
+                        currentValue = userAvatarStyleInput,
+                        options = listOf(
+                            SettingOption("文字", "text", TestTags.SettingsUserAvatarTextButton),
+                            SettingOption("应用图标", "app-icon", TestTags.SettingsUserAvatarAppIconButton),
+                        ),
+                        onValueChange = onUserAvatarStyleChange,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
                     SettingsSegmentedRow(

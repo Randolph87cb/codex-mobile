@@ -80,6 +80,8 @@ data class AppUiState(
     val serviceTierInput: String,
     val sandboxModeInput: String,
     val fontSizeInput: String,
+    val avatarShapeInput: String,
+    val userAvatarStyleInput: String,
     val connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     val showArchivedSessions: Boolean = false,
     val sessions: List<SessionSummary> = emptyList(),
@@ -406,6 +408,22 @@ class AppViewModel(
         updateSettingsState {
             it.copy(
                 fontSizeInput = normalizeFontSize(value),
+            )
+        }
+    }
+
+    fun updateAvatarShapeInput(value: String) {
+        updateSettingsState {
+            it.copy(
+                avatarShapeInput = normalizeAvatarShape(value),
+            )
+        }
+    }
+
+    fun updateUserAvatarStyleInput(value: String) {
+        updateSettingsState {
+            it.copy(
+                userAvatarStyleInput = normalizeUserAvatarStyle(value),
             )
         }
     }
@@ -2965,6 +2983,8 @@ class AppViewModel(
                 serviceTier = state.serviceTierInput,
                 sandboxMode = state.sandboxModeInput,
                 fontSize = state.fontSizeInput,
+                avatarShape = state.avatarShapeInput,
+                userAvatarStyle = state.userAvatarStyleInput,
                 savedConnections = normalizedConnections,
                 selectedConnectionId = state.selectedConnectionId,
             ),
@@ -3482,6 +3502,8 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
         serviceTierInput = settings.serviceTier,
         sandboxModeInput = settings.sandboxMode,
         fontSizeInput = settings.fontSize,
+        avatarShapeInput = settings.avatarShape,
+        userAvatarStyleInput = settings.userAvatarStyle,
         settingsItems = defaultSettingsItems(
             savedConnections = settings.savedConnections,
             selectedConnectionId = settings.selectedConnectionId ?: settings.savedConnections.first().id,
@@ -3494,6 +3516,8 @@ private fun createInitialUiState(settings: AppSettings): AppUiState {
             serviceTierInput = settings.serviceTier,
             sandboxModeInput = settings.sandboxMode,
             fontSizeInput = settings.fontSize,
+            avatarShapeInput = settings.avatarShape,
+            userAvatarStyleInput = settings.userAvatarStyle,
         ),
     )
 }
@@ -3552,6 +3576,8 @@ private fun AppSettings.sanitize(): AppSettings {
         serviceTier = normalizeServiceTier(serviceTier),
         sandboxMode = ManagedSandboxMode,
         fontSize = normalizeFontSize(fontSize),
+        avatarShape = normalizeAvatarShape(avatarShape),
+        userAvatarStyle = normalizeUserAvatarStyle(userAvatarStyle),
         savedConnections = normalizedConnections,
         selectedConnectionId = resolvedSelectedConnection.id,
     )
@@ -4154,6 +4180,8 @@ private fun defaultSettingsItems(
     serviceTierInput: String = "default",
     sandboxModeInput: String = "workspace-write",
     fontSizeInput: String = "standard",
+    avatarShapeInput: String = "circle",
+    userAvatarStyleInput: String = "text",
 ): List<Pair<String, String>> {
     val connectedState = connectionState as? BridgeConnectionState.Connected
     val selectedConnection = savedConnections.firstOrNull { it.id == selectedConnectionId }
@@ -4168,6 +4196,8 @@ private fun defaultSettingsItems(
         "推理强度" to localizedReasoningEffort(reasoningEffortInput),
         "速度档位" to localizedServiceTier(serviceTierInput),
         "字体大小" to localizedFontSize(fontSizeInput),
+        "头像形状" to localizedAvatarShape(avatarShapeInput),
+        "我的头像" to localizedUserAvatarStyle(userAvatarStyleInput),
         "文件权限" to localizedSandboxMode(sandboxModeInput),
         "审批模式" to localizedApprovalMode(approvalModeInput),
         "运行器" to (connectedState?.runnerMode ?: "未连接"),
@@ -4188,6 +4218,20 @@ private fun normalizeFontSize(value: String): String {
     return when (value) {
         "small", "standard", "large" -> value
         else -> "standard"
+    }
+}
+
+private fun normalizeAvatarShape(value: String): String {
+    return when (value) {
+        "circle", "rounded" -> value
+        else -> "circle"
+    }
+}
+
+private fun normalizeUserAvatarStyle(value: String): String {
+    return when (value) {
+        "text", "app-icon" -> value
+        else -> "text"
     }
 }
 
@@ -4246,6 +4290,20 @@ private fun localizedFontSize(value: String): String {
         "small" -> "小"
         "large" -> "大"
         else -> "标准"
+    }
+}
+
+private fun localizedAvatarShape(value: String): String {
+    return when (normalizeAvatarShape(value)) {
+        "rounded" -> "圆角矩形"
+        else -> "圆形"
+    }
+}
+
+private fun localizedUserAvatarStyle(value: String): String {
+    return when (normalizeUserAvatarStyle(value)) {
+        "app-icon" -> "应用图标"
+        else -> "文字头像"
     }
 }
 
