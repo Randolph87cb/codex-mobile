@@ -35,16 +35,25 @@ class PrimaryScreensShowcaseActivity : ComponentActivity() {
 
 @Composable
 private fun ConnectionShowcase() {
+    val connections = showcaseConnections()
     ConnectionScreen(
         currentConnectionName = "办公室桥接",
+        savedConnections = connections,
+        selectedConnectionId = "office",
         endpoint = "ws://10.0.0.12:8080",
+        authToken = "showcase-token",
         connectionState = BridgeConnectionState.Connected(
             endpoint = "ws://10.0.0.12:8080",
             service = "Codex Bridge",
             runnerMode = "LAN",
         ),
         isLoading = false,
+        onConnectionNameChange = {},
         onEndpointChange = {},
+        onAuthTokenChange = {},
+        onAddSavedConnection = {},
+        onSelectSavedConnection = {},
+        onDeleteSavedConnection = {},
         onConnect = {},
         onOpenSettings = {},
     )
@@ -132,20 +141,7 @@ private fun DraftShowcase() {
 
 @Composable
 private fun SettingsShowcase() {
-    val connections = listOf(
-        SavedBridgeConnection(
-            id = "office",
-            name = "办公室桥接",
-            endpoint = "ws://10.0.0.12:8080",
-            authToken = "showcase-token",
-        ),
-        SavedBridgeConnection(
-            id = "tailscale",
-            name = "Tailscale",
-            endpoint = "ws://100.64.1.10:8080",
-            authToken = "",
-        ),
-    )
+    val connections = showcaseConnections()
     SettingsScreen(
         items = listOf(
             "桥接模式" to "真实桥接",
@@ -193,6 +189,23 @@ private fun SettingsShowcase() {
         onBack = {},
         onNavigateToConnect = {},
         onNavigateToSessions = {},
+    )
+}
+
+private fun showcaseConnections(): List<SavedBridgeConnection> {
+    return listOf(
+        SavedBridgeConnection(
+            id = "office",
+            name = "办公室桥接",
+            endpoint = "ws://10.0.0.12:8080",
+            authToken = "showcase-token",
+        ),
+        SavedBridgeConnection(
+            id = "tailscale",
+            name = "Tailscale",
+            endpoint = "ws://100.64.1.10:8080",
+            authToken = "",
+        ),
     )
 }
 

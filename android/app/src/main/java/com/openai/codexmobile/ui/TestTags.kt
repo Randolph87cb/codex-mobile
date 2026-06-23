@@ -2,9 +2,17 @@ package com.openai.codexmobile.ui
 
 object TestTags {
     const val ConnectionScreen = "connection_screen"
+    const val ConnectionNameField = "connection_name_field"
     const val ConnectionEndpointField = "connection_endpoint_field"
+    const val ConnectionAuthTokenField = "connection_auth_token_field"
     const val ConnectionConnectButton = "connection_connect_button"
     const val ConnectionOpenSettingsButton = "connection_open_settings_button"
+    const val ConnectionSavedConnectionsCard = "connection_saved_connections_card"
+    const val ConnectionSavedAddButton = "connection_saved_add_button"
+    const val ConnectionSavedAddBottomButton = "connection_saved_add_bottom_button"
+    const val ConnectionSavedItemPrefix = "connection_saved_item_"
+    const val ConnectionSavedSelectPrefix = "connection_saved_select_"
+    const val ConnectionSavedDeletePrefix = "connection_saved_delete_"
 
     const val SessionListScreen = "session_list_screen"
     const val SessionListCreateButton = "session_list_create_button"

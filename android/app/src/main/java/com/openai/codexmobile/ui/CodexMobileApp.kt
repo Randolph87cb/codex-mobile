@@ -166,10 +166,18 @@ fun CodexMobileApp(
             composable(Routes.Connection) {
                 ConnectionScreen(
                     currentConnectionName = uiState.selectedConnection?.name.orEmpty(),
+                    savedConnections = uiState.savedConnections,
+                    selectedConnectionId = uiState.selectedConnectionId,
                     endpoint = uiState.endpointInput,
+                    authToken = uiState.authTokenInput,
                     connectionState = uiState.connectionState,
                     isLoading = uiState.isLoading,
+                    onConnectionNameChange = appViewModel::updateSelectedConnectionName,
                     onEndpointChange = appViewModel::updateEndpointInput,
+                    onAuthTokenChange = appViewModel::updateAuthTokenInput,
+                    onAddSavedConnection = appViewModel::addSavedConnection,
+                    onSelectSavedConnection = appViewModel::selectSavedConnection,
+                    onDeleteSavedConnection = appViewModel::deleteSavedConnection,
                     onConnect = {
                         navigateToSessionsAfterConnect.value = true
                         appViewModel.connect()

@@ -22,11 +22,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -58,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openai.codexmobile.data.SavedBridgeConnection
 import com.openai.codexmobile.model.BridgeConnectionState
 import com.openai.codexmobile.ui.TestTags
 
@@ -65,10 +68,18 @@ import com.openai.codexmobile.ui.TestTags
 @Composable
 fun ConnectionScreen(
     currentConnectionName: String,
+    savedConnections: List<SavedBridgeConnection>,
+    selectedConnectionId: String,
     endpoint: String,
+    authToken: String,
     connectionState: BridgeConnectionState,
     isLoading: Boolean,
+    onConnectionNameChange: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
+    onAuthTokenChange: (String) -> Unit,
+    onAddSavedConnection: () -> Unit,
+    onSelectSavedConnection: (String) -> Unit,
+    onDeleteSavedConnection: (String) -> Unit,
     onConnect: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSessions: () -> Unit = {},
@@ -122,6 +133,7 @@ fun ConnectionScreen(
                 connected = connected,
                 isLoading = isLoading,
                 onConnect = onConnect,
+                onAddSavedConnection = onAddSavedConnection,
                 onOpenSettings = onOpenSettings,
                 onOpenSessions = onOpenSessions,
             )
@@ -156,9 +168,23 @@ fun ConnectionScreen(
             }
 
             item {
-                EndpointEditor(
+                CurrentConnectionEditor(
+                    name = currentConnectionName,
                     endpoint = endpoint,
+                    authToken = authToken,
+                    onNameChange = onConnectionNameChange,
                     onEndpointChange = onEndpointChange,
+                    onAuthTokenChange = onAuthTokenChange,
+                )
+            }
+
+            item {
+                SavedConnectionsSection(
+                    savedConnections = savedConnections,
+                    selectedConnectionId = selectedConnectionId,
+                    onAddSavedConnection = onAddSavedConnection,
+                    onSelectSavedConnection = onSelectSavedConnection,
+                    onDeleteSavedConnection = onDeleteSavedConnection,
                 )
             }
         }
@@ -216,11 +242,7 @@ private fun BridgeConnectionNodeCard(
                     icon = Icons.Filled.Lan,
                     text = endpoint.ifBlank { "未配置桥接端点" },
                 )
-                ConnectionMetaRow(
-                    icon = Icons.Filled.Key,
-                    text = "••••••••••••••••",
-                    dimmed = true,
-                )
+                ConnectionMetaRow(icon = Icons.Filled.Key, text = "••••••••••••••••", dimmed = true)
             }
         }
     }
@@ -254,9 +276,13 @@ private fun ConnectionMetaRow(
 }
 
 @Composable
-private fun EndpointEditor(
+private fun CurrentConnectionEditor(
+    name: String,
     endpoint: String,
+    authToken: String,
+    onNameChange: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
+    onAuthTokenChange: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -269,9 +295,22 @@ private fun EndpointEditor(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "桥接端点",
+                text = "当前连接",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+            )
+            OutlinedTextField(
+                value = name,
+                onValueChange = onNameChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.ConnectionNameField),
+                singleLine = true,
+                shape = RoundedCornerShape(18.dp),
+                leadingIcon = {
+                    Icon(imageVector = Icons.Filled.Router, contentDescription = null)
+                },
+                placeholder = { Text("连接名称") },
             )
             OutlinedTextField(
                 value = endpoint,
@@ -299,6 +338,29 @@ private fun EndpointEditor(
                 },
                 placeholder = { Text("http://10.0.2.2:8787") },
             )
+            OutlinedTextField(
+                value = authToken,
+                onValueChange = onAuthTokenChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.ConnectionAuthTokenField),
+                singleLine = true,
+                shape = RoundedCornerShape(18.dp),
+                leadingIcon = {
+                    Icon(imageVector = Icons.Filled.Key, contentDescription = null)
+                },
+                trailingIcon = {
+                    if (authToken.isNotBlank()) {
+                        IconButton(onClick = { onAuthTokenChange("") }) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "清空令牌",
+                            )
+                        }
+                    }
+                },
+                placeholder = { Text("Bridge Token") },
+            )
             Text(
                 text = "模拟器建议使用 10.0.2.2，真机请填写 Windows 电脑的局域网地址。",
                 style = MaterialTheme.typography.bodySmall,
@@ -309,10 +371,143 @@ private fun EndpointEditor(
 }
 
 @Composable
+private fun SavedConnectionsSection(
+    savedConnections: List<SavedBridgeConnection>,
+    selectedConnectionId: String,
+    onAddSavedConnection: () -> Unit,
+    onSelectSavedConnection: (String) -> Unit,
+    onDeleteSavedConnection: (String) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.ConnectionSavedConnectionsCard),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "已保存连接",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "${savedConnections.size} 个 bridge 端点",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedButton(
+                    onClick = onAddSavedConnection,
+                    modifier = Modifier.testTag(TestTags.ConnectionSavedAddButton),
+                ) {
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("新增")
+                }
+            }
+
+            savedConnections.forEach { connection ->
+                SavedConnectionRow(
+                    connection = connection,
+                    selected = connection.id == selectedConnectionId,
+                    canDelete = savedConnections.size > 1,
+                    onSelectSavedConnection = onSelectSavedConnection,
+                    onDeleteSavedConnection = onDeleteSavedConnection,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavedConnectionRow(
+    connection: SavedBridgeConnection,
+    selected: Boolean,
+    canDelete: Boolean,
+    onSelectSavedConnection: (String) -> Unit,
+    onDeleteSavedConnection: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .testTag(TestTags.ConnectionSavedItemPrefix + connection.id)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(9.dp)
+                .background(
+                    color = if (selected) Color(0xFF22C55E) else MaterialTheme.colorScheme.outline,
+                    shape = CircleShape,
+                ),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = connection.name.ifBlank { "未命名连接" },
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = connection.endpoint.ifBlank { "未配置桥接地址" },
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (selected) {
+            Button(onClick = {}, enabled = false) {
+                Text("当前")
+            }
+        } else {
+            OutlinedButton(
+                onClick = { onSelectSavedConnection(connection.id) },
+                modifier = Modifier.testTag(TestTags.ConnectionSavedSelectPrefix + connection.id),
+            ) {
+                Text("切换")
+            }
+        }
+        IconButton(
+            onClick = { onDeleteSavedConnection(connection.id) },
+            enabled = canDelete,
+            modifier = Modifier.testTag(TestTags.ConnectionSavedDeletePrefix + connection.id),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DeleteOutline,
+                contentDescription = "删除连接",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ConnectionBottomArea(
     connected: Boolean,
     isLoading: Boolean,
     onConnect: () -> Unit,
+    onAddSavedConnection: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSessions: () -> Unit,
 ) {
@@ -371,16 +566,17 @@ private fun ConnectionBottomArea(
         }
 
         OutlinedButton(
-            onClick = onOpenSettings,
+            onClick = onAddSavedConnection,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(50.dp)
+                .testTag(TestTags.ConnectionSavedAddBottomButton),
             shape = RoundedCornerShape(25.dp),
         ) {
             Icon(imageVector = Icons.Filled.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "管理连接",
+                text = "新增连接",
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
             )

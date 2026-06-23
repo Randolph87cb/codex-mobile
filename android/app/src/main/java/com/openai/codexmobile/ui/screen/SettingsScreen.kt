@@ -167,58 +167,9 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsSectionHeader(text = "Connection Management")
+                SettingsSectionHeader(text = "Bridge Runtime")
                 SettingsCard(modifier = Modifier.testTag(TestTags.SettingsConnectionsCard)) {
-                    SavedBridgeSummaryRow(
-                        count = savedConnections.size,
-                        onAddSavedConnection = onAddSavedConnection,
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
-                    SettingsTextFieldBlock(
-                        label = "Connection Name",
-                        value = selectedConnectionName,
-                        onValueChange = onConnectionNameChange,
-                        testTag = TestTags.SettingsConnectionNameField,
-                        icon = Icons.Filled.Router,
-                        placeholder = "默认连接",
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
-                    SettingsTextFieldBlock(
-                        label = "Current Endpoint",
-                        value = endpointInput,
-                        onValueChange = onEndpointChange,
-                        testTag = TestTags.SettingsEndpointField,
-                        icon = Icons.Filled.Link,
-                        placeholder = "http://10.0.2.2:8787",
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
-                    SettingsTextFieldBlock(
-                        label = "Access Token",
-                        value = authTokenInput,
-                        onValueChange = onAuthTokenChange,
-                        testTag = TestTags.SettingsAuthTokenField,
-                        icon = Icons.Filled.Key,
-                        placeholder = "Bridge Token",
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
                     RestartBridgeRow(onRestartBridge = onRestartBridge)
-                    if (savedConnections.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            savedConnections.forEach { connection ->
-                                SavedConnectionRow(
-                                    connection = connection,
-                                    selected = connection.id == selectedConnectionId,
-                                    canDelete = savedConnections.size > 1,
-                                    onSelectSavedConnection = onSelectSavedConnection,
-                                    onDeleteSavedConnection = onDeleteSavedConnection,
-                                )
-                            }
-                        }
-                    }
                 }
             }
 

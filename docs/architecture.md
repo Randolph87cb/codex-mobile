@@ -31,7 +31,7 @@ codex.exe app-server
 
 ### Android App
 
-- 管理 bridge 地址、token、工作目录、模型和权限配置
+- 管理 bridge 地址、token、工作目录、模型和权限配置；保存连接的新增、切换和删除集中在连接页
 - 展示会话列表与详情页
 - 渲染实时流、历史 transcript、执行过程和图片
 - 维护结构化实时执行活动，不再只靠 transcript 文本猜系统消息边界
