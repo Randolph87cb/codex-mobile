@@ -578,7 +578,6 @@ fun SessionDetailScreen(
                 isDraft = draftSession != null,
                 isLoading = isLoading,
                 canUseInput = detail != null,
-                waitingForCodexReply = draftSession == null && detail?.status == "running",
                 showInterruptButton = draftSession == null && shouldShowInterruptButton(detail, sessionRealtimeState),
                 isInterrupting = sessionRealtimeState.isInterrupting,
                 hasPendingUploadBlockers = hasPendingUploadBlockers,
@@ -620,7 +619,6 @@ private fun DetailInputDock(
     isDraft: Boolean,
     isLoading: Boolean,
     canUseInput: Boolean,
-    waitingForCodexReply: Boolean,
     showInterruptButton: Boolean,
     isInterrupting: Boolean,
     hasPendingUploadBlockers: Boolean,
@@ -649,14 +647,6 @@ private fun DetailInputDock(
                 .padding(horizontal = 7.dp, vertical = 7.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            if (waitingForCodexReply) {
-                WaitingForCodexReplyRow(
-                    showInterruptButton = showInterruptButton,
-                    isInterrupting = isInterrupting,
-                    canUseInput = canUseInput,
-                    onInterrupt = onInterrupt,
-                )
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -709,6 +699,28 @@ private fun DetailInputDock(
                     maxLines = 3,
                     textStyle = MaterialTheme.typography.bodyMedium,
                 )
+                if (showInterruptButton) {
+                    FilledTonalIconButton(
+                        onClick = onInterrupt,
+                        enabled = canUseInput && !isInterrupting,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag(TestTags.SessionDetailInterruptButton),
+                    ) {
+                        if (isInterrupting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.StopCircle,
+                                contentDescription = "中断当前轮",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
                 Button(
                     onClick = {
                         focusManager.clearFocus(force = true)
@@ -733,58 +745,6 @@ private fun DetailInputDock(
                             modifier = Modifier.size(19.dp),
                         )
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WaitingForCodexReplyRow(
-    showInterruptButton: Boolean,
-    isInterrupting: Boolean,
-    canUseInput: Boolean,
-    onInterrupt: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(TestTags.SessionDetailWaitingNotice),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.HourglassTop,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = "正在等待 Codex 回复，完成后会通知你",
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (showInterruptButton) {
-            OutlinedButton(
-                onClick = onInterrupt,
-                enabled = canUseInput && !isInterrupting,
-                modifier = Modifier.testTag(TestTags.SessionDetailInterruptButton),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                if (isInterrupting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Filled.StopCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text("终止当前轮", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -1388,6 +1348,29 @@ private fun StatusStrip(
         detail?.goal == null -> "未设置"
         else -> localizedGoalStatus(detail.goal.status)
     }
+    val backgroundWatchStatusText = backgroundWatch.statusText
+    val backgroundWatchHealthy = backgroundWatchStatusText == "后台提醒已开启" ||
+        backgroundWatchStatusText == "后台提醒可用"
+    val backgroundWatchWarning = backgroundWatchStatusText == "通知权限未开启" ||
+        backgroundWatchStatusText == "后台监听中断"
+    val backgroundWatchTint = when {
+        backgroundWatchStatusText == "后台监听中断" -> MaterialTheme.colorScheme.error
+        backgroundWatchStatusText == "通知权限未开启" -> MaterialTheme.colorScheme.tertiary
+        backgroundWatchHealthy -> Color(0xFF16A34A)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val backgroundWatchIcon = when {
+        backgroundWatchStatusText == "后台监听中断" -> Icons.Filled.Error
+        backgroundWatchWarning -> Icons.Filled.Schedule
+        backgroundWatchHealthy -> Icons.Filled.CheckCircle
+        else -> Icons.Filled.HourglassTop
+    }
+    val backgroundWatchCompactText = when (backgroundWatchStatusText) {
+        "后台提醒已开启", "后台提醒可用" -> "已开启"
+        "通知权限未开启" -> "未授权"
+        "后台监听中断" -> "中断"
+        else -> "待确认"
+    }
     val statusNotice = buildStatusStripNotice(
         sessionRealtimeState = sessionRealtimeState,
         sessionStatus = sessionStatus,
@@ -1466,64 +1449,21 @@ private fun StatusStrip(
                         .weight(1f)
                         .clickable { onShowGoal() },
                 )
+                StatusMetricDivider(height = 28.dp)
+                SessionStatusMetric(
+                    label = "后台提醒",
+                    value = backgroundWatchCompactText,
+                    icon = backgroundWatchIcon,
+                    iconTint = backgroundWatchTint,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(TestTags.SessionDetailBackgroundWatchStatus),
+                )
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-            BackgroundWatchStatusRow(backgroundWatch = backgroundWatch)
             statusNotice?.let { notice ->
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                 SessionStatusNotice(notice = notice)
             }
-        }
-    }
-}
-
-@Composable
-private fun BackgroundWatchStatusRow(backgroundWatch: BackgroundWatchUiState) {
-    val statusText = backgroundWatch.statusText
-    val isHealthy = statusText == "后台提醒已开启" || statusText == "后台提醒可用"
-    val isWarning = statusText == "通知权限未开启" || statusText == "后台监听中断"
-    val tint = when {
-        statusText == "后台监听中断" -> MaterialTheme.colorScheme.error
-        statusText == "通知权限未开启" -> MaterialTheme.colorScheme.tertiary
-        isHealthy -> Color(0xFF16A34A)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val icon = when {
-        statusText == "后台监听中断" -> Icons.Filled.Error
-        isWarning -> Icons.Filled.Schedule
-        isHealthy -> Icons.Filled.CheckCircle
-        else -> Icons.Filled.HourglassTop
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(TestTags.SessionDetailBackgroundWatchStatus),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = tint,
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = backgroundWatch.helperText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }
