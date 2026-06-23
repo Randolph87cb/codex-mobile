@@ -300,6 +300,7 @@ Android 当前会把详情页顶部状态拆成两层来消费：
 
 - 第一行：`bridge 状态 / 同步方式 / 会话状态`
 - 第二行：`排队消息 / 目标状态`
+- 后台提醒行：`后台提醒已开启 / 通知权限未开启 / 后台监听中断`，用于说明用户是否会收到线程结束通知
 - 顶栏右侧：全局额度双点指示器，点击展开详情
 - 消息流里的非对话过程不会作为独立系统卡片展示，而是归属到 Codex 回复布局中
 - 执行过程只按连续片段合并；如果中间出现 `Codex：...` 文字回复，后续过程会开启新的执行过程分组
@@ -637,6 +638,16 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 }
 ```
 
+### `GET /api/file/download?path=...`
+
+下载 bridge 允许暴露的本地文件。Android 设置页不会新增协议或云服务，只在当前 bridge 已连接时，把最新调试包路径编码成下载链接：
+
+```text
+/api/file/download?path=D%3A%5Cworkspace%5Ccodex-mobile%5Candroid%5Capp%5Cbuild%5Coutputs%5Capk%5Cdebug%5Capp-debug.apk
+```
+
+该入口用于把当前本机 `android/app/build/outputs/apk/debug/app-debug.apk` 更容易交给手机浏览器下载；如果当前 bridge 未连接，Android 只显示中文不可用提示。
+
 ## 实时流
 
 ### `GET /api/session/:id/ws`
@@ -650,7 +661,7 @@ Android 当前有两类消费者会使用同一条实时流接口：
 - 会话详情页：作为 UI 状态同步来源，负责渲染实时输出、执行过程和审批状态。
 - 后台会话监听前台服务：用户在 App 内成功发送消息后启动，只观察当前 `sessionId` 的事件，在 `assistant.done`、`run.status=idle/error`、`run.interrupted`、`tool.request`、`error` 时发系统通知并自停。该服务不接管 UI 状态，也不作为会话状态真相源。
 
-后台监听服务从 Android 本地设置读取 bridge 地址和 Bearer token，复用客户端已有 WebSocket 解析逻辑；Android 13+ 如果用户未授予通知权限，服务仍会尽量保持前台监听，结果提醒可能不会显示，用户需要回到 App 查看状态。通知通道拆成两类：常驻监听通知使用低打扰通道，线程结束、等待审批、中断和出错使用高重要级别结果提醒通道，以便系统尽量以横幅或弹出通知提示用户。
+后台监听服务从 Android 本地设置读取 bridge 地址和 Bearer token，复用客户端已有 WebSocket 解析逻辑；Android 13+ 如果用户未授予通知权限，服务仍会尽量保持前台监听，结果提醒可能不会显示，用户需要回到 App 查看状态。详情页顶部会同步显示“后台提醒已开启 / 通知权限未开启 / 后台监听中断”等健康提示。通知通道拆成两类：常驻监听通知使用低打扰通道，线程结束、等待审批、中断和出错使用高重要级别结果提醒通道，以便系统尽量以横幅或弹出通知提示用户。
 
 结果提醒的点击行为由 Android 客户端处理：通知会携带 `sessionId` 打开 App，客户端会先保留这个待打开目标；如果 bridge 已连接，会立即导航到对应会话详情并补拉 `GET /api/session/:id`；如果尚未连接，会按当前保存的 endpoint/token 主动连接 bridge，连接成功后再打开目标会话；如果连接失败，客户端会保留待打开 `sessionId` 并显示中文提示，用户稍后手动连接成功后会继续尝试打开。
 

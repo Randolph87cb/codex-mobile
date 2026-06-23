@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
     private val requestedSessionId = MutableStateFlow<String?>(null)
+    private var appViewModel: AppViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,8 +57,12 @@ class MainActivity : ComponentActivity() {
                     },
                 ),
             )
+            this@MainActivity.appViewModel = appViewModel
             val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
             val sessionIdFromNotification by requestedSessionId.collectAsStateWithLifecycle()
+            LaunchedEffect(appViewModel) {
+                appViewModel.setNotificationPermissionGranted(canPostNotifications())
+            }
             LaunchedEffect(sessionIdFromNotification) {
                 val sessionId = sessionIdFromNotification ?: return@LaunchedEffect
                 appViewModel.openSessionFromNotification(sessionId)
@@ -69,10 +74,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        appViewModel?.setNotificationPermissionGranted(canPostNotifications())
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         requestedSessionId.value = intent.sessionIdExtra()
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_POST_NOTIFICATIONS) {
+            appViewModel?.setNotificationPermissionGranted(canPostNotifications())
+        }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -89,6 +111,12 @@ class MainActivity : ComponentActivity() {
             arrayOf(Manifest.permission.POST_NOTIFICATIONS),
             REQUEST_POST_NOTIFICATIONS,
         )
+    }
+
+    private fun canPostNotifications(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     private fun Intent.sessionIdExtra(): String? {

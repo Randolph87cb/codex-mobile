@@ -104,6 +104,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -119,6 +120,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.openai.codexmobile.AccountQuotaUiState
+import com.openai.codexmobile.BackgroundWatchUiState
 import com.openai.codexmobile.DraftSessionUiState
 import com.openai.codexmobile.PendingImageAttachmentUiState
 import com.openai.codexmobile.PendingImageUploadState
@@ -209,6 +211,7 @@ fun SessionDetailScreen(
     connectionState: BridgeConnectionState = BridgeConnectionState.Disconnected,
     accountQuota: AccountQuotaUiState = AccountQuotaUiState(),
     sessionRealtimeState: SessionRealtimeUiState,
+    backgroundWatch: BackgroundWatchUiState = BackgroundWatchUiState(),
     queuedInputs: List<String>,
     draftMessage: String,
     pendingImageAttachments: List<PendingImageAttachmentUiState>,
@@ -471,6 +474,7 @@ fun SessionDetailScreen(
                 detail = detail,
                 connectionState = connectionState,
                 sessionRealtimeState = sessionRealtimeState,
+                backgroundWatch = backgroundWatch,
                 queuedInputs = queuedInputs,
                 isDraft = draftSession != null,
                 onShowQueued = { queuedDialogVisible = true },
@@ -574,6 +578,7 @@ fun SessionDetailScreen(
                 isDraft = draftSession != null,
                 isLoading = isLoading,
                 canUseInput = detail != null,
+                waitingForCodexReply = draftSession == null && detail?.status == "running",
                 showInterruptButton = draftSession == null && shouldShowInterruptButton(detail, sessionRealtimeState),
                 isInterrupting = sessionRealtimeState.isInterrupting,
                 hasPendingUploadBlockers = hasPendingUploadBlockers,
@@ -615,6 +620,7 @@ private fun DetailInputDock(
     isDraft: Boolean,
     isLoading: Boolean,
     canUseInput: Boolean,
+    waitingForCodexReply: Boolean,
     showInterruptButton: Boolean,
     isInterrupting: Boolean,
     hasPendingUploadBlockers: Boolean,
@@ -625,6 +631,7 @@ private fun DetailInputDock(
     onSend: () -> Unit,
     onInterrupt: () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
     val sendEnabled = !isLoading &&
         canUseInput &&
         (draftMessage.isNotBlank() || hasPendingAttachments) &&
@@ -636,88 +643,77 @@ private fun DetailInputDock(
         tonalElevation = 4.dp,
         shadowElevation = 3.dp,
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 7.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            FilledTonalIconButton(
-                onClick = onPickImage,
-                enabled = !isLoading && canUseInput,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag(TestTags.SessionDetailAttachImageButton),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Image,
-                    contentDescription = "添加图片",
-                    modifier = Modifier.size(18.dp),
+            if (waitingForCodexReply) {
+                WaitingForCodexReplyRow(
+                    showInterruptButton = showInterruptButton,
+                    isInterrupting = isInterrupting,
+                    canUseInput = canUseInput,
+                    onInterrupt = onInterrupt,
                 )
             }
-            FilledTonalIconButton(
-                onClick = onPickVideo,
-                enabled = !isLoading && canUseInput,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag(TestTags.SessionDetailAttachVideoButton),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = "添加视频",
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            OutlinedTextField(
-                value = draftMessage,
-                onValueChange = onDraftMessageChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 48.dp)
-                    .testTag(TestTags.SessionDetailDraftField),
-                placeholder = {
-                    Text(
-                        if (isDraft) {
-                            "首条消息发送后才真正创建线程"
-                        } else {
-                            "输入指令..."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                shape = RoundedCornerShape(22.dp),
-                maxLines = 3,
-                textStyle = MaterialTheme.typography.bodyMedium,
-            )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (showInterruptButton) {
-                    FilledTonalIconButton(
-                        onClick = onInterrupt,
-                        enabled = canUseInput && !isInterrupting,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .testTag(TestTags.SessionDetailInterruptButton),
-                    ) {
-                        if (isInterrupting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Filled.StopCircle,
-                                contentDescription = "中断当前轮",
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
+                FilledTonalIconButton(
+                    onClick = onPickImage,
+                    enabled = !isLoading && canUseInput,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag(TestTags.SessionDetailAttachImageButton),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Image,
+                        contentDescription = "添加图片",
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
+                FilledTonalIconButton(
+                    onClick = onPickVideo,
+                    enabled = !isLoading && canUseInput,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag(TestTags.SessionDetailAttachVideoButton),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "添加视频",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                OutlinedTextField(
+                    value = draftMessage,
+                    onValueChange = onDraftMessageChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .testTag(TestTags.SessionDetailDraftField),
+                    placeholder = {
+                        Text(
+                            if (isDraft) {
+                                "首条消息发送后才真正创建线程"
+                            } else {
+                                "输入指令..."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    },
+                    shape = RoundedCornerShape(22.dp),
+                    maxLines = 3,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                )
                 Button(
-                    onClick = onSend,
+                    onClick = {
+                        focusManager.clearFocus(force = true)
+                        onSend()
+                    },
                     enabled = sendEnabled,
                     modifier = Modifier
                         .size(46.dp)
@@ -737,6 +733,58 @@ private fun DetailInputDock(
                             modifier = Modifier.size(19.dp),
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaitingForCodexReplyRow(
+    showInterruptButton: Boolean,
+    isInterrupting: Boolean,
+    canUseInput: Boolean,
+    onInterrupt: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailWaitingNotice),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.HourglassTop,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = "正在等待 Codex 回复，完成后会通知你",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (showInterruptButton) {
+            OutlinedButton(
+                onClick = onInterrupt,
+                enabled = canUseInput && !isInterrupting,
+                modifier = Modifier.testTag(TestTags.SessionDetailInterruptButton),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                if (isInterrupting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.StopCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("终止当前轮", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -1308,6 +1356,7 @@ private fun StatusStrip(
     detail: SessionDetail?,
     connectionState: BridgeConnectionState,
     sessionRealtimeState: SessionRealtimeUiState,
+    backgroundWatch: BackgroundWatchUiState,
     queuedInputs: List<String>,
     isDraft: Boolean,
     onShowQueued: () -> Unit,
@@ -1418,10 +1467,63 @@ private fun StatusStrip(
                         .clickable { onShowGoal() },
                 )
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            BackgroundWatchStatusRow(backgroundWatch = backgroundWatch)
             statusNotice?.let { notice ->
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                 SessionStatusNotice(notice = notice)
             }
+        }
+    }
+}
+
+@Composable
+private fun BackgroundWatchStatusRow(backgroundWatch: BackgroundWatchUiState) {
+    val statusText = backgroundWatch.statusText
+    val isHealthy = statusText == "后台提醒已开启" || statusText == "后台提醒可用"
+    val isWarning = statusText == "通知权限未开启" || statusText == "后台监听中断"
+    val tint = when {
+        statusText == "后台监听中断" -> MaterialTheme.colorScheme.error
+        statusText == "通知权限未开启" -> MaterialTheme.colorScheme.tertiary
+        isHealthy -> Color(0xFF16A34A)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val icon = when {
+        statusText == "后台监听中断" -> Icons.Filled.Error
+        isWarning -> Icons.Filled.Schedule
+        isHealthy -> Icons.Filled.CheckCircle
+        else -> Icons.Filled.HourglassTop
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SessionDetailBackgroundWatchStatus),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = tint,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = backgroundWatch.helperText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

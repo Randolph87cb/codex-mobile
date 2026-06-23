@@ -328,6 +328,108 @@ class AppViewModelTest {
         }
 
     @Test
+    fun notificationPermissionStateShowsDisabledBackgroundWatchHint() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_notification_permission", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        viewModel.setNotificationPermissionGranted(false)
+        advanceUntilIdle()
+
+        assertEquals("通知权限未开启", viewModel.uiState.value.backgroundWatch.statusText)
+        assertTrue(viewModel.uiState.value.backgroundWatch.helperText.contains("线程结束时可能不会弹出提醒"))
+    }
+
+    @Test
+    fun sendInputShowsWaitingNoticeAndEnablesBackgroundWatch() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_waiting_notice", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val watchedSessions = mutableListOf<String>()
+        val viewModel = AppViewModel(
+            bridgeApi = bridgeApi,
+            sessionRepository = repository,
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = FakeAppLogger(),
+            startSessionWatch = { sessionId -> watchedSessions += sessionId },
+        )
+
+        viewModel.setNotificationPermissionGranted(true)
+        viewModel.openSessionDetail(detail.id)
+        advanceUntilIdle()
+        viewModel.updateDraftMessage("开始执行")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(listOf("sess_waiting_notice"), watchedSessions)
+        assertEquals("正在等待 Codex 回复，完成后会通知你。", viewModel.uiState.value.message)
+        assertEquals("后台提醒已开启", viewModel.uiState.value.backgroundWatch.statusText)
+        assertEquals("sess_waiting_notice", viewModel.uiState.value.backgroundWatch.activeSessionId)
+        assertTrue(
+            viewModel.uiState.value.sessionRealtimeState.lastEventText
+                ?.contains("完成后会通知你") == true,
+        )
+    }
+
+    @Test
+    fun sendInputReportsBackgroundWatchInterruptionWhenServiceStartFails() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_watch_fail", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(
+            bridgeApi = bridgeApi,
+            sessionRepository = repository,
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = FakeAppLogger(),
+            startSessionWatch = { throw IllegalStateException("前台服务启动失败") },
+        )
+
+        viewModel.setNotificationPermissionGranted(true)
+        viewModel.openSessionDetail(detail.id)
+        advanceUntilIdle()
+        viewModel.updateDraftMessage("开始执行")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals("后台监听中断", viewModel.uiState.value.backgroundWatch.statusText)
+        assertTrue(viewModel.uiState.value.backgroundWatch.helperText.contains("前台服务启动失败"))
+        assertNull(viewModel.uiState.value.backgroundWatch.activeSessionId)
+    }
+
+    @Test
+    fun latestDebugApkDownloadUrlUsesConnectedBridgeFileEndpoint() = runTest(dispatcher.scheduler) {
+        val detail = sampleDetail(id = "sess_apk_url", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = detail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(detail.toSummary()),
+            detailsById = mapOf(detail.id to detail),
+        )
+        val viewModel = AppViewModel(bridgeApi, repository, FakeAppSettingsStore(), FakeAppLogger())
+
+        assertNull(viewModel.uiState.value.latestDebugApkDownloadUrl)
+        assertTrue(viewModel.uiState.value.latestDebugApkDownloadHint.contains("当前连接不可用"))
+
+        viewModel.connect()
+        advanceUntilIdle()
+
+        val url = viewModel.uiState.value.latestDebugApkDownloadUrl
+        assertNotNull(url)
+        assertTrue(url!!.startsWith("http://10.0.2.2:8787/api/file/download?path="))
+        assertTrue(url.contains("android%5Capp%5Cbuild%5Coutputs%5Capk%5Cdebug%5Capp-debug.apk"))
+        assertTrue(viewModel.uiState.value.latestDebugApkDownloadHint.contains("手机浏览器"))
+    }
+
+    @Test
     fun goalActionsUpdateSelectedSessionAndCallBridge() = runTest(dispatcher.scheduler) {
         val detail = sampleDetail(id = "sess_goal", status = "idle")
         val bridgeApi = FakeBridgeApi(createdDetail = detail)

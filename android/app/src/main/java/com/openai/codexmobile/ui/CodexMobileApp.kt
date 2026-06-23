@@ -260,6 +260,7 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     connectionState = uiState.connectionState,
                     accountQuota = uiState.accountQuota,
                     sessionRealtimeState = uiState.sessionRealtimeState,
+                    backgroundWatch = uiState.backgroundWatch,
                     queuedInputs = uiState.queuedInputs,
                     draftMessage = uiState.draftMessage,
                     pendingImageAttachments = uiState.pendingImageAttachments,
@@ -315,6 +316,9 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                     serviceTierInput = uiState.serviceTierInput,
                     sandboxModeInput = uiState.sandboxModeInput,
                     fontSizeInput = uiState.fontSizeInput,
+                    latestDebugApkPath = uiState.latestDebugApkPath,
+                    latestDebugApkDownloadUrl = uiState.latestDebugApkDownloadUrl,
+                    latestDebugApkDownloadHint = uiState.latestDebugApkDownloadHint,
                     diagnosticsLog = uiState.diagnosticsLog,
                     onConnectionNameChange = appViewModel::updateSelectedConnectionName,
                     onAddSavedConnection = appViewModel::addSavedConnection,
@@ -336,6 +340,12 @@ fun CodexMobileApp(appViewModel: AppViewModel) {
                         clipboardManager.setText(AnnotatedString(logs))
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar("日志已复制到剪贴板。")
+                        }
+                    },
+                    onCopyApkDownloadUrl = { url ->
+                        clipboardManager.setText(AnnotatedString(url))
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("APK 下载链接已复制到剪贴板。")
                         }
                     },
                     onBack = { navController.popBackStack() },

@@ -88,6 +88,9 @@ fun SettingsScreen(
     serviceTierInput: String,
     sandboxModeInput: String,
     fontSizeInput: String,
+    latestDebugApkPath: String = "D:\\workspace\\codex-mobile\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+    latestDebugApkDownloadUrl: String? = null,
+    latestDebugApkDownloadHint: String = "当前连接不可用，连接 bridge 后会生成下载链接。",
     diagnosticsLog: String,
     onConnectionNameChange: (String) -> Unit,
     onAddSavedConnection: () -> Unit,
@@ -105,6 +108,7 @@ fun SettingsScreen(
     onRefreshLogs: () -> Unit,
     onClearLogs: () -> Unit,
     onCopyLogs: (String) -> Unit,
+    onCopyApkDownloadUrl: (String) -> Unit = {},
     onRestartBridge: () -> Unit,
     onBack: () -> Unit,
     onNavigateToConnect: () -> Unit,
@@ -318,6 +322,15 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            item {
+                ApkDownloadSection(
+                    latestDebugApkPath = latestDebugApkPath,
+                    latestDebugApkDownloadUrl = latestDebugApkDownloadUrl,
+                    latestDebugApkDownloadHint = latestDebugApkDownloadHint,
+                    onCopyApkDownloadUrl = onCopyApkDownloadUrl,
+                )
             }
 
             item {
@@ -643,6 +656,73 @@ private fun SettingsIconTile(icon: ImageVector) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+@Composable
+private fun ApkDownloadSection(
+    latestDebugApkPath: String,
+    latestDebugApkDownloadUrl: String?,
+    latestDebugApkDownloadHint: String,
+    onCopyApkDownloadUrl: (String) -> Unit,
+) {
+    SettingsSectionHeader(text = "Debug APK")
+    SettingsCard(modifier = Modifier.testTag(TestTags.SettingsApkDownloadCard)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SettingsIconTile(icon = Icons.Filled.Link)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text("下载最新调试包 APK", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    text = latestDebugApkDownloadHint,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            OutlinedButton(
+                onClick = {
+                    latestDebugApkDownloadUrl?.let(onCopyApkDownloadUrl)
+                },
+                enabled = latestDebugApkDownloadUrl != null,
+                modifier = Modifier.testTag(TestTags.SettingsCopyApkDownloadUrlButton),
+            ) {
+                Text("复制链接")
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+        ReadOnlyPreferenceRow(label = "APK 本地路径", value = latestDebugApkPath)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = "下载链接",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SelectionContainer {
+                Text(
+                    text = latestDebugApkDownloadUrl ?: "当前连接不可用，连接 bridge 后显示。",
+                    modifier = Modifier.testTag(TestTags.SettingsApkDownloadUrl),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = if (latestDebugApkDownloadUrl == null) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+            }
+        }
     }
 }
 

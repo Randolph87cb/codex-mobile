@@ -58,6 +58,9 @@ private const val BridgeRestartRecoveryIntervalMs = 1_500L
 private const val BridgeRestartRecoveryMaxAttempts = 12
 private const val ManagedApprovalMode = "auto"
 private const val ManagedSandboxMode = "danger-full-access"
+private const val LatestDebugApkPath =
+    "D:\\workspace\\codex-mobile\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk"
+private const val WaitingForCodexReplyText = "正在等待 Codex 回复，完成后会通知你。"
 
 private enum class RealtimeNoticeMode {
     ImmediateReconnect,
@@ -88,6 +91,7 @@ data class AppUiState(
     val settingsItems: List<Pair<String, String>>,
     val accountQuota: AccountQuotaUiState = AccountQuotaUiState(),
     val sessionRealtimeState: SessionRealtimeUiState = SessionRealtimeUiState(),
+    val backgroundWatch: BackgroundWatchUiState = BackgroundWatchUiState(),
     val pendingNotificationSessionId: String? = null,
     val notificationNavigationSessionId: String? = null,
     val pendingImageAttachments: List<PendingImageAttachmentUiState> = emptyList(),
@@ -103,6 +107,25 @@ data class AppUiState(
 
     val fontSizeTypeScale: Float
         get() = typeScaleForFontSize(fontSizeInput)
+
+    val latestDebugApkPath: String
+        get() = LatestDebugApkPath
+
+    val latestDebugApkDownloadUrl: String?
+        get() {
+            val connectedEndpoint = (connectionState as? BridgeConnectionState.Connected)?.endpoint
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: return null
+            return buildBridgeDownloadUrl(connectedEndpoint, LatestDebugApkPath)
+        }
+
+    val latestDebugApkDownloadHint: String
+        get() = if (latestDebugApkDownloadUrl == null) {
+            "当前连接不可用，连接 bridge 后会生成下载链接。"
+        } else {
+            "手机浏览器打开该链接即可下载当前本机调试包。"
+        }
 }
 
 data class DraftSessionUiState(
@@ -170,6 +193,32 @@ data class PendingVideoAttachmentUiState(
     val savedPath: String? = null,
     val uploadError: String? = null,
 )
+
+data class BackgroundWatchUiState(
+    val notificationPermissionGranted: Boolean? = null,
+    val activeSessionId: String? = null,
+    val interrupted: Boolean = false,
+    val interruptionMessage: String? = null,
+) {
+    val statusText: String
+        get() = when {
+            notificationPermissionGranted == false -> "通知权限未开启"
+            interrupted -> "后台监听中断"
+            activeSessionId != null -> "后台提醒已开启"
+            notificationPermissionGranted == true -> "后台提醒已开启"
+            else -> "后台提醒待确认"
+        }
+
+    val helperText: String
+        get() = when {
+            notificationPermissionGranted == false -> "系统通知权限关闭，线程结束时可能不会弹出提醒。"
+            interrupted -> interruptionMessage?.takeIf { it.isNotBlank() }
+                ?: "后台监听未能启动，请回到 App 查看线程状态。"
+            activeSessionId != null -> "当前线程结束、等待审批或出错时会发系统通知。"
+            notificationPermissionGranted == true -> "发送消息后会启动后台监听。"
+            else -> "正在确认系统通知权限。"
+        }
+}
 
 enum class PendingVideoUploadState {
     Uploading,
@@ -357,6 +406,18 @@ class AppViewModel(
         updateSettingsState {
             it.copy(
                 fontSizeInput = normalizeFontSize(value),
+            )
+        }
+    }
+
+    fun setNotificationPermissionGranted(granted: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                backgroundWatch = state.backgroundWatch.copy(
+                    notificationPermissionGranted = granted,
+                    interrupted = if (!granted) false else state.backgroundWatch.interrupted,
+                    interruptionMessage = if (!granted) null else state.backgroundWatch.interruptionMessage,
+                ),
             )
         }
     }
@@ -3160,12 +3221,27 @@ class AppViewModel(
                 attachments = attachmentRefs,
             ),
         )
-        runCatching {
+        val watchStartResult = runCatching {
             startSessionWatch(detail.id)
         }.onFailure { error ->
             appLogger.warn(
                 "AppViewModel",
                 "启动后台会话监听失败：sessionId=${detail.id}, error=${error.message ?: "unknown"}",
+            )
+        }
+        val nextBackgroundWatch = if (watchStartResult.isSuccess) {
+            uiState.value.backgroundWatch.copy(
+                activeSessionId = detail.id,
+                interrupted = false,
+                interruptionMessage = null,
+            )
+        } else {
+            uiState.value.backgroundWatch.copy(
+                activeSessionId = null,
+                interrupted = true,
+                interruptionMessage = watchStartResult.exceptionOrNull()?.message
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "后台监听启动失败，请回到 App 查看线程状态。",
             )
         }
         activeAssistantTurnId = null
@@ -3184,23 +3260,18 @@ class AppViewModel(
                 draftMessage = "",
                 pendingImageAttachments = emptyList(),
                 pendingVideoAttachments = emptyList(),
-                message = if (fromQueue) {
-                    "已发送排队消息。"
-                } else if (hasAttachments) {
-                    "附件已发送，等待 Codex 回复。"
-                } else {
-                    "消息已发送，等待实时输出。"
-                },
+                message = WaitingForCodexReplyText,
                 queuedInputs = queuedInputsFor(detail.id),
+                backgroundWatch = nextBackgroundWatch,
                 sessionRealtimeState = it.sessionRealtimeState.copy(
                     statusText = localizedSessionStatus("running"),
                     isInterrupting = false,
                     lastEventText = if (fromQueue) {
-                        "已发送一条排队消息，等待 Codex 回复。"
+                        "已发送一条排队消息，$WaitingForCodexReplyText"
                     } else if (hasAttachments) {
-                        "已发送附件，等待 Codex 回复。"
+                        "已发送附件，$WaitingForCodexReplyText"
                     } else {
-                        "已发送消息，等待 Codex 回复。"
+                        "已发送消息，$WaitingForCodexReplyText"
                     },
                 ),
             )
@@ -3904,6 +3975,12 @@ private fun buildBridgeImageSource(stagedPath: String): String {
 private fun buildBridgeFileSource(stagedPath: String): String {
     val encodedPath = URLEncoder.encode(stagedPath, StandardCharsets.UTF_8.name())
     return "bridge-file://$encodedPath"
+}
+
+private fun buildBridgeDownloadUrl(endpoint: String, path: String): String {
+    val baseUrl = endpoint.trim().trimEnd('/')
+    val encodedPath = URLEncoder.encode(path, StandardCharsets.UTF_8.name())
+    return "$baseUrl/api/file/download?path=$encodedPath"
 }
 
 private fun appendSystemMessage(

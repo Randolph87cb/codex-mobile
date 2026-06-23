@@ -37,6 +37,7 @@ codex.exe app-server
 - 维护结构化实时执行活动，不再只靠 transcript 文本猜系统消息边界
 - 在前后台切换和实时流恢复后主动补拉详情快照，追平断线窗口内的状态
 - 用户发送消息成功后启动会话后台监听前台服务；服务只观察 bridge WebSocket 事件、发送系统通知并在终态或提醒事件后自停，不成为 UI 状态真相源
+- 在详情页显示后台提醒健康状态，在设置页基于现有 bridge 文件下载接口展示最新调试 APK 链接
 - 在发送前预上传图片，再按 bridge 暂存路径提交输入
 
 ### Windows Bridge
@@ -75,7 +76,12 @@ codex.exe app-server
 3. 常驻通知显示“正在等待 Codex 回复”，使用低打扰通知通道。收到 `assistant.done`、`run.status=idle/error`、`run.interrupted`、`tool.request`、`error` 后，服务通过高重要级别结果提醒通道发送系统通知并自停，让线程结束、等待审批、中断和出错尽量以横幅或弹出通知出现。
 4. 普通完成通知会先补拉 `GET /api/session/:id`，从最新 transcript 中提取最后一段 Codex 回复的 1-2 行摘要放进大文本通知；如果补拉或提取失败，则回退为“回复已结束，点按返回 App 查看会话。”。等待审批、中断、出错和后台监听中断继续使用专门文案。
 5. 结果通知区分“回复已结束 / 等待审批 / 已中断 / 出错 / 后台监听中断”。点击通知会打开 App，并携带 `sessionId`；客户端会保留待打开目标，已连接时直接导航并补拉详情，未连接时主动使用现有 endpoint/token 连接 bridge，连接失败时保留目标并用中文提示用户，稍后连接成功后继续打开。
-6. Android 13+ 会在 App 启动时请求 `POST_NOTIFICATIONS`。如果用户未授权，后台监听不因此崩溃，但系统可能不展示结果通知。
+6. Android 13+ 会在 App 启动时请求 `POST_NOTIFICATIONS`。如果用户未授权，后台监听不因此崩溃，但系统可能不展示结果通知，详情页会显示“通知权限未开启”。
+7. App 在发送成功后把输入区清焦点，并显示“正在等待 Codex 回复，完成后会通知你”；当前轮运行中保留清晰的“终止当前轮”操作。
+
+### 调试包下载
+
+Android 设置页复用 bridge 的 `GET /api/file/download?path=...`，把 `D:\workspace\codex-mobile\android\app\build\outputs\apk\debug\app-debug.apk` 编码成当前 bridge 下载 URL。该能力只展示和复制链接，不新建云服务，也不改变 bridge 协议；当前连接不可用时显示中文提示。
 
 ### 图片输入
 
