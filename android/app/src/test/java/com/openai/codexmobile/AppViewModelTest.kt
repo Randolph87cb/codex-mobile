@@ -371,10 +371,59 @@ class AppViewModelTest {
         assertEquals(listOf("sess_waiting_notice"), watchedSessions)
         assertEquals("正在等待 Codex 回复，完成后会通知你。", viewModel.uiState.value.message)
         assertEquals("后台提醒已开启", viewModel.uiState.value.backgroundWatch.statusText)
-        assertEquals("sess_waiting_notice", viewModel.uiState.value.backgroundWatch.activeSessionId)
+        assertEquals(setOf("sess_waiting_notice"), viewModel.uiState.value.backgroundWatch.activeSessionIds)
+        assertTrue(viewModel.uiState.value.backgroundWatch.isWatching("sess_waiting_notice"))
         assertTrue(
             viewModel.uiState.value.sessionRealtimeState.lastEventText
                 ?.contains("完成后会通知你") == true,
+        )
+    }
+
+    @Test
+    fun sendInputAddsBackgroundWatchSessionWithoutReplacingExistingOnes() = runTest(dispatcher.scheduler) {
+        val firstDetail = sampleDetail(id = "sess_watch_one", status = "idle")
+        val secondDetail = sampleDetail(id = "sess_watch_two", status = "idle")
+        val bridgeApi = FakeBridgeApi(createdDetail = firstDetail)
+        val repository = FakeSessionRepository(
+            sessionSummaries = listOf(firstDetail.toSummary(), secondDetail.toSummary()),
+            detailsById = mapOf(
+                firstDetail.id to firstDetail,
+                secondDetail.id to secondDetail,
+            ),
+        )
+        val watchedSessions = mutableListOf<String>()
+        val viewModel = AppViewModel(
+            bridgeApi = bridgeApi,
+            sessionRepository = repository,
+            settingsStore = FakeAppSettingsStore(),
+            appLogger = FakeAppLogger(),
+            startSessionWatch = { sessionId -> watchedSessions += sessionId },
+        )
+
+        viewModel.setNotificationPermissionGranted(true)
+        viewModel.openSessionDetail(firstDetail.id)
+        advanceUntilIdle()
+        viewModel.updateDraftMessage("第一条")
+        viewModel.sendInput()
+        advanceUntilIdle()
+        viewModel.openSessionDetail(secondDetail.id)
+        advanceUntilIdle()
+        viewModel.updateDraftMessage("第二条")
+        viewModel.sendInput()
+        advanceUntilIdle()
+
+        assertEquals(listOf("sess_watch_one", "sess_watch_two"), watchedSessions)
+        assertEquals(
+            setOf("sess_watch_one", "sess_watch_two"),
+            viewModel.uiState.value.backgroundWatch.activeSessionIds,
+        )
+        assertEquals(
+            "后台提醒已开启",
+            viewModel.uiState.value.backgroundWatch.statusTextForSession("sess_watch_two"),
+        )
+        assertEquals(
+            "后台提醒已开启",
+            viewModel.uiState.value.backgroundWatch.statusTextForSession("sess_watch_one"),
         )
     }
 
@@ -403,7 +452,7 @@ class AppViewModelTest {
 
         assertEquals("后台监听中断", viewModel.uiState.value.backgroundWatch.statusText)
         assertTrue(viewModel.uiState.value.backgroundWatch.helperText.contains("前台服务启动失败"))
-        assertNull(viewModel.uiState.value.backgroundWatch.activeSessionId)
+        assertEquals(emptySet<String>(), viewModel.uiState.value.backgroundWatch.activeSessionIds)
     }
 
     @Test

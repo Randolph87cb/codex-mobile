@@ -1358,7 +1358,7 @@ private fun StatusStrip(
         detail?.goal == null -> "未设置"
         else -> localizedGoalStatus(detail.goal.status)
     }
-    val backgroundWatchStatusText = backgroundWatch.statusText
+    val backgroundWatchStatusText = backgroundWatch.statusTextForSession(detail?.id)
     val backgroundWatchHealthy = backgroundWatchStatusText == "后台提醒已开启" ||
         backgroundWatchStatusText == "后台提醒可用"
     val backgroundWatchWarning = backgroundWatchStatusText == "通知权限未开启" ||
@@ -1377,6 +1377,7 @@ private fun StatusStrip(
     }
     val backgroundWatchCompactText = when (backgroundWatchStatusText) {
         "后台提醒已开启", "后台提醒可用" -> "已开启"
+        "其他线程监听中" -> "其他线程"
         "通知权限未开启" -> "未授权"
         "后台监听中断" -> "中断"
         else -> "待确认"

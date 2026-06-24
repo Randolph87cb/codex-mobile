@@ -1,6 +1,7 @@
 package com.openai.codexmobile.service
 
 import com.openai.codexmobile.data.SessionStreamEvent
+import kotlinx.coroutines.Job
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -185,5 +186,79 @@ class SessionWatchEventReducerTest {
     fun dismissedPresenceNotificationIsRestoredOnlyWhenPresenceIsActive() {
         assertTrue(SessionWatchDismissPolicy.shouldRestorePresenceNotification(presenceActive = true))
         assertFalse(SessionWatchDismissPolicy.shouldRestorePresenceNotification(presenceActive = false))
+    }
+
+    @Test
+    fun watchPoolAddsMultipleSessionsWithoutCancellingExistingJobs() {
+        val pool = SessionWatchJobPool()
+        val firstJob = Job()
+        val secondJob = Job()
+        val duplicateJob = Job()
+
+        assertTrue(pool.addIfAbsent("session-1", firstJob))
+        assertTrue(pool.addIfAbsent("session-2", secondJob))
+        assertFalse(pool.addIfAbsent("session-1", duplicateJob))
+
+        assertEquals(listOf("session-1", "session-2"), pool.activeSessionIds())
+        assertTrue(firstJob.isActive)
+        assertTrue(secondJob.isActive)
+        assertTrue(duplicateJob.isActive)
+
+        duplicateJob.cancel()
+        firstJob.cancel()
+        secondJob.cancel()
+    }
+
+    @Test
+    fun watchPoolRemovesOneSessionWithoutRemovingAnother() {
+        val pool = SessionWatchJobPool()
+        val firstJob = Job()
+        val secondJob = Job()
+
+        pool.addIfAbsent("session-1", firstJob)
+        pool.addIfAbsent("session-2", secondJob)
+
+        assertEquals(firstJob, pool.remove("session-1"))
+        assertEquals(listOf("session-2"), pool.activeSessionIds())
+        assertTrue(secondJob.isActive)
+
+        firstJob.cancel()
+        secondJob.cancel()
+    }
+
+    @Test
+    fun watchPoolMarksTerminalSessionOnlyOnce() {
+        val pool = SessionWatchJobPool()
+
+        assertTrue(pool.markTerminalHandled("session-1"))
+        assertFalse(pool.markTerminalHandled("session-1"))
+        assertTrue(pool.markTerminalHandled("session-2"))
+    }
+
+    @Test
+    fun pendingSessionWatchStoreCodecSanitizesBlankAndDuplicateSessionIds() {
+        val sessionIds = PendingSessionWatchStoreCodec.sanitize(
+            listOf(" session-1 ", "", "session-2", "session-1", "   "),
+        )
+
+        assertEquals(setOf("session-1", "session-2"), sessionIds)
+    }
+
+    @Test
+    fun reconnectPolicyCapsAtMaximumDelay() {
+        assertEquals(1_000L, SessionWatchReconnectPolicy.delayMillis(0))
+        assertEquals(2_000L, SessionWatchReconnectPolicy.delayMillis(1))
+        assertEquals(5_000L, SessionWatchReconnectPolicy.delayMillis(2))
+        assertEquals(10_000L, SessionWatchReconnectPolicy.delayMillis(3))
+        assertEquals(10_000L, SessionWatchReconnectPolicy.delayMillis(99))
+    }
+
+    @Test
+    fun snapshotPolicyInfersTerminalResultFromDetailStatus() {
+        assertEquals(SessionWatchResult.Done, SessionWatchSnapshotPolicy.resultForStatus("idle"))
+        assertEquals(SessionWatchResult.Done, SessionWatchSnapshotPolicy.resultForStatus("completed"))
+        assertEquals(SessionWatchResult.Error(null), SessionWatchSnapshotPolicy.resultForStatus("failed"))
+        assertEquals(SessionWatchResult.Interrupted, SessionWatchSnapshotPolicy.resultForStatus("cancelled"))
+        assertNull(SessionWatchSnapshotPolicy.resultForStatus("running"))
     }
 }

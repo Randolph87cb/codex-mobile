@@ -658,7 +658,7 @@ bridge 当前默认 `bodyLimit` 为 `32MB`，可用环境变量 `BRIDGE_BODY_LIM
 Android 当前有两类消费者会使用同一条实时流接口：
 
 - 会话详情页：作为 UI 状态同步来源，负责渲染实时输出、执行过程和审批状态。
-- 后台会话监听前台服务：用户在 App 内成功发送消息后启动，只观察当前 `sessionId` 的事件，在 `assistant.done`、`run.status=idle/error`、`run.interrupted`、`tool.request`、`error` 时发系统通知并自停。该服务不接管 UI 状态，也不作为会话状态真相源。
+- 后台会话监听前台服务：用户在 App 内成功发送消息后把该 `sessionId` 加入监听池；多个线程可以同时监听，某个线程在 `assistant.done`、`run.status=idle/error`、`run.interrupted`、`tool.request`、`error` 时只停止并移除自己的监听任务，同时发送对应系统通知。该服务不接管 UI 状态，也不作为会话状态真相源。
 
 后台监听服务从 Android 本地设置读取 bridge 地址和 Bearer token，复用客户端已有 WebSocket 解析逻辑；Android 13+ 如果用户未授予通知权限，服务仍会尽量保持前台监听，结果提醒可能不会显示，用户需要回到 App 查看状态。详情页顶部会在排队和目标状态旁边同步显示轻量后台提醒状态。通知通道拆成两类：常驻监听通知使用低打扰通道，线程结束、等待审批、中断和出错使用高重要级别结果提醒通道，以便系统尽量以横幅或弹出通知提示用户。
 

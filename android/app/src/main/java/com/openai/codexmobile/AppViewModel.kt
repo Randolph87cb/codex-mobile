@@ -199,16 +199,19 @@ data class PendingVideoAttachmentUiState(
 
 data class BackgroundWatchUiState(
     val notificationPermissionGranted: Boolean? = null,
-    val activeSessionId: String? = null,
+    val activeSessionIds: Set<String> = emptySet(),
     val interrupted: Boolean = false,
     val interruptionMessage: String? = null,
 ) {
+    val activeCount: Int
+        get() = activeSessionIds.size
+
     val statusText: String
         get() = when {
             notificationPermissionGranted == false -> "通知权限未开启"
             interrupted -> "后台监听中断"
-            activeSessionId != null -> "后台提醒已开启"
-            notificationPermissionGranted == true -> "后台提醒已开启"
+            activeCount > 0 -> "后台提醒已开启"
+            notificationPermissionGranted == true -> "后台提醒可用"
             else -> "后台提醒待确认"
         }
 
@@ -217,10 +220,37 @@ data class BackgroundWatchUiState(
             notificationPermissionGranted == false -> "系统通知权限关闭，线程结束时可能不会弹出提醒。"
             interrupted -> interruptionMessage?.takeIf { it.isNotBlank() }
                 ?: "后台监听未能启动，请回到 App 查看线程状态。"
-            activeSessionId != null -> "当前线程结束、等待审批或出错时会发系统通知。"
+            activeCount > 0 -> "正在监听 $activeCount 个线程；线程结束、等待审批或出错时会发系统通知。"
             notificationPermissionGranted == true -> "发送消息后会启动后台监听。"
             else -> "正在确认系统通知权限。"
         }
+
+    fun isWatching(sessionId: String?): Boolean {
+        return sessionId?.takeIf { it.isNotBlank() }?.let(activeSessionIds::contains) == true
+    }
+
+    fun statusTextForSession(sessionId: String?): String {
+        return when {
+            notificationPermissionGranted == false -> "通知权限未开启"
+            interrupted -> "后台监听中断"
+            isWatching(sessionId) -> "后台提醒已开启"
+            activeCount > 0 -> "其他线程监听中"
+            notificationPermissionGranted == true -> "后台提醒可用"
+            else -> "后台提醒待确认"
+        }
+    }
+
+    fun helperTextForSession(sessionId: String?): String {
+        return when {
+            notificationPermissionGranted == false -> "系统通知权限关闭，线程结束时可能不会弹出提醒。"
+            interrupted -> interruptionMessage?.takeIf { it.isNotBlank() }
+                ?: "后台监听未能启动，请回到 App 查看线程状态。"
+            isWatching(sessionId) -> "当前线程结束、等待审批或出错时会发系统通知。"
+            activeCount > 0 -> "正在监听 $activeCount 个线程；当前线程发送消息后也会加入后台监听。"
+            notificationPermissionGranted == true -> "发送消息后会启动后台监听。"
+            else -> "正在确认系统通知权限。"
+        }
+    }
 }
 
 enum class PendingVideoUploadState {
@@ -3273,13 +3303,13 @@ class AppViewModel(
         }
         val nextBackgroundWatch = if (watchStartResult.isSuccess) {
             uiState.value.backgroundWatch.copy(
-                activeSessionId = detail.id,
+                activeSessionIds = uiState.value.backgroundWatch.activeSessionIds + detail.id,
                 interrupted = false,
                 interruptionMessage = null,
             )
         } else {
             uiState.value.backgroundWatch.copy(
-                activeSessionId = null,
+                activeSessionIds = uiState.value.backgroundWatch.activeSessionIds - detail.id,
                 interrupted = true,
                 interruptionMessage = watchStartResult.exceptionOrNull()?.message
                     ?.takeIf { it.isNotBlank() }

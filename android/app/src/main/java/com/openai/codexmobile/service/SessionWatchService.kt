@@ -26,22 +26,26 @@ import com.openai.codexmobile.data.SharedPreferencesAppSettingsStore
 import com.openai.codexmobile.data.defaultEndpointForCurrentDevice
 import com.openai.codexmobile.diagnostics.FileAppLogger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class SessionWatchService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var watchJob: Job? = null
-    private var activeSessionId: String? = null
+    private val watchPool = SessionWatchJobPool()
     private var presenceActive = false
     private var appInForeground = false
     private var visibleSessionId: String? = null
     private lateinit var appLogger: FileAppLogger
+    private val pendingWatchStore: PendingSessionWatchStore by lazy {
+        PendingSessionWatchStore(applicationContext)
+    }
     private val notificationDismissedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_WATCH_NOTIFICATION_DISMISSED) {
@@ -51,7 +55,7 @@ class SessionWatchService : Service() {
                 return
             }
             appLogger.info(TAG, "常驻通知被用户滑掉，重新显示后台接收通知。")
-            startOrUpdateForegroundNotification(activeSessionId)
+            startOrUpdateForegroundNotification()
         }
     }
 
@@ -71,7 +75,8 @@ class SessionWatchService : Service() {
         return when (intent?.action) {
             ACTION_START_PRESENCE -> {
                 presenceActive = true
-                startOrUpdateForegroundNotification(activeSessionId)
+                restorePendingSessionWatches()
+                startOrUpdateForegroundNotification()
                 START_STICKY
             }
             ACTION_STOP_PRESENCE -> {
@@ -105,22 +110,25 @@ class SessionWatchService : Service() {
         }
 
         presenceActive = true
-        startOrUpdateForegroundNotification(sessionId)
-        if (activeSessionId == sessionId && watchJob?.isActive == true) {
+        pendingWatchStore.add(sessionId)
+        val job = serviceScope.launch(start = CoroutineStart.LAZY) {
+            watchSession(sessionId)
+        }
+        val added = watchPool.addIfAbsent(sessionId, job)
+        if (!added) {
+            job.cancel()
             appLogger.info(TAG, "后台监听已在运行：sessionId=$sessionId")
+            startOrUpdateForegroundNotification()
             return START_REDELIVER_INTENT
         }
 
-        watchJob?.cancel()
-        activeSessionId = sessionId
-        watchJob = serviceScope.launch {
-            watchSession(sessionId)
-        }
+        job.start()
+        startOrUpdateForegroundNotification()
         return START_REDELIVER_INTENT
     }
 
     override fun onDestroy() {
-        watchJob?.cancel()
+        watchPool.cancelAll()
         serviceScope.cancel()
         runCatching {
             unregisterReceiver(notificationDismissedReceiver)
@@ -153,31 +161,85 @@ class SessionWatchService : Service() {
 
             provider.updateAuthToken(settings.authToken)
             provider.connect(endpoint)
-            appLogger.info(TAG, "后台监听已连接 bridge：sessionId=$sessionId")
+            var reconnectAttempt = 0
+            while (watchPool.isWatching(sessionId) && !watchPool.hasTerminalHandled(sessionId)) {
+                appLogger.info(TAG, "后台监听已连接 bridge：sessionId=$sessionId")
+                provider.observeSessionEvents(sessionId).collect { event ->
+                    val decision = SessionWatchEventReducer.reduce(event)
+                    if (decision.result != null) {
+                        handleTerminalResult(provider, sessionId, decision.result)
+                    }
+                    if (decision.stopWatching) {
+                        appLogger.info(TAG, "后台监听收到结束事件：sessionId=$sessionId, result=${decision.result}")
+                        stopWatching(sessionId)
+                    }
+                }
 
-            provider.observeSessionEvents(sessionId).collect { event ->
-                val decision = SessionWatchEventReducer.reduce(event)
-                if (decision.result != null) {
-                    postResultNotification(
-                        sessionId = sessionId,
-                        result = resolveResultNotification(provider, sessionId, decision.result),
-                    )
+                if (!watchPool.isWatching(sessionId) || watchPool.hasTerminalHandled(sessionId)) {
+                    return
                 }
-                if (decision.stopWatching) {
-                    appLogger.info(TAG, "后台监听收到结束事件：sessionId=$sessionId, result=${decision.result}")
-                    stopWatching()
+
+                val snapshotResult = resolveSnapshotTerminalResult(provider, sessionId)
+                if (snapshotResult != null) {
+                    appLogger.info(TAG, "后台监听通过详情快照确认终态：sessionId=$sessionId, result=$snapshotResult")
+                    handleTerminalResult(provider, sessionId, snapshotResult)
+                    stopWatching(sessionId)
+                    return
                 }
+
+                val retryDelayMs = SessionWatchReconnectPolicy.delayMillis(reconnectAttempt)
+                reconnectAttempt += 1
+                appLogger.warn(TAG, "后台监听实时流已关闭，${retryDelayMs}ms 后重连：sessionId=$sessionId")
+                delay(retryDelayMs)
             }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             appLogger.error(TAG, "后台监听中断：sessionId=$sessionId", error)
-            postResultNotification(
+            handleTerminalResult(
+                provider = provider,
                 sessionId = sessionId,
                 result = SessionWatchResult.BackgroundInterrupted(error.message),
             )
-            stopWatching()
+            stopWatching(sessionId)
         }
+    }
+
+    private suspend fun resolveSnapshotTerminalResult(
+        provider: RealBridgeDataProvider,
+        sessionId: String,
+    ): SessionWatchResult? {
+        return try {
+            val detail = provider.getSessionDetail(sessionId) ?: return null
+            detail.pendingApproval?.let { pendingApproval ->
+                return SessionWatchResult.AwaitingApproval(pendingApproval.method)
+            }
+            SessionWatchSnapshotPolicy.resultForStatus(detail.status)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            appLogger.warn(
+                TAG,
+                "后台监听补拉详情判断终态失败：sessionId=$sessionId, error=${error.message ?: "unknown"}",
+            )
+            null
+        }
+    }
+
+    private suspend fun handleTerminalResult(
+        provider: RealBridgeDataProvider,
+        sessionId: String,
+        result: SessionWatchResult,
+    ) {
+        if (!watchPool.markTerminalHandled(sessionId)) {
+            appLogger.info(TAG, "后台监听终态已处理，跳过重复通知：sessionId=$sessionId, result=$result")
+            return
+        }
+        pendingWatchStore.remove(sessionId)
+        postResultNotification(
+            sessionId = sessionId,
+            result = resolveResultNotification(provider, sessionId, result),
+        )
     }
 
     private suspend fun resolveResultNotification(
@@ -209,21 +271,17 @@ class SessionWatchService : Service() {
         }
     }
 
-    private fun stopWatching() {
-        watchJob?.cancel()
-        watchJob = null
-        activeSessionId = null
+    private fun stopWatching(sessionId: String) {
+        watchPool.remove(sessionId)?.cancel()
         if (presenceActive) {
-            startOrUpdateForegroundNotification(null)
+            startOrUpdateForegroundNotification()
         } else {
             stopServiceCompletely()
         }
     }
 
     private fun stopServiceCompletely() {
-        watchJob?.cancel()
-        watchJob = null
-        activeSessionId = null
+        watchPool.cancelAll()
         presenceActive = false
         appInForeground = false
         visibleSessionId = null
@@ -231,14 +289,17 @@ class SessionWatchService : Service() {
         stopSelf()
     }
 
-    private fun startOrUpdateForegroundNotification(sessionId: String?) {
-        val hasActiveSession = sessionId != null
+    private fun startOrUpdateForegroundNotification() {
+        val activeSessionIds = watchPool.activeSessionIds()
+        val activeWatchCount = activeSessionIds.size
+        val singleSessionId = activeSessionIds.singleOrNull()
+        val hasActiveSession = activeWatchCount > 0
         val notification = buildNotification(
             channelId = WATCH_CHANNEL_ID,
-            sessionId = sessionId,
+            sessionId = singleSessionId,
             title = if (hasActiveSession) "Codex 后台监听中" else "Codex Mobile 正在运行",
             text = if (hasActiveSession) {
-                "正在等待 Codex 回复"
+                "正在监听 $activeWatchCount 个线程"
             } else {
                 "保持连接，线程完成后会提醒你"
             },
@@ -283,9 +344,28 @@ class SessionWatchService : Service() {
             priority = NotificationCompat.PRIORITY_HIGH,
         )
         try {
-            NotificationManagerCompat.from(this).notify(RESULT_NOTIFICATION_ID, notification)
+            NotificationManagerCompat.from(this).notify(resultNotificationId(sessionId), notification)
         } catch (error: SecurityException) {
             appLogger.warn(TAG, "发送系统通知失败，可能缺少通知权限：${error.message ?: "unknown"}")
+        }
+    }
+
+    private fun restorePendingSessionWatches() {
+        val pendingSessionIds = pendingWatchStore.load()
+        if (pendingSessionIds.isEmpty()) {
+            return
+        }
+        pendingSessionIds.forEach { sessionId ->
+            val job = serviceScope.launch(start = CoroutineStart.LAZY) {
+                watchSession(sessionId)
+            }
+            val added = watchPool.addIfAbsent(sessionId, job)
+            if (added) {
+                appLogger.info(TAG, "恢复后台监听：sessionId=$sessionId")
+                job.start()
+            } else {
+                job.cancel()
+            }
         }
     }
 
@@ -388,9 +468,13 @@ class SessionWatchService : Service() {
         private const val WATCH_CHANNEL_ID = "codex_session_watch"
         private const val RESULT_CHANNEL_ID = "codex_session_result_alerts"
         private const val WATCH_NOTIFICATION_ID = 4101
-        private const val RESULT_NOTIFICATION_ID = 4102
+        private const val RESULT_NOTIFICATION_ID_BASE = 4102
         private const val OPEN_APP_REQUEST_CODE = 4103
         private const val WATCH_DISMISSED_REQUEST_CODE = 4104
+
+        private fun resultNotificationId(sessionId: String): Int {
+            return RESULT_NOTIFICATION_ID_BASE + (sessionId.hashCode().ushr(1) % 1_000_000)
+        }
 
         fun startPresence(context: Context) {
             val intent = Intent(context, SessionWatchService::class.java)
@@ -433,6 +517,123 @@ class SessionWatchService : Service() {
 internal object SessionWatchDismissPolicy {
     fun shouldRestorePresenceNotification(presenceActive: Boolean): Boolean {
         return presenceActive
+    }
+}
+
+internal object SessionWatchReconnectPolicy {
+    private val delaysMs = longArrayOf(1_000L, 2_000L, 5_000L, 10_000L)
+
+    fun delayMillis(attempt: Int): Long {
+        return delaysMs[attempt.coerceAtLeast(0).coerceAtMost(delaysMs.lastIndex)]
+    }
+}
+
+internal object SessionWatchSnapshotPolicy {
+    fun resultForStatus(status: String): SessionWatchResult? {
+        return when (status.lowercase()) {
+            "idle", "completed", "complete", "done" -> SessionWatchResult.Done
+            "error", "failed" -> SessionWatchResult.Error(null)
+            "interrupted", "cancelled", "canceled" -> SessionWatchResult.Interrupted
+            else -> null
+        }
+    }
+}
+
+internal class SessionWatchJobPool {
+    private val lock = Any()
+    private val jobsBySessionId = LinkedHashMap<String, Job>()
+    private val terminalHandledSessionIds = mutableSetOf<String>()
+
+    fun addIfAbsent(sessionId: String, job: Job): Boolean {
+        val normalizedSessionId = sessionId.takeIf { it.isNotBlank() } ?: return false
+        return synchronized(lock) {
+            if (jobsBySessionId[normalizedSessionId]?.isActive == true) {
+                false
+            } else {
+                jobsBySessionId[normalizedSessionId] = job
+                terminalHandledSessionIds.remove(normalizedSessionId)
+                true
+            }
+        }
+    }
+
+    fun remove(sessionId: String): Job? {
+        return synchronized(lock) {
+            jobsBySessionId.remove(sessionId)
+        }
+    }
+
+    fun cancelAll() {
+        val jobs = synchronized(lock) {
+            val currentJobs = jobsBySessionId.values.toList()
+            jobsBySessionId.clear()
+            terminalHandledSessionIds.clear()
+            currentJobs
+        }
+        jobs.forEach { it.cancel() }
+    }
+
+    fun activeSessionIds(): List<String> {
+        return synchronized(lock) {
+            jobsBySessionId.keys.toList()
+        }
+    }
+
+    fun isWatching(sessionId: String): Boolean {
+        return synchronized(lock) {
+            jobsBySessionId[sessionId]?.isActive == true
+        }
+    }
+
+    fun markTerminalHandled(sessionId: String): Boolean {
+        return synchronized(lock) {
+            terminalHandledSessionIds.add(sessionId)
+        }
+    }
+
+    fun hasTerminalHandled(sessionId: String): Boolean {
+        return synchronized(lock) {
+            terminalHandledSessionIds.contains(sessionId)
+        }
+    }
+}
+
+internal object PendingSessionWatchStoreCodec {
+    fun sanitize(sessionIds: Iterable<String>): Set<String> {
+        return sessionIds
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toCollection(linkedSetOf())
+    }
+}
+
+internal class PendingSessionWatchStore(context: Context) {
+    private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun load(): Set<String> {
+        return PendingSessionWatchStoreCodec.sanitize(
+            preferences.getStringSet(KEY_PENDING_SESSION_IDS, emptySet()).orEmpty(),
+        )
+    }
+
+    fun add(sessionId: String) {
+        update { current -> current + sessionId }
+    }
+
+    fun remove(sessionId: String) {
+        update { current -> current - sessionId }
+    }
+
+    private fun update(transform: (Set<String>) -> Set<String>) {
+        val nextSessionIds = PendingSessionWatchStoreCodec.sanitize(transform(load()))
+        preferences.edit()
+            .putStringSet(KEY_PENDING_SESSION_IDS, nextSessionIds)
+            .apply()
+    }
+
+    private companion object {
+        const val PREFS_NAME = "codex_session_watch"
+        const val KEY_PENDING_SESSION_IDS = "pending_session_ids"
     }
 }
 
