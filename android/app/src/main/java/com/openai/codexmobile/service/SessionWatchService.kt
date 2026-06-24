@@ -6,8 +6,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -40,11 +42,29 @@ class SessionWatchService : Service() {
     private var appInForeground = false
     private var visibleSessionId: String? = null
     private lateinit var appLogger: FileAppLogger
+    private val notificationDismissedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_WATCH_NOTIFICATION_DISMISSED) {
+                return
+            }
+            if (!SessionWatchDismissPolicy.shouldRestorePresenceNotification(presenceActive)) {
+                return
+            }
+            appLogger.info(TAG, "常驻通知被用户滑掉，重新显示后台接收通知。")
+            startOrUpdateForegroundNotification(activeSessionId)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         appLogger = FileAppLogger(applicationContext)
         ensureNotificationChannels()
+        ContextCompat.registerReceiver(
+            this,
+            notificationDismissedReceiver,
+            IntentFilter(ACTION_WATCH_NOTIFICATION_DISMISSED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -102,6 +122,9 @@ class SessionWatchService : Service() {
     override fun onDestroy() {
         watchJob?.cancel()
         serviceScope.cancel()
+        runCatching {
+            unregisterReceiver(notificationDismissedReceiver)
+        }
         super.onDestroy()
     }
 
@@ -274,7 +297,7 @@ class SessionWatchService : Service() {
         ongoing: Boolean,
         priority: Int,
     ): Notification {
-        return NotificationCompat.Builder(this, channelId)
+        val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
@@ -287,7 +310,10 @@ class SessionWatchService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setDefaults(if (ongoing) 0 else NotificationCompat.DEFAULT_ALL)
             .setOnlyAlertOnce(ongoing)
-            .build()
+        if (ongoing) {
+            builder.setDeleteIntent(buildNotificationDismissedPendingIntent())
+        }
+        return builder.build()
     }
 
     private fun buildOpenAppPendingIntent(sessionId: String?): PendingIntent {
@@ -300,6 +326,17 @@ class SessionWatchService : Service() {
         return PendingIntent.getActivity(
             this,
             sessionId?.hashCode() ?: OPEN_APP_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun buildNotificationDismissedPendingIntent(): PendingIntent {
+        val intent = Intent(ACTION_WATCH_NOTIFICATION_DISMISSED)
+            .setPackage(packageName)
+        return PendingIntent.getBroadcast(
+            this,
+            WATCH_DISMISSED_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -344,6 +381,8 @@ class SessionWatchService : Service() {
         private const val ACTION_STOP_PRESENCE = "com.openai.codexmobile.action.STOP_PRESENCE"
         private const val ACTION_WATCH_SESSION = "com.openai.codexmobile.action.WATCH_SESSION"
         private const val ACTION_UPDATE_VISIBLE_SESSION = "com.openai.codexmobile.action.UPDATE_VISIBLE_SESSION"
+        private const val ACTION_WATCH_NOTIFICATION_DISMISSED =
+            "com.openai.codexmobile.action.WATCH_NOTIFICATION_DISMISSED"
         private const val EXTRA_APP_IN_FOREGROUND = "com.openai.codexmobile.extra.APP_IN_FOREGROUND"
         private const val EXTRA_VISIBLE_SESSION_ID = "com.openai.codexmobile.extra.VISIBLE_SESSION_ID"
         private const val WATCH_CHANNEL_ID = "codex_session_watch"
@@ -351,6 +390,7 @@ class SessionWatchService : Service() {
         private const val WATCH_NOTIFICATION_ID = 4101
         private const val RESULT_NOTIFICATION_ID = 4102
         private const val OPEN_APP_REQUEST_CODE = 4103
+        private const val WATCH_DISMISSED_REQUEST_CODE = 4104
 
         fun startPresence(context: Context) {
             val intent = Intent(context, SessionWatchService::class.java)
@@ -387,6 +427,12 @@ class SessionWatchService : Service() {
                 .putExtra(EXTRA_SESSION_ID, sessionId)
             ContextCompat.startForegroundService(context, intent)
         }
+    }
+}
+
+internal object SessionWatchDismissPolicy {
+    fun shouldRestorePresenceNotification(presenceActive: Boolean): Boolean {
+        return presenceActive
     }
 }
 

@@ -180,4 +180,10 @@ class SessionWatchEventReducerTest {
 
         assertTrue(shouldPost)
     }
+
+    @Test
+    fun dismissedPresenceNotificationIsRestoredOnlyWhenPresenceIsActive() {
+        assertTrue(SessionWatchDismissPolicy.shouldRestorePresenceNotification(presenceActive = true))
+        assertFalse(SessionWatchDismissPolicy.shouldRestorePresenceNotification(presenceActive = false))
+    }
 }
