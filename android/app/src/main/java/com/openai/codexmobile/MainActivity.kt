@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestedSessionId.value = intent.sessionIdExtra()
         requestNotificationPermissionIfNeeded()
+        SessionWatchService.startPresence(applicationContext)
 
         val settingsStore = SharedPreferencesAppSettingsStore(
             context = applicationContext,
@@ -81,6 +82,13 @@ class MainActivity : ComponentActivity() {
                 CodexMobileApp(
                     appViewModel = appViewModel,
                     onInstallDebugApk = ::downloadAndInstallDebugApk,
+                    onVisibleSessionChanged = { appInForeground, sessionId ->
+                        SessionWatchService.updateVisibleSession(
+                            context = applicationContext,
+                            appInForeground = appInForeground,
+                            sessionId = sessionId,
+                        )
+                    },
                 )
             }
         }
@@ -89,6 +97,13 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         appViewModel?.setNotificationPermissionGranted(canPostNotifications())
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) {
+            SessionWatchService.stopPresence(applicationContext)
+        }
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

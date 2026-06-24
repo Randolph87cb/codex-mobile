@@ -36,6 +36,9 @@ class SessionWatchService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var watchJob: Job? = null
     private var activeSessionId: String? = null
+    private var presenceActive = false
+    private var appInForeground = false
+    private var visibleSessionId: String? = null
     private lateinit var appLogger: FileAppLogger
 
     override fun onCreate() {
@@ -45,14 +48,44 @@ class SessionWatchService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return when (intent?.action) {
+            ACTION_START_PRESENCE -> {
+                presenceActive = true
+                startOrUpdateForegroundNotification(activeSessionId)
+                START_STICKY
+            }
+            ACTION_STOP_PRESENCE -> {
+                stopServiceCompletely()
+                START_NOT_STICKY
+            }
+            ACTION_UPDATE_VISIBLE_SESSION -> {
+                appInForeground = intent.getBooleanExtra(EXTRA_APP_IN_FOREGROUND, false)
+                visibleSessionId = intent.getStringExtra(EXTRA_VISIBLE_SESSION_ID)
+                    ?.takeIf { it.isNotBlank() }
+                START_STICKY
+            }
+            ACTION_WATCH_SESSION, null -> {
+                startSessionWatchFromIntent(intent, startId)
+            }
+            else -> {
+                appLogger.warn(TAG, "收到未知后台监听指令：action=${intent.action}")
+                START_NOT_STICKY
+            }
+        }
+    }
+
+    private fun startSessionWatchFromIntent(intent: Intent?, startId: Int): Int {
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID)?.takeIf { it.isNotBlank() }
         if (sessionId == null) {
             appLogger.warn(TAG, "启动后台监听失败：缺少 sessionId。")
-            stopSelf(startId)
+            if (!presenceActive) {
+                stopSelf(startId)
+            }
             return START_NOT_STICKY
         }
 
-        startAsForeground(sessionId)
+        presenceActive = true
+        startOrUpdateForegroundNotification(sessionId)
         if (activeSessionId == sessionId && watchJob?.isActive == true) {
             appLogger.info(TAG, "后台监听已在运行：sessionId=$sessionId")
             return START_REDELIVER_INTENT
@@ -73,6 +106,11 @@ class SessionWatchService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopServiceCompletely()
+        super.onTaskRemoved(rootIntent)
+    }
 
     private suspend fun watchSession(sessionId: String) {
         val provider = RealBridgeDataProvider(appLogger)
@@ -152,16 +190,35 @@ class SessionWatchService : Service() {
         watchJob?.cancel()
         watchJob = null
         activeSessionId = null
+        if (presenceActive) {
+            startOrUpdateForegroundNotification(null)
+        } else {
+            stopServiceCompletely()
+        }
+    }
+
+    private fun stopServiceCompletely() {
+        watchJob?.cancel()
+        watchJob = null
+        activeSessionId = null
+        presenceActive = false
+        appInForeground = false
+        visibleSessionId = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun startAsForeground(sessionId: String) {
+    private fun startOrUpdateForegroundNotification(sessionId: String?) {
+        val hasActiveSession = sessionId != null
         val notification = buildNotification(
             channelId = WATCH_CHANNEL_ID,
             sessionId = sessionId,
-            title = "Codex 后台监听中",
-            text = "正在等待 Codex 回复",
+            title = if (hasActiveSession) "Codex 后台监听中" else "Codex Mobile 正在运行",
+            text = if (hasActiveSession) {
+                "正在等待 Codex 回复"
+            } else {
+                "保持连接，线程完成后会提醒你"
+            },
             ongoing = true,
             priority = NotificationCompat.PRIORITY_LOW,
         )
@@ -180,6 +237,15 @@ class SessionWatchService : Service() {
         sessionId: String,
         result: SessionWatchResult,
     ) {
+        if (!SessionWatchNotificationPolicy.shouldPostResultNotification(
+                appInForeground = appInForeground,
+                visibleSessionId = visibleSessionId,
+                resultSessionId = sessionId,
+            )
+        ) {
+            appLogger.info(TAG, "用户正在查看当前会话，跳过结果通知：sessionId=$sessionId, result=$result")
+            return
+        }
         if (!canPostNotifications()) {
             appLogger.warn(TAG, "通知权限未授予，跳过结果通知：sessionId=$sessionId, result=$result")
             return
@@ -202,7 +268,7 @@ class SessionWatchService : Service() {
 
     private fun buildNotification(
         channelId: String,
-        sessionId: String,
+        sessionId: String?,
         title: String,
         text: String,
         ongoing: Boolean,
@@ -213,24 +279,27 @@ class SessionWatchService : Service() {
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(buildOpenSessionPendingIntent(sessionId))
+            .setContentIntent(buildOpenAppPendingIntent(sessionId))
             .setOngoing(ongoing)
             .setAutoCancel(!ongoing)
             .setPriority(priority)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setDefaults(if (ongoing) 0 else NotificationCompat.DEFAULT_ALL)
+            .setOnlyAlertOnce(ongoing)
             .build()
     }
 
-    private fun buildOpenSessionPendingIntent(sessionId: String): PendingIntent {
+    private fun buildOpenAppPendingIntent(sessionId: String?): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_SESSION_ID, sessionId)
+            if (sessionId != null) {
+                putExtra(EXTRA_SESSION_ID, sessionId)
+            }
         }
         return PendingIntent.getActivity(
             this,
-            sessionId.hashCode(),
+            sessionId?.hashCode() ?: OPEN_APP_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -271,19 +340,63 @@ class SessionWatchService : Service() {
         const val EXTRA_SESSION_ID = "com.openai.codexmobile.extra.SESSION_ID"
 
         private const val TAG = "SessionWatchService"
+        private const val ACTION_START_PRESENCE = "com.openai.codexmobile.action.START_PRESENCE"
+        private const val ACTION_STOP_PRESENCE = "com.openai.codexmobile.action.STOP_PRESENCE"
+        private const val ACTION_WATCH_SESSION = "com.openai.codexmobile.action.WATCH_SESSION"
+        private const val ACTION_UPDATE_VISIBLE_SESSION = "com.openai.codexmobile.action.UPDATE_VISIBLE_SESSION"
+        private const val EXTRA_APP_IN_FOREGROUND = "com.openai.codexmobile.extra.APP_IN_FOREGROUND"
+        private const val EXTRA_VISIBLE_SESSION_ID = "com.openai.codexmobile.extra.VISIBLE_SESSION_ID"
         private const val WATCH_CHANNEL_ID = "codex_session_watch"
         private const val RESULT_CHANNEL_ID = "codex_session_result_alerts"
         private const val WATCH_NOTIFICATION_ID = 4101
         private const val RESULT_NOTIFICATION_ID = 4102
+        private const val OPEN_APP_REQUEST_CODE = 4103
+
+        fun startPresence(context: Context) {
+            val intent = Intent(context, SessionWatchService::class.java)
+                .setAction(ACTION_START_PRESENCE)
+            ContextCompat.startForegroundService(context, intent)
+        }
+
+        fun stopPresence(context: Context) {
+            val intent = Intent(context, SessionWatchService::class.java)
+                .setAction(ACTION_STOP_PRESENCE)
+            context.startService(intent)
+        }
+
+        fun updateVisibleSession(
+            context: Context,
+            appInForeground: Boolean,
+            sessionId: String?,
+        ) {
+            val intent = Intent(context, SessionWatchService::class.java)
+                .setAction(ACTION_UPDATE_VISIBLE_SESSION)
+                .putExtra(EXTRA_APP_IN_FOREGROUND, appInForeground)
+            sessionId?.takeIf { it.isNotBlank() }?.let { visibleSessionId ->
+                intent.putExtra(EXTRA_VISIBLE_SESSION_ID, visibleSessionId)
+            }
+            context.startService(intent)
+        }
 
         fun startWatching(context: Context, sessionId: String) {
             if (sessionId.isBlank()) {
                 return
             }
             val intent = Intent(context, SessionWatchService::class.java)
+                .setAction(ACTION_WATCH_SESSION)
                 .putExtra(EXTRA_SESSION_ID, sessionId)
             ContextCompat.startForegroundService(context, intent)
         }
+    }
+}
+
+internal object SessionWatchNotificationPolicy {
+    fun shouldPostResultNotification(
+        appInForeground: Boolean,
+        visibleSessionId: String?,
+        resultSessionId: String,
+    ): Boolean {
+        return !(appInForeground && visibleSessionId == resultSessionId)
     }
 }
 

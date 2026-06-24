@@ -49,6 +49,7 @@ private object Routes {
 fun CodexMobileApp(
     appViewModel: AppViewModel,
     onInstallDebugApk: suspend (String, String) -> String = { _, _ -> "当前版本不支持直接安装 APK。" },
+    onVisibleSessionChanged: (Boolean, String?) -> Unit = { _, _ -> },
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -59,6 +60,14 @@ fun CodexMobileApp(
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val appInForeground = remember {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+    }
+    val visibleSessionId = if (currentRoute == Routes.SessionDetail) {
+        backStackEntry?.arguments?.getString("sessionId")?.takeIf { it.isNotBlank() }
+    } else {
+        null
+    }
     val navigateToSessionsAfterConnect = remember { mutableStateOf(false) }
     val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isEmpty()) {
@@ -122,6 +131,10 @@ fun CodexMobileApp(
         uiState.message?.let { snackbarHostState.showSnackbar(it) }
     }
 
+    LaunchedEffect(appInForeground.value, visibleSessionId) {
+        onVisibleSessionChanged(appInForeground.value, visibleSessionId)
+    }
+
     LaunchedEffect(uiState.notificationNavigationSessionId) {
         val sessionId = uiState.notificationNavigationSessionId ?: return@LaunchedEffect
         navController.navigate("session/$sessionId") {
@@ -161,14 +174,23 @@ fun CodexMobileApp(
         val lifecycle = lifecycleOwner.lifecycle
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> appViewModel.onAppForegrounded()
-                Lifecycle.Event.ON_STOP -> appViewModel.onAppBackgrounded()
+                Lifecycle.Event.ON_START -> {
+                    appInForeground.value = true
+                    appViewModel.onAppForegrounded()
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    appInForeground.value = false
+                    appViewModel.onAppBackgrounded()
+                }
                 else -> Unit
             }
         }
         lifecycle.addObserver(observer)
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            appInForeground.value = true
             appViewModel.onAppForegrounded()
+        } else {
+            appInForeground.value = false
         }
         onDispose {
             lifecycle.removeObserver(observer)

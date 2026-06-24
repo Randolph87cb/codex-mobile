@@ -136,4 +136,48 @@ class SessionWatchEventReducerTest {
         assertEquals(180, summary?.length)
         assertTrue(summary?.endsWith("...") == true)
     }
+
+    @Test
+    fun resultNotificationIsSuppressedForVisibleForegroundSession() {
+        val shouldPost = SessionWatchNotificationPolicy.shouldPostResultNotification(
+            appInForeground = true,
+            visibleSessionId = "session-1",
+            resultSessionId = "session-1",
+        )
+
+        assertFalse(shouldPost)
+    }
+
+    @Test
+    fun resultNotificationIsPostedWhenAppIsBackgrounded() {
+        val shouldPost = SessionWatchNotificationPolicy.shouldPostResultNotification(
+            appInForeground = false,
+            visibleSessionId = "session-1",
+            resultSessionId = "session-1",
+        )
+
+        assertTrue(shouldPost)
+    }
+
+    @Test
+    fun resultNotificationIsPostedForDifferentForegroundSession() {
+        val shouldPost = SessionWatchNotificationPolicy.shouldPostResultNotification(
+            appInForeground = true,
+            visibleSessionId = "session-2",
+            resultSessionId = "session-1",
+        )
+
+        assertTrue(shouldPost)
+    }
+
+    @Test
+    fun resultNotificationIsPostedWhenNoSessionIsVisible() {
+        val shouldPost = SessionWatchNotificationPolicy.shouldPostResultNotification(
+            appInForeground = true,
+            visibleSessionId = null,
+            resultSessionId = "session-1",
+        )
+
+        assertTrue(shouldPost)
+    }
 }
