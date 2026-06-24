@@ -28,6 +28,22 @@
   - 未重启 bridge。
   - 未修改业务代码。
 
+## 2026-06-24 后续处理
+
+- 用户卸载开机启动项后，重新尝试注册并启动 bridge。
+- 检查结果：
+  - Git 工作区干净。
+  - 未发现 Startup 文件夹中的 `CodexMobileBridge.cmd`。
+  - 初始状态下 8787 未监听。
+- 执行结果：
+  - `install-bridge-autostart.ps1` 注册计划任务失败，错误为 `Access is denied`。
+  - `schtasks.exe /Create ... /SC ONLOGON ...` 注册普通登录任务同样失败，错误为 `Access is denied`。
+  - `restart-bridge-background.ps1 -HostAddress 0.0.0.0 -Port 8787 -Runner app-server` 启动成功。
+  - `/health` 返回 `lifecycle.phase = running`、`draining = false`。
+- 结论：
+  - bridge 服务本体已启动成功。
+  - 当前非管理员会话无法注册 Windows 计划任务；需要管理员 PowerShell 执行注册命令，或改用其他自启动方式。
+
 ## 2026-06-19 后台脚本测试与验收补充
 
 - 目标：为 bridge 后台启动/停止脚本修复补脚本级验收，不改 `scripts/restart-bridge-background.ps1` 与 `scripts/stop-bridge-background.ps1`，不提交 Git。
